@@ -16,6 +16,7 @@ export interface ZScores {
 
 export interface Player {
   id: string;
+  person_id?: string; // stable real-person key shared by franchise/era variants
   name: string;
   year: number;
   decade: string;
@@ -53,6 +54,7 @@ export interface Player {
 // Trimmed player projection sent to the client during the draft (full stats stay server-side).
 export interface DraftCandidate {
   id: string;
+  person_id?: string;
   name: string;
   year: number;
   decade: string;

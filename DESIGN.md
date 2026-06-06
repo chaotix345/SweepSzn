@@ -151,7 +151,15 @@ Show W-L, ORtg/DRtg/NetRtg, the top 3 things helping and top 2 hurting, in plain
 
 ---
 
-## 8. Open decisions for you
+## 8. Draft pool identity
+
+The draft pool is intentionally **player × franchise × era**, not one global peak per player. A player can have multiple real cards when his career meaningfully spans teams or decades: Cleveland LeBron, Miami LeBron, Lakers LeBron, Orlando Shaq, Lakers Shaq, etc. Each card is backed by the best actual season inside that franchise-era bucket, so Miami LeBron is not 2009 Cleveland LeBron wearing a Heat jersey.
+
+The lineup still enforces one real person. Once any LeBron variant is drafted, all other `person_id=lebron_james` variants are unavailable for the rest of that run. This preserves the team-era slot-machine feel without allowing duplicate-player exploits.
+
+---
+
+## 9. Open decisions for you
 
 1. **Player granularity:** peak *season* (more accurate) vs. the original's *decade averages* (simpler, matches the slot-machine "team+decade" feel). Recommend season, displayed as the decade.
 2. **Fidelity vs. ship speed for v0:** full fitted engine now, or a simpler-but-correct v0 (z-scores + usage + equal-base Pythagorean) that we then calibrate up.
@@ -160,7 +168,7 @@ Show W-L, ORtg/DRtg/NetRtg, the top 3 things helping and top 2 hurting, in plain
 
 ---
 
-## 9. Calibration results (what the data actually said)
+## 10. Calibration results (what the data actually said)
 
 The engine is fit to **1,170 real NBA team-seasons** (1985–2025) and **24,687 player-seasons**. Honest findings, including the limits:
 
