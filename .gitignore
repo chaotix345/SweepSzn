@@ -1,0 +1,24 @@
+# dependencies / build
+web/node_modules/
+web/.next/
+web/out/
+web/build/
+node_modules/
+
+# python pipeline caches (regenerable). players.json/coefficients.json under web/public/data ARE committed.
+__pycache__/
+*.pyc
+data/out/
+# 228MB cached Basketball-Reference HTML — regenerate with data/scrape.py
+data/raw/
+
+# local tool state / scratch / research artifacts
+.gstack/
+research/shots/
+*.log
+
+# os / editor / secrets
+.DS_Store
+*.pem
+.env*
+!.env.example

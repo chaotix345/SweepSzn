@@ -1,0 +1,266 @@
+"""
+Build app datasets from cached Basketball-Reference HTML.
+
+Outputs (to web/public/data and data/out):
+  players.json         - one PEAK season per player (the draftable pool), with raw box,
+                         efficiency, advanced (OBPM/DBPM/BPM/USG/TS), per-season z-scores,
+                         position, decade, data tier, and a defense-estimated flag.
+  league_context.json  - per-season mean/SD for each stat + pace + league ORtg/TS%.
+  team_seasons.json    - real team-seasons with actual W/ORtg/DRtg/NRtg/Pace + top rotation
+                         (per-team player lines w/ z-scores) for engine calibration.
+"""
+import os, io, re, json, math, sys
+import pandas as pd, numpy as np
+sys.stdout.reconfigure(encoding="utf-8")
+
+RAW = "data/raw"
+OUT = "data/out"
+WEBDATA = "web/public/data"
+os.makedirs(OUT, exist_ok=True)
+os.makedirs(WEBDATA, exist_ok=True)
+
+# stats we z-score / carry (per-game)
+BOX = ["pts", "trb", "orb", "drb", "ast", "stl", "blk", "tov"]
+QUAL_G = 25          # min games to count toward league distribution & peak candidacy
+QUAL_MP = 20.0       # min minutes/game (when MP available)
+PEAK_MIN_G = 40      # prefer fuller seasons for peak selection
+
+def read_tables(path):
+    html = open(path, encoding="utf-8", errors="replace").read()
+    html = html.replace("<!--", "").replace("-->", "")  # unwrap B-R commented tables
+    try:
+        return pd.read_html(io.StringIO(html))
+    except ValueError:
+        return []
+
+def flat_cols(df):
+    df = df.copy()
+    df.columns = [c[-1] if isinstance(c, tuple) else c for c in df.columns]
+    return df
+
+def num(s):
+    return pd.to_numeric(s, errors="coerce")
+
+def is_combined_team(t):
+    t = str(t)
+    return t == "TOT" or bool(re.match(r"^\d+TM$", t))
+
+def decade_of(year):  # year = season END year (NBA_2023 -> 2022-23)
+    return f"{((year - 1)//10)*10}s"
+
+def data_tier(year):
+    if year >= 1974: return "complete"
+    if year >= 1952: return "partial"
+    return "primitive"
+
+def load_per_game(year):
+    p = f"{RAW}/NBA_{year}_per_game.html"
+    if not os.path.exists(p): return None
+    ts = read_tables(p)
+    for t in ts:
+        f = flat_cols(t)
+        if "Player" in f.columns and "PTS" in f.columns:
+            return f
+    return None
+
+def load_advanced(year):
+    p = f"{RAW}/NBA_{year}_advanced.html"
+    if not os.path.exists(p): return None
+    ts = read_tables(p)
+    for t in ts:
+        f = flat_cols(t)
+        if "Player" in f.columns and "TS%" in f.columns:
+            return f
+    return None
+
+def load_team_misc(year):
+    p = f"{RAW}/NBA_{year}.html"
+    if not os.path.exists(p): return None
+    ts = read_tables(p)
+    for t in ts:
+        f = flat_cols(t)
+        cols = [str(c) for c in f.columns]
+        if "ORtg" in cols and "Pace" in cols and "Team" in cols and "W" in cols:
+            return f
+    return None
+
+def norm_pos(p):
+    # Basketball-Reference's cached per_game HTML stores ONE primary position per
+    # player-season (no "PF-SF" multi-pos in our raw cache), so this split is a no-op in
+    # practice. Multi-position ELIGIBILITY (truer to 82-0) is added afterwards by
+    # data/enrich_players.mjs, which joins 82-0's authentic `positions` arrays + normalizes
+    # `team` to a current franchise. Run it after this script:  node data/enrich_players.mjs
+    p = str(p)
+    if p in ("nan", ""): return "F"
+    return p.split("-")[0]
+
+# B-R team-name -> abbrev (current + common historical); fallback = first-letters
+def abbr(team):
+    t = str(team).replace("*", "").strip()
+    return t  # we key rosters by full team name; the game uses peak team via player rows
+
+def build():
+    years = list(range(1950, 2026))
+    league_ctx = {}
+    pool_rows = []          # combined per-player-season (for pool + league dist)
+    team_rows = []          # per-team per-player-season (for rosters)
+    team_seasons = []       # real team-season outcomes
+
+    for y in years:
+        pg = load_per_game(y)
+        if pg is None:
+            continue
+        adv = load_advanced(y)
+
+        # ---- assemble per-row player-season records (per_game) ----
+        pg = pg[pg["Player"].astype(str) != "Player"].copy()
+        pg = pg[~pg["Player"].astype(str).str.contains("League Average", na=False)]
+        rename = {"PTS":"pts","TRB":"trb","ORB":"orb","DRB":"drb","AST":"ast","STL":"stl",
+                  "BLK":"blk","TOV":"tov","FG":"fg","FGA":"fga","3P":"fg3","3PA":"fg3a",
+                  "FT":"ft","FTA":"fta","MP":"mp","G":"g","Team":"team","Pos":"pos","Age":"age"}
+        for k in rename:
+            if k not in pg.columns: pg[k] = np.nan
+        pg = pg.rename(columns=rename)
+        for c in BOX + ["fg","fga","fg3","fg3a","ft","fta","mp","g","age"]:
+            pg[c] = num(pg[c])
+
+        # advanced merge keys: Player + Team
+        if adv is not None:
+            adv = adv[adv["Player"].astype(str) != "Player"].copy()
+            arename = {"TS%":"ts","USG%":"usg","OBPM":"obpm","DBPM":"dbpm","BPM":"bpm",
+                       "VORP":"vorp","PER":"per","OWS":"ows","DWS":"dws","Team":"team"}
+            for k in arename:
+                if k not in adv.columns: adv[k] = np.nan
+            adv = adv.rename(columns=arename)
+            for c in ["ts","usg","obpm","dbpm","bpm","vorp","per","ows","dws"]:
+                adv[c] = num(adv[c])
+            adv_keyed = adv[["Player","team","ts","usg","obpm","dbpm","bpm","vorp","per","ows","dws"]]
+            pg = pg.merge(adv_keyed, on=["Player","team"], how="left")
+        else:
+            for c in ["ts","usg","obpm","dbpm","bpm","vorp","per","ows","dws"]:
+                pg[c] = np.nan
+
+        # TS computed fallback if missing: PTS / (2*(FGA + 0.44*FTA))
+        denom = 2*(pg["fga"].fillna(0) + 0.44*pg["fta"].fillna(0))
+        ts_calc = np.where(denom > 0, pg["pts"]/denom, np.nan)
+        pg["ts"] = pg["ts"].where(pg["ts"].notna(), ts_calc)
+
+        # ---- league distribution from QUALIFIED, single/combined rows only ----
+        combined = pg[pg["team"].apply(lambda t: is_combined_team(t)) | ~pg.duplicated("Player", keep=False)]
+        # qualified mask
+        qmp = combined["mp"].fillna(0) >= QUAL_MP if combined["mp"].notna().any() else True
+        qg = combined["g"].fillna(0) >= QUAL_G
+        qual = combined[qg & (qmp if isinstance(qmp, pd.Series) else True)]
+        ctx = {"year": y, "decade": decade_of(y), "tier": data_tier(y), "n_qualified": int(len(qual))}
+        for c in BOX + ["ts"]:
+            vals = qual[c].dropna()
+            ctx[c] = {"mean": float(vals.mean()) if len(vals) else None,
+                      "sd": float(vals.std(ddof=0)) if len(vals) > 1 else None}
+        # league pace + ORtg from team-misc League Average row
+        tm = load_team_misc(y)
+        ctx["pace"], ctx["lg_ortg"] = None, None
+        if tm is not None:
+            la = tm[tm["Team"].astype(str).str.contains("League Average", na=False)]
+            if len(la):
+                ctx["pace"] = float(num(la["Pace"]).iloc[0]) if "Pace" in tm.columns else None
+                ctx["lg_ortg"] = float(num(la["ORtg"]).iloc[0]) if "ORtg" in tm.columns else None
+        league_ctx[str(y)] = ctx
+
+        def zof(row, stat):
+            m = ctx.get(stat, {}).get("mean"); s = ctx.get(stat, {}).get("sd")
+            v = row.get(stat)
+            if m is None or s in (None, 0) or v is None or (isinstance(v, float) and math.isnan(v)):
+                return None
+            return round((v - m)/s, 4)
+
+        # ---- pool rows (combined per player) ----
+        for _, r in combined.iterrows():
+            rec = {"name": str(r["Player"]), "year": y, "decade": decade_of(y), "tier": data_tier(y),
+                   "team": str(r["team"]), "pos": norm_pos(r["pos"]), "age": (None if pd.isna(r["age"]) else float(r["age"])),
+                   "g": (None if pd.isna(r["g"]) else float(r["g"])), "mp": (None if pd.isna(r["mp"]) else float(r["mp"]))}
+            for c in BOX + ["fg","fga","fg3","fg3a","ft","fta","ts","usg","obpm","dbpm","bpm","vorp","per","ows","dws"]:
+                v = r.get(c); rec[c] = (None if (v is None or (isinstance(v,float) and math.isnan(v))) else round(float(v),4))
+            rec["z"] = {c: zof(r, c) for c in BOX + ["ts"]}
+            pool_rows.append(rec)
+
+        # ---- per-team rows (real-team rosters) ----
+        per_team = pg[~pg["team"].apply(is_combined_team)]
+        for _, r in per_team.iterrows():
+            rec = {"name": str(r["Player"]), "year": y, "team": str(r["team"]),
+                   "pos": norm_pos(r["pos"]), "g": (None if pd.isna(r["g"]) else float(r["g"])),
+                   "mp": (None if pd.isna(r["mp"]) else float(r["mp"]))}
+            for c in BOX + ["ts","usg","obpm","dbpm","bpm"]:
+                v = r.get(c); rec[c] = (None if (v is None or (isinstance(v,float) and math.isnan(v))) else round(float(v),4))
+            rec["z"] = {c: zof(r, c) for c in BOX + ["ts"]}
+            team_rows.append(rec)
+
+        # ---- real team-season outcomes for calibration ----
+        if tm is not None:
+            for _, r in tm.iterrows():
+                name = str(r["Team"]).replace("*","").strip()
+                if "League Average" in name or name in ("nan",""): continue
+                ts_rec = {"year": y, "team_name": name}
+                for col, key in [("W","w"),("L","l"),("ORtg","ortg"),("DRtg","drtg"),
+                                 ("NRtg","nrtg"),("Pace","pace"),("SRS","srs"),("MOV","mov")]:
+                    ts_rec[key] = (float(num(pd.Series([r[col]])).iloc[0]) if col in tm.columns and pd.notna(r[col]) else None)
+                team_seasons.append(ts_rec)
+
+    # ---- attach top rotation (per-team, top-by-MP) to each team-season ----
+    # index team_rows by (year, team)
+    from collections import defaultdict
+    byteam = defaultdict(list)
+    for tr in team_rows:
+        byteam[(tr["year"], tr["team"])].append(tr)
+    # map full team name -> abbrev used in per_game via the team-misc? We instead match on
+    # team-season abbrev. team_rows team is the per_game 3-letter code; team_seasons team_name is full.
+    # Build name->abbr by joining on (year) using standings? Simpler: keep rotations keyed by abbr,
+    # and resolve full-name -> abbr at calibration time using a lookup built from a mapping table.
+    json.dump({"team_rotations": {f"{k[0]}|{k[1]}": sorted(v, key=lambda x:-(x["mp"] or 0))[:8] for k,v in byteam.items()}},
+              open(f"{OUT}/team_rotations.json","w",encoding="utf-8"))
+
+    # ---- choose PEAK season per player for the pool ----
+    from collections import defaultdict as dd
+    byplayer = dd(list)
+    for r in pool_rows:
+        byplayer[r["name"]].append(r)
+
+    def ok(v):
+        return v is not None and not (isinstance(v, float) and math.isnan(v))
+
+    def peak_score(r):
+        # VORP is volume-aware: tiny-sample BPM noise scores ~0, real stars score high.
+        if ok(r.get("vorp")):
+            return float(r["vorp"])
+        mp, g = (r.get("mp") or 0), (r.get("g") or 0)
+        if ok(r.get("bpm")) and mp >= 15:
+            return float(r["bpm"]) * (mp * g) / 1000.0   # approximate VORP for pre-VORP seasons
+        zz = r["z"]
+        comp = (zz.get("pts") or 0)*0.5 + (zz.get("ast") or 0)*0.3 + (zz.get("trb") or 0)*0.2
+        return comp * (mp * g) / 1000.0
+
+    pool = []
+    for name, seasons in byplayer.items():
+        cand = [s for s in seasons if (s["g"] or 0) >= QUAL_G and ((s["mp"] or 99) >= QUAL_MP)]
+        if not cand:
+            continue  # never a rotation-level player -> not in the draftable pool
+        best = max(cand, key=peak_score)
+        best = dict(best)
+        best["id"] = re.sub(r"[^a-z0-9]+","_", name.lower()).strip("_") + f"_{best['year']}"
+        best["defense_estimated"] = best["tier"] != "complete"  # no STL/BLK pre-1974
+        best["peak_score"] = round(peak_score(best), 3)
+        pool.append(best)
+
+    pool.sort(key=lambda r: -(r["peak_score"] or -9))
+    json.dump(pool, open(f"{WEBDATA}/players.json","w",encoding="utf-8"))
+    json.dump(league_ctx, open(f"{WEBDATA}/league_context.json","w",encoding="utf-8"))
+    json.dump(team_seasons, open(f"{OUT}/team_seasons.json","w",encoding="utf-8"))
+    json.dump(pool_rows, open(f"{OUT}/all_player_seasons.json","w",encoding="utf-8"))  # for z->BPM calibration
+
+    print(f"players(pool)={len(pool)}  player_seasons={len(pool_rows)}  team_seasons={len(team_seasons)}  seasons={len(league_ctx)}")
+    print("NEXT: run `node data/enrich_players.mjs` to add multi-position eligibility + franchise normalization (UI only; no recalibration).")
+    print("top 12 by peak_score:")
+    for r in pool[:12]:
+        print(f"  {r['name']:24s} {r['year']} {r['team']:4s} {r['pos']:3s} bpm={r.get('bpm')} pts={r.get('pts')} z_pts={r['z'].get('pts')}")
+
+if __name__ == "__main__":
+    build()

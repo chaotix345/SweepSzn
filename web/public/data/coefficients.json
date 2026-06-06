@@ -1,0 +1,47 @@
+{
+  "ortgBase": 104.407,
+  "drtgBase": 107.595,
+  "offScale": 0.6178,
+  "defScale": 0.742,
+  "pythK": 14.0,
+  "offModel": {
+    "intercept": 0.4328,
+    "pts": 1.058,
+    "ast": 0.6331,
+    "ts": 0.9088
+  },
+  "defModel": {
+    "intercept": -2.4242,
+    "dws": 79.5313,
+    "trb": -0.7115,
+    "posC": 0.6555,
+    "posPF": 0.2915,
+    "posSF": 0.1066,
+    "posSG": -0.0155
+  },
+  "usgModel": {
+    "intercept": 21.2311,
+    "pts": 3.0339,
+    "ast": -0.4904
+  },
+  "usageBudget": 100,
+  "overloadGamma": 0.2,
+  "spacing": {
+    "perShooter": 1.4,
+    "diminish": 0.55,
+    "noneFloor": -3.0,
+    "baseline": 1.6
+  },
+  "noRimPenalty": 5.0,
+  "thinPerimeterPenalty": 3.0,
+  "_meta": {
+    "team_seasons": 1170,
+    "off_r2": 0.423,
+    "def_r2": 0.429,
+    "wins_rmse": 6.06,
+    "zoff_r2": 0.609,
+    "zdef_r2": 0.233,
+    "zusg_r2": 0.343,
+    "gamma_fit": -0.0173
+  }
+}
