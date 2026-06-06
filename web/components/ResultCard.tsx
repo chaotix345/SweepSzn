@@ -16,8 +16,10 @@ export default function ResultCard({
   result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset: () => void;
 }) {
   const factors = factorViews(result);
-  const helps = factors.filter((f) => f.kind === "good");
-  const hurts = factors.filter((f) => f.kind === "bad");
+  // split by the value's sign (what actually helped/hurt), not the engine's fixed label —
+  // e.g. a below-average "Star defense" carries a negative value and belongs under "hurting".
+  const helps = factors.filter((f) => f.value > 0);
+  const hurts = factors.filter((f) => f.value < 0);
   const roles = lineupRoles(players, result.players);
   const totals = players.reduce(
     (a, p) => ({ pts: a.pts + (p.pts ?? 0), trb: a.trb + (p.trb ?? 0), ast: a.ast + (p.ast ?? 0), stl: a.stl + (p.stl ?? 0), blk: a.blk + (p.blk ?? 0) }),

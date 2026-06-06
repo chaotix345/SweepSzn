@@ -97,8 +97,8 @@ export function lineupRoles(players: Player[], breakdowns: PlayerBreakdown[]): R
 // A one-sentence headline summarizing the verdict.
 export function headline(result: LineupResult): string {
   const net = result.netRtg;
-  const helps = result.factors.filter((f) => f.kind === "good").sort((a, b) => b.value - a.value);
-  const hurts = result.factors.filter((f) => f.kind === "bad").sort((a, b) => a.value - b.value);
+  const helps = result.factors.filter((f) => f.value > 0).sort((a, b) => b.value - a.value);
+  const hurts = result.factors.filter((f) => f.value < 0).sort((a, b) => a.value - b.value);
   const lead = net >= 10 ? "An elite, well-balanced lineup"
     : net >= 4 ? "A strong contender"
     : net >= -2 ? "A roughly average lineup"
