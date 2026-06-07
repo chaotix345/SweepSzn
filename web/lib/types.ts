@@ -69,19 +69,33 @@ export interface DraftCandidate {
   defense_estimated?: boolean;
 }
 
+export interface DefModel {
+  intercept: number; dws: number; posC: number; posPF: number; posSF: number; posSG: number; trb?: number;
+}
+
 export interface Coefficients {
   ortgBase: number;
   drtgBase: number;
   offScale: number;
   defScale: number;
   pythK: number;
+  // cap on |z| applied at prediction time so a thin early league can't manufacture a super-human z
+  zCap: number;
+  // era-depth multiplier on per-player impact: 1.0 for year>=fullYear (modern), ramps to `floor` by startYear
+  eraStrength: { floor: number; gamma: number; startYear: number; fullYear: number };
   // fitted z-score -> impact models (used when a player lacks real OBPM/DBPM/USG, i.e. pre-1974/78)
   offModel: { intercept: number; pts: number; ast: number; ts: number };
-  defModel: { intercept: number; dws: number; trb: number; posC: number; posPF: number; posSF: number; posSG: number };
+  defModel: DefModel;        // legacy (dws+trb+pos) — kept for reference; NOT used by the engine
+  defModelEst: DefModel;     // pre-1974 defense path: shrunk dws + position, no trb collinearity artifact
+  defEstCap: number;         // pre-era ceiling for estimated DBPM (max real DBPM in 1974+ training data); applied before the era multiplier
+  dwsShrinkK: number;        // Bayesian shrinkage strength for DWS/g toward the league mean
+  leagueDwsMean: number;     // prior mean DWS/g
   usgModel: { intercept: number; pts: number; ast: number };
   usageBudget: number;
   overloadGamma: number;
   spacing: { perShooter: number; diminish: number; noneFloor: number; baseline: number };
+  // continuous rim protection: best big's blk z (or trb z proxy pre-1974) mapped 0..1 over [lo, lo+span]
+  rim: { blkLo: number; blkSpan: number; trbProxyLo: number; trbProxySpan: number };
   noRimPenalty: number;
   thinPerimeterPenalty: number;
 }

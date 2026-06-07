@@ -19,6 +19,20 @@ WEBDATA = "web/public/data"
 os.makedirs(OUT, exist_ok=True)
 os.makedirs(WEBDATA, exist_ok=True)
 
+def clean(o):
+    """Recursively replace NaN/inf with None so outputs are valid JSON (json.dump emits a bare `NaN` otherwise,
+    which JSON.parse / JSON.stringify in the app cannot read). Early seasons have NaN pace/lg_ortg."""
+    if isinstance(o, float):
+        return o if math.isfinite(o) else None
+    if isinstance(o, dict):
+        return {k: clean(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [clean(v) for v in o]
+    return o
+
+def dump_json(obj, path):
+    json.dump(clean(obj), open(path, "w", encoding="utf-8"), allow_nan=False)
+
 # stats we z-score / carry (per-game)
 BOX = ["pts", "trb", "orb", "drb", "ast", "stl", "blk", "tov"]
 QUAL_G = 25          # min games to count toward league distribution & peak candidacy
@@ -220,8 +234,8 @@ def build():
     # team-season abbrev. team_rows team is the per_game 3-letter code; team_seasons team_name is full.
     # Build name->abbr by joining on (year) using standings? Simpler: keep rotations keyed by abbr,
     # and resolve full-name -> abbr at calibration time using a lookup built from a mapping table.
-    json.dump({"team_rotations": {f"{k[0]}|{k[1]}": sorted(v, key=lambda x:-(x["mp"] or 0))[:8] for k,v in byteam.items()}},
-              open(f"{OUT}/team_rotations.json","w",encoding="utf-8"))
+    dump_json({"team_rotations": {f"{k[0]}|{k[1]}": sorted(v, key=lambda x:-(x["mp"] or 0))[:8] for k,v in byteam.items()}},
+              f"{OUT}/team_rotations.json")
 
     # ---- choose PEAK season per player/franchise/era for the draft pool ----
     # The game spins a franchise + decade, so players with meaningful stints in multiple
@@ -262,10 +276,10 @@ def build():
         pool.append(best)
 
     pool.sort(key=lambda r: -(r["peak_score"] or -9))
-    json.dump(pool, open(f"{WEBDATA}/players.json","w",encoding="utf-8"))
-    json.dump(league_ctx, open(f"{WEBDATA}/league_context.json","w",encoding="utf-8"))
-    json.dump(team_seasons, open(f"{OUT}/team_seasons.json","w",encoding="utf-8"))
-    json.dump(pool_rows, open(f"{OUT}/all_player_seasons.json","w",encoding="utf-8"))  # for z->BPM calibration
+    dump_json(pool, f"{WEBDATA}/players.json")
+    dump_json(league_ctx, f"{WEBDATA}/league_context.json")
+    dump_json(team_seasons, f"{OUT}/team_seasons.json")
+    dump_json(pool_rows, f"{OUT}/all_player_seasons.json")  # for z->BPM calibration
 
     people = len({r["person_id"] for r in pool})
     print(f"players(pool)={len(pool)} variants for {people} people  player_seasons={len(pool_rows)}  team_seasons={len(team_seasons)}  seasons={len(league_ctx)}")

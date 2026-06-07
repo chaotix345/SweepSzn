@@ -4,6 +4,13 @@
   "offScale": 0.6178,
   "defScale": 0.742,
   "pythK": 14.0,
+  "zCap": 3.3,
+  "eraStrength": {
+    "floor": 0.85,
+    "gamma": 0.7,
+    "startYear": 1950,
+    "fullYear": 1985
+  },
   "offModel": {
     "intercept": 0.4328,
     "pts": 1.058,
@@ -19,29 +26,51 @@
     "posSF": 0.1066,
     "posSG": -0.0155
   },
+  "defModelEst": {
+    "intercept": -1.7504,
+    "dws": 77.2445,
+    "posC": 0.0613,
+    "posPF": -0.2484,
+    "posSF": -0.1734,
+    "posSG": -0.1265
+  },
+  "defEstCap": 5.5,
+  "dwsShrinkK": 40,
+  "leagueDwsMean": 0.02037,
   "usgModel": {
     "intercept": 21.2311,
     "pts": 3.0339,
     "ast": -0.4904
   },
   "usageBudget": 100,
-  "overloadGamma": 0.2,
+  "overloadGamma": 0.22,
   "spacing": {
-    "perShooter": 1.4,
+    "perShooter": 0.987,
     "diminish": 0.55,
     "noneFloor": -3.0,
     "baseline": 1.6
   },
-  "noRimPenalty": 5.0,
+  "rim": {
+    "blkLo": 0.4,
+    "blkSpan": 1.4,
+    "trbProxyLo": 0.8,
+    "trbProxySpan": 1.6
+  },
+  "noRimPenalty": 7.0,
   "thinPerimeterPenalty": 3.0,
   "_meta": {
     "team_seasons": 1170,
     "off_r2": 0.423,
     "def_r2": 0.429,
-    "wins_rmse": 6.06,
+    "in_sample_wins_rmse": 6.06,
+    "cv_wins_rmse": 6.069,
+    "cv_wins_rmse_with_box": 6.416,
     "zoff_r2": 0.609,
-    "zdef_r2": 0.233,
+    "zdef_r2_legacy": 0.233,
+    "zdef_r2_est": 0.153,
     "zusg_r2": 0.343,
-    "gamma_fit": -0.0173
+    "gamma_fit": -0.0173,
+    "spacing_fit": 0.987,
+    "box_team_terms_help_cv": false
   }
 }

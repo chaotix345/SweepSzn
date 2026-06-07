@@ -6,14 +6,14 @@ A rebuild of the viral [82-0.com](https://www.82-0.com) NBA team-builder with an
 
 The original sums per-game stats (PPG×0.46 + RPG×0.25 + …) with no era adjustment, so raw-stat monsters (Wilt) and ball-dominant stat-stuffers dominate. This version:
 
-- **Era-normalizes** every stat to z-scores vs. that season's league (kills pace/scoring-environment inflation).
+- **Era-normalizes** every stat to z-scores vs. that season's league, then applies an **era-strength multiplier** + z-cap so a thin 8-team 1950s league can't manufacture all-time greats (Mikan drops from #4 to outside the top-25; Wilt/Russell stay elite). The multiplier is 1.0 for the modern (1985+) calibration era, so the real-team fit is untouched.
 - Drafts **franchise-era player variants**: Miami LeBron, Cleveland LeBron, and Lakers LeBron are separate cards backed by their actual seasons, while the lineup still locks to one real LeBron.
-- Uses **OBPM/DBPM** (Box Plus/Minus — validated points-per-100 impact) for 1974+, with z-score box proxies for older eras (rebound+position rim-protection prior so pre-1974 defenders like Russell keep their value).
-- Applies a **continuous usage-overload penalty** — five ball-dominant stars can't all keep their numbers (one ball, finite shots).
-- Scores **offense and defense separately** (≈ equal weight) and adds spacing / rim-protection / positional checks.
-- Maps team ORtg/DRtg → wins via **Pythagorean expectation**, with all coefficients **fitted to 1,170 real NBA team-seasons** (the fit recovered the canonical exponent k≈14).
+- Uses **OBPM/DBPM** (Box Plus/Minus — validated points-per-100 impact) for 1974+, with z-score box proxies for older eras. Pre-1974 **defense** is redone: DWS Bayesian-shrunk toward the league mean (the old model had a perverse rebounding term that ranked obscure 1950s role players as all-time defenders).
+- Applies a **continuous usage-overload penalty** (five ball-dominant stars can't all keep their numbers) and a **continuous interior-presence penalty** (a no-big lineup concedes the rim, post, and glass) — which keeps five point guards honest without a gameable positional rule.
+- Scores **offense and defense separately** (≈ equal weight) and adds a **data-fit spacing** term (per-shooter coefficient regressed from real ORtg residuals, not hand-set).
+- Maps team ORtg/DRtg → wins via **Pythagorean expectation**, core coefficients **fitted to 1,170 real NBA team-seasons** (the fit recovered the canonical exponent k≈14). Honest **year-grouped 10-fold cross-validation** reports out-of-sample accuracy (~6.1 wins RMSE — the real ceiling for a 5-starter feature set) in `coefficients.json._meta.cv_wins_rmse`.
 
-Result: a balanced two-way team beats a stat-stuffer; 82-0 is achievable but brutal (best lineup found ≈ 79–80 wins).
+Result: a balanced two-way team beats a stat-stuffer; 82-0 is achievable but brutal (best lineup found ≈ 79 wins). See `DESIGN.md` §11 for the full accuracy-overhaul writeup.
 
 ## Layout
 

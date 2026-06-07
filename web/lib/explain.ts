@@ -19,6 +19,8 @@ export function factorBlurb(label: string, value = 0): string {
   if (l.startsWith("spacing")) return value >= 0
     ? "Enough outside shooting to bend the defense and open driving lanes."
     : "Cramped floor — not enough shooting, so the paint stays clogged.";
+  if (l.startsWith("no interior size")) return "No real big — the lineup concedes the rim, the post, and the defensive glass to anyone with size.";
+  if (l.startsWith("thin interior size")) return "Undersized inside — limited rim protection and rebounding against bigger frontlines.";
   if (l.startsWith("no rim protection")) return "No real shot-blocker inside — opponents convert at the rim and you allow more points.";
   if (l.startsWith("no perimeter defender")) return "No on-ball stopper on the wing — opposing guards get downhill too easily.";
   return "Contribution to the team rating.";
