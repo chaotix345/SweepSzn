@@ -6,9 +6,12 @@
 // players 82-0 doesn't carry (almost all 1940s). The ENGINE still uses the single `pos`, so this
 // requires NO recalibration. Run after data/build_dataset.py:  node data/enrich_players.mjs
 import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const PLAYERS = "C:/Dev/Active/82-0.v2/web/public/data/players.json";
-const META = "C:/Dev/Active/82-0.v2/data/820_player_meta.json";
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const PLAYERS = path.join(ROOT, "web", "public", "data", "players.json");
+const META = path.join(ROOT, "data", "820_player_meta.json");
 const SLOTS = ["PG", "SG", "SF", "PF", "C"];
 const SLOTSET = new Set(SLOTS);
 const CURRENT = new Set("ATL BOS BKN CHA CHI CLE DAL DEN DET GSW HOU IND LAC LAL MEM MIA MIL MIN NOP NYK OKC ORL PHI PHX POR SAC SAS TOR UTA WAS".split(" "));
@@ -51,17 +54,25 @@ for (const p of players) {
   const ownCur = toCurrent(p.team); // current code for our peak-season team (if any)
   const poolTeams = pool.map((r) => toCurrent(r.team)).filter(Boolean);
   let franchise;
-  if (ownCur && poolTeams.includes(ownCur)) franchise = ownCur;            // our peak team agrees with 82-0
-  else if (poolTeams.length) franchise = mode(poolTeams);                  // 82-0's franchise for this player
+  if (ownCur) franchise = ownCur;                                           // keep the actual franchise-era card
+  else if (poolTeams.length) franchise = mode(poolTeams);                  // fallback for rows that only 82-0 metadata can place
   else franchise = ownCur;                                                 // historical map / already-current
   if (franchise && franchise !== p.team) { p.team = franchise; teamNorm++; } else teamKept++;
 }
 
-fs.writeFileSync(PLAYERS, JSON.stringify(players));
-const bad = players.filter((p) => !CURRENT.has(p.team));
-console.log(`enriched ${players.length} players`);
+const collapsed = new Map();
+for (const p of players) {
+  const key = `${p.person_id || slug(p.name)}|${p.team}|${p.decade}`;
+  const prev = collapsed.get(key);
+  if (!prev || (p.peak_score ?? -Infinity) > (prev.peak_score ?? -Infinity)) collapsed.set(key, p);
+}
+const out = [...collapsed.values()].sort((a, b) => (b.peak_score ?? -9) - (a.peak_score ?? -9));
+
+fs.writeFileSync(PLAYERS, JSON.stringify(out));
+const bad = out.filter((p) => !CURRENT.has(p.team));
+console.log(`enriched ${players.length} raw variants -> ${out.length} collapsed franchise-era variants`);
 console.log(`eligible: sameEra=${viaSameEra} anyEra=${viaAnyEra} adjacencyFallback=${viaFallback}`);
 console.log(`team: normalized=${teamNorm} kept=${teamKept} | still non-current (mostly pre-1960 defunct): ${bad.length}`);
-const dist = {}; for (const p of players) { const n = p.eligible.length; dist[n] = (dist[n] || 0) + 1; }
+const dist = {}; for (const p of out) { const n = p.eligible.length; dist[n] = (dist[n] || 0) + 1; }
 console.log("eligible-count distribution:", JSON.stringify(dist));
 console.log("non-current team codes:", [...new Set(bad.map((p) => p.team))].sort().join(" ") || "(none)");

@@ -2,7 +2,7 @@
 Build app datasets from cached Basketball-Reference HTML.
 
 Outputs (to web/public/data and data/out):
-  players.json         - one PEAK season per player (the draftable pool), with raw box,
+  players.json         - one PEAK season per player/franchise/era (the draftable pool), with raw box,
                          efficiency, advanced (OBPM/DBPM/BPM/USG/TS), per-season z-scores,
                          position, decade, data tier, and a defense-estimated flag.
   league_context.json  - per-season mean/SD for each stat + pace + league ORtg/TS%.
@@ -47,6 +47,9 @@ def is_combined_team(t):
 
 def decade_of(year):  # year = season END year (NBA_2023 -> 2022-23)
     return f"{((year - 1)//10)*10}s"
+
+def slug(s):
+    return re.sub(r"[^a-z0-9]+", "_", str(s).lower()).strip("_")
 
 def data_tier(year):
     if year >= 1974: return "complete"
@@ -186,10 +189,12 @@ def build():
         # ---- per-team rows (real-team rosters) ----
         per_team = pg[~pg["team"].apply(is_combined_team)]
         for _, r in per_team.iterrows():
-            rec = {"name": str(r["Player"]), "year": y, "team": str(r["team"]),
-                   "pos": norm_pos(r["pos"]), "g": (None if pd.isna(r["g"]) else float(r["g"])),
+            rec = {"name": str(r["Player"]), "year": y, "decade": decade_of(y), "tier": data_tier(y),
+                   "team": str(r["team"]), "pos": norm_pos(r["pos"]),
+                   "age": (None if pd.isna(r["age"]) else float(r["age"])),
+                   "g": (None if pd.isna(r["g"]) else float(r["g"])),
                    "mp": (None if pd.isna(r["mp"]) else float(r["mp"]))}
-            for c in BOX + ["ts","usg","obpm","dbpm","bpm"]:
+            for c in BOX + ["fg","fga","fg3","fg3a","ft","fta","ts","usg","obpm","dbpm","bpm","vorp","per","ows","dws"]:
                 v = r.get(c); rec[c] = (None if (v is None or (isinstance(v,float) and math.isnan(v))) else round(float(v),4))
             rec["z"] = {c: zof(r, c) for c in BOX + ["ts"]}
             team_rows.append(rec)
@@ -218,11 +223,15 @@ def build():
     json.dump({"team_rotations": {f"{k[0]}|{k[1]}": sorted(v, key=lambda x:-(x["mp"] or 0))[:8] for k,v in byteam.items()}},
               open(f"{OUT}/team_rotations.json","w",encoding="utf-8"))
 
-    # ---- choose PEAK season per player for the pool ----
+    # ---- choose PEAK season per player/franchise/era for the draft pool ----
+    # The game spins a franchise + decade, so players with meaningful stints in multiple
+    # places should appear as separate cards (e.g. CLE/MIA/LAL LeBron). Each card uses
+    # the actual best season from that franchise-era, while `person_id` lets the app lock
+    # out the other variants once one real player is drafted.
     from collections import defaultdict as dd
-    byplayer = dd(list)
-    for r in pool_rows:
-        byplayer[r["name"]].append(r)
+    by_variant = dd(list)
+    for r in team_rows:
+        by_variant[(r["name"], r["team"], r["decade"])].append(r)
 
     def ok(v):
         return v is not None and not (isinstance(v, float) and math.isnan(v))
@@ -239,13 +248,15 @@ def build():
         return comp * (mp * g) / 1000.0
 
     pool = []
-    for name, seasons in byplayer.items():
+    for (name, team, decade), seasons in by_variant.items():
         cand = [s for s in seasons if (s["g"] or 0) >= QUAL_G and ((s["mp"] or 99) >= QUAL_MP)]
         if not cand:
             continue  # never a rotation-level player -> not in the draftable pool
         best = max(cand, key=peak_score)
         best = dict(best)
-        best["id"] = re.sub(r"[^a-z0-9]+","_", name.lower()).strip("_") + f"_{best['year']}"
+        person = slug(name)
+        best["person_id"] = person
+        best["id"] = f"{person}_{slug(team)}_{slug(decade)}_{best['year']}"
         best["defense_estimated"] = best["tier"] != "complete"  # no STL/BLK pre-1974
         best["peak_score"] = round(peak_score(best), 3)
         pool.append(best)
@@ -256,7 +267,8 @@ def build():
     json.dump(team_seasons, open(f"{OUT}/team_seasons.json","w",encoding="utf-8"))
     json.dump(pool_rows, open(f"{OUT}/all_player_seasons.json","w",encoding="utf-8"))  # for z->BPM calibration
 
-    print(f"players(pool)={len(pool)}  player_seasons={len(pool_rows)}  team_seasons={len(team_seasons)}  seasons={len(league_ctx)}")
+    people = len({r["person_id"] for r in pool})
+    print(f"players(pool)={len(pool)} variants for {people} people  player_seasons={len(pool_rows)}  team_seasons={len(team_seasons)}  seasons={len(league_ctx)}")
     print("NEXT: run `node data/enrich_players.mjs` to add multi-position eligibility + franchise normalization (UI only; no recalibration).")
     print("top 12 by peak_score:")
     for r in pool[:12]:

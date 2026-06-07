@@ -7,6 +7,7 @@ A rebuild of the viral [82-0.com](https://www.82-0.com) NBA team-builder with an
 The original sums per-game stats (PPG×0.46 + RPG×0.25 + …) with no era adjustment, so raw-stat monsters (Wilt) and ball-dominant stat-stuffers dominate. This version:
 
 - **Era-normalizes** every stat to z-scores vs. that season's league (kills pace/scoring-environment inflation).
+- Drafts **franchise-era player variants**: Miami LeBron, Cleveland LeBron, and Lakers LeBron are separate cards backed by their actual seasons, while the lineup still locks to one real LeBron.
 - Uses **OBPM/DBPM** (Box Plus/Minus — validated points-per-100 impact) for 1974+, with z-score box proxies for older eras (rebound+position rim-protection prior so pre-1974 defenders like Russell keep their value).
 - Applies a **continuous usage-overload penalty** — five ball-dominant stars can't all keep their numbers (one ball, finite shots).
 - Scores **offense and defense separately** (≈ equal weight) and adds spacing / rim-protection / positional checks.
@@ -21,6 +22,7 @@ DESIGN.md              engine + game design doc
 data/                  offline Python pipeline (run once to (re)build data)
   scrape.py            throttled Basketball-Reference scraper -> data/raw/
   build_dataset.py     raw HTML -> web/public/data/{players,league_context}.json
+                       players are one peak season per player/franchise/era
   calibrate.py         fits coefficients.json against real team-seasons
   out/                 intermediate (team_seasons.json, team_rotations.json)
 web/                   Next.js 16 app (App Router)

@@ -43,6 +43,7 @@ function load() {
   const decSeen = new Map<string, Set<string>>();
 
   for (const p of players) {
+    p.person_id ??= p.name.toLowerCase().replace(/['.]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
     byId.set(p.id, p);
     // 82-0 parity: only current franchises, only the 1960s–2020s decades are draftable
     if (!CURRENT.has(p.team) || !DECADES.has(p.decade)) continue;
@@ -90,7 +91,7 @@ function strSeed(s: string): number {
 
 function toCandidate(p: Player): DraftCandidate {
   return {
-    id: p.id, name: p.name, year: p.year, decade: p.decade, team: p.team,
+    id: p.id, person_id: p.person_id, name: p.name, year: p.year, decade: p.decade, team: p.team,
     pos: p.pos, eligible: (p.eligible && p.eligible.length ? p.eligible : [p.pos as Slot]),
     pts: p.pts, trb: p.trb, ast: p.ast, stl: p.stl, blk: p.blk, defense_estimated: p.defense_estimated,
   };
@@ -114,10 +115,12 @@ export interface SpinResult {
 // Spin a (team, decade) like 82-0: uniform over populated combos, full roster returned.
 // `seed` makes it deterministic (Daily). Locks/excludes implement the two one-time skips.
 export function spin(seed: string, round: number, opts: SpinOptions = {}): SpinResult {
-  const { draftIndex, draftKeys, teamsByDecade, decadesByTeam } = load();
-  const exclude = new Set(opts.exclude ?? []);
+  const { byId, draftIndex, draftKeys, teamsByDecade, decadesByTeam } = load();
+  const excludeIds = new Set(opts.exclude ?? []);
+  const excludePeople = new Set([...excludeIds].map((id) => byId.get(id)?.person_id ?? id));
   const rng = mulberry32(strSeed(seed) ^ (round * 2654435761) ^ ((opts.salt ?? 0) * 40503));
-  const undrafted = (k: string) => (draftIndex.get(k) ?? []).some((p) => !exclude.has(p.id));
+  const available = (p: Player) => !excludeIds.has(p.id) && !excludePeople.has(p.person_id ?? p.id);
+  const undrafted = (k: string) => (draftIndex.get(k) ?? []).some(available);
   const pick = <T,>(arr: T[]) => arr[Math.floor(rng() * arr.length)];
 
   let team: string, decade: string;
@@ -142,7 +145,7 @@ export function spin(seed: string, round: number, opts: SpinOptions = {}): SpinR
   }
 
   const candidates = (draftIndex.get(`${team}|${decade}`) ?? [])
-    .filter((p) => !exclude.has(p.id))
+    .filter(available)
     .sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0))
     .map(toCandidate);
   return { team, decade, candidates };
