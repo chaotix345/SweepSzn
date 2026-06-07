@@ -29,7 +29,12 @@ run("Wilt + 4 low-usage roleplayers", ["Wilt Chamberlain", "Bruce Bowen", "Ben W
 run("5 PGs (positional chaos)", ["Stephen Curry", "Magic Johnson", "Chris Paul", "Steve Nash", "Isiah Thomas"]);
 
 // search for the engine's best achievable lineup among top stars (mulberry32 PRNG)
-const stars = [...players].filter((p) => (p.peak_score ?? 0) > 5).slice(0, 80);
+// one variant per real person, so the search can't stack two Wilts/LeBrons
+const pid = (p: Player) => p.person_id ?? p.id;
+const bestByPerson = new Map<string, Player>();
+for (const p of [...players].sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0)))
+  if (!bestByPerson.has(pid(p))) bestByPerson.set(pid(p), p);
+const stars = [...bestByPerson.values()].filter((p) => (p.peak_score ?? 0) > 5).slice(0, 80);
 function rng(seed: number) {
   return function () {
     seed |= 0; seed = (seed + 0x6d2b79f5) | 0;

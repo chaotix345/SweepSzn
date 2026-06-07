@@ -31,23 +31,35 @@ console.log("=== consensus panel ===");
 const scored = PANEL.map(([label, names]) => [label, wins(names)] as [string, number]).sort((a, b) => b[1] - a[1]);
 for (const [label, w] of scored) console.log(`  ${String(w).padStart(2)}-${82 - w}  ${label}`);
 
+// one real person per lineup (the game's rule): keep each person's best-by-stat variant only.
+const pid = (p: Player) => p.person_id ?? p.id;
+function topDistinct(sortKey: (p: Player) => number, n: number): Player[] {
+  const seen = new Set<string>(); const out: Player[] = [];
+  for (const p of [...players].sort((a, b) => sortKey(b) - sortKey(a))) {
+    if (seen.has(pid(p))) continue;
+    seen.add(pid(p)); out.push(p);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
 // ---- exploit probes: degenerate constructions must NOT beat the balanced GOAT team ----
 console.log("\n=== exploit probes ===");
 const goat = wins(PANEL[0][1]);
-const probes: [string, string[]][] = [
-  ["Max-PPG stack", [...players].sort((a, b) => (b.pts ?? 0) - (a.pts ?? 0)).slice(0, 5).map((p) => p.name)],
-  ["Max-REB stack", [...players].sort((a, b) => (b.trb ?? 0) - (a.trb ?? 0)).slice(0, 5).map((p) => p.name)],
-  ["Max-AST stack", [...players].sort((a, b) => (b.ast ?? 0) - (a.ast ?? 0)).slice(0, 5).map((p) => p.name)],
-  ["Max-USG stack", [...players].sort((a, b) => (b.usg ?? 0) - (a.usg ?? 0)).slice(0, 5).map((p) => p.name)],
+const probes: [string, Player[]][] = [
+  ["Max-PPG stack", topDistinct((p) => p.pts ?? 0, 5)],
+  ["Max-REB stack", topDistinct((p) => p.trb ?? 0, 5)],
+  ["Max-AST stack", topDistinct((p) => p.ast ?? 0, 5)],
+  ["Max-USG stack", topDistinct((p) => p.usg ?? 0, 5)],
 ];
-for (const [label, names] of probes) {
-  const w = wins(names);
+for (const [label, lineupP] of probes) {
+  const w = evaluateLineup(lineupP, coeff).wins;
   console.log(`  ${String(w).padStart(2)} wins  ${label}  ${w > goat ? "  <-- EXPLOIT (beats GOAT " + goat + ")" : "(ok, <= GOAT " + goat + ")"}`);
-  console.log("     " + names.join(", "));
+  console.log("     " + lineupP.map((p) => `${p.name} ${p.year}`).join(", "));
 }
 
 // ---- hill-climb to find the engine's true optimum (is 82-0 reachable? is the best team sane?) ----
-const stars = [...players].filter((p) => (p.peak_score ?? 0) > 4).slice(0, 120);
+const stars = topDistinct((p) => p.peak_score ?? 0, 120); // distinct people only
 function rng(s: number) { return () => { s |= 0; s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const rand = rng(7);
 let globalBest = { w: 0, names: [] as string[] };
@@ -61,7 +73,7 @@ for (let start = 0; start < 40; start++) {
     improved = false;
     for (let i = 0; i < 5; i++) {
       for (const cand of stars) {
-        if (cur.some((p) => p.id === cand.id)) continue;
+        if (cur.some((p, j) => j !== i && pid(p) === pid(cand))) continue; // one real person per lineup
         const trial = cur.slice(); trial[i] = cand;
         const w = evaluateLineup(trial, coeff).wins;
         if (w > curW) { cur = trial; curW = w; improved = true; }
