@@ -221,13 +221,15 @@ export default function Game() {
   );
 
   const canPlaceAny = current ? current.candidates.some((c) => openSlots.some((s) => c.eligible.includes(s))) : true;
+  const hideIQ = mode === "hoopiq";
+  const reelMasked = (locked: boolean) => hideIQ && !(spinning && !locked);
 
   return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart={filled > 0 || !!current}>
       {/* reels */}
       <div className="flex flex-wrap items-center justify-center gap-3">
-        <Reel kind="TEAM" value={reel.team} sub={teamName(reel.team)} color="orange" locked={lockedReel === "team"} />
-        <Reel kind="ERA" value={reel.era} sub="decade" color="violet" locked={lockedReel === "era"} />
+        <Reel kind="TEAM" value={reel.team} sub={teamName(reel.team)} color="orange" locked={lockedReel === "team"} masked={reelMasked(lockedReel === "team")} />
+        <Reel kind="ERA" value={reel.era} sub="decade" color="violet" locked={lockedReel === "era"} masked={reelMasked(lockedReel === "era")} />
         {!current && (
           <button onClick={spin} disabled={spinning}
             className="rounded-xl bg-orange-500 px-7 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400 disabled:opacity-50">
@@ -235,6 +237,9 @@ export default function Game() {
           </button>
         )}
       </div>
+      {hideIQ && (
+        <p className="mt-2 text-center text-[11px] text-zinc-500">🧠 Team &amp; era hidden — draft by recognizing the players.</p>
+      )}
       {(current || spinning) && (
         <div className="mt-2 flex justify-center gap-2 text-xs">
           <SkipBtn label="↻ Re-spin Team" used={skips.team} onClick={reSpinTeam} disabled={spinning} />
@@ -274,7 +279,7 @@ export default function Game() {
 
         {/* court (below candidates on mobile, right on desktop) */}
         <div className="order-last">
-          <Court roster={roster} selSlot={selSlot} isTarget={slotTarget} onSlot={clickSlot} />
+          <Court roster={roster} selSlot={selSlot} isTarget={slotTarget} onSlot={clickSlot} maskColors={hideIQ} />
           {selPlayer && (
             <p role="status" aria-live="polite" className="mt-2 text-center text-xs font-semibold text-orange-400">
               Placing {displayName(selPlayer.name)} — tap a glowing position
@@ -366,16 +371,16 @@ function ModeSelect({ onPick }: { onPick: (m: Mode) => void }) {
   );
 }
 
-function Reel({ kind, value, sub, color, locked }: {
-  kind: string; value: string; sub: string; color: "orange" | "violet"; locked?: boolean;
+function Reel({ kind, value, sub, color, locked, masked }: {
+  kind: string; value: string; sub: string; color: "orange" | "violet"; locked?: boolean; masked?: boolean;
 }) {
   const ring = locked ? "border-amber-500" : color === "orange" ? "border-orange-500" : "border-violet-500";
   const tag = locked ? "text-amber-400" : color === "orange" ? "text-orange-500" : "text-violet-400";
   return (
     <div className={`relative w-28 rounded-xl border-2 ${ring} bg-zinc-900 px-3 py-2 text-center shadow-md`}>
       <div className={`text-[10px] font-bold uppercase tracking-widest ${tag}`}>{locked ? "🔒 LOCKED" : kind}</div>
-      <div className="text-2xl font-black leading-tight">{value}</div>
-      <div className="truncate text-[10px] text-zinc-500">{sub}</div>
+      <div className="text-2xl font-black leading-tight">{masked ? "???" : value}</div>
+      <div className="truncate text-[10px] text-zinc-500">{masked ? "hidden" : sub}</div>
     </div>
   );
 }
@@ -390,8 +395,8 @@ function SkipBtn({ label, used, onClick, disabled }: { label: string; used: bool
   );
 }
 
-function Court({ roster, selSlot, isTarget, onSlot }: {
-  roster: Roster; selSlot: Slot | null; isTarget: (s: Slot) => boolean; onSlot: (s: Slot) => void;
+function Court({ roster, selSlot, isTarget, onSlot, maskColors }: {
+  roster: Roster; selSlot: Slot | null; isTarget: (s: Slot) => boolean; onSlot: (s: Slot) => void; maskColors?: boolean;
 }) {
   return (
     <div className="relative mx-auto aspect-[4/3.4] w-full max-w-sm overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-b from-[#14223b] to-[#0c1626] lg:sticky lg:top-4">
@@ -407,7 +412,7 @@ function Court({ roster, selSlot, isTarget, onSlot }: {
         const p = roster[s];
         const target = isTarget(s);
         const picked = selSlot === s;
-        const c = p ? teamColors(p.team) : null;
+        const c = p ? (maskColors ? { bg: "#3f3f46", text: "#e4e4e7" } : teamColors(p.team)) : null;
         return (
           <button key={s} onClick={() => onSlot(s)} style={{ left: `${COURT[s].left}%`, top: `${COURT[s].top}%` }}
             aria-label={p ? `${p.name} at ${s}${target ? ", swap target" : ""}` : `${s} slot${target ? ", eligible — tap to place" : " (empty)"}`}
@@ -464,8 +469,14 @@ function Browser({ spin, mode, selId, hints, onToggleHints, canPlace, onSelect }
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
       <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 p-2.5">
-        <span className="rounded-md px-2 py-1 text-xs font-black" style={{ background: c0.bg, color: c0.text }}>{spin.team}</span>
-        <span className="rounded-md bg-violet-500/20 px-2 py-1 text-xs font-bold text-violet-300">{eraLabel(spin.decade)}</span>
+        {hideStats ? (
+          <span title="Team & era are hidden in HoopIQ — recognize the players" className="rounded-md bg-zinc-800 px-2 py-1 text-xs font-bold text-zinc-300">🧠 Mystery roster</span>
+        ) : (
+          <>
+            <span className="rounded-md px-2 py-1 text-xs font-black" style={{ background: c0.bg, color: c0.text }}>{spin.team}</span>
+            <span className="rounded-md bg-violet-500/20 px-2 py-1 text-xs font-bold text-violet-300">{eraLabel(spin.decade)}</span>
+          </>
+        )}
         <div className="ml-auto flex gap-1">
           {(["All", "G", "F", "C"] as const).map((g) => (
             <button key={g} onClick={() => setGroup(g)}
