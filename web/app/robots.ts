@@ -5,7 +5,7 @@ import { baseUrl } from "@/lib/site";
 // fetch their share-card images; they're kept out of search by their own `noindex` metadata).
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: { userAgent: "*", allow: "/" },
+    rules: { userAgent: "*", allow: "/", disallow: "/admin" },
     sitemap: `${baseUrl}/sitemap.xml`,
   };
 }
