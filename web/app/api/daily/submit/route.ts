@@ -36,14 +36,14 @@ export async function POST(req: Request) {
   const v = verifyDaily(date, trace, deps);
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
 
-  const row = { uid, name, wins: v.result.wins, losses: v.result.losses, net: v.result.netRtg, lineup: v.lineup };
-  const view = await submitScore(date, row, v.result);
-
-  // Claim cleanup: signed-in user who posted anonymously earlier today -> remove the anon duplicate.
-  // The anon uid is an unguessable client UUID, so passing it is proof of ownership of that row.
-  if (session && typeof body.anonUid === "string" && UID_RE.test(body.anonUid) && body.anonUid !== uid) {
-    await removeEntry(date, body.anonUid);
+  // Claim cleanup BEFORE computing the view (so rank/total aren't inflated by the dupe).
+  // Only the anon uid bound into the session at sign-in is removable — never a client-supplied
+  // uid — so a signed-in user can't delete another player's row.
+  if (session?.anon && session.anon !== uid) {
+    await removeEntry(date, session.anon);
   }
 
+  const row = { uid, name, wins: v.result.wins, losses: v.result.losses, net: v.result.netRtg, lineup: v.lineup };
+  const view = await submitScore(date, row, v.result);
   return NextResponse.json(view);
 }

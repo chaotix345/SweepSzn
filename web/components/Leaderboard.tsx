@@ -31,22 +31,19 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
     try {
       const r = await fetch(`/api/daily/leaderboard?date=${encodeURIComponent(date)}&uid=${encodeURIComponent(uid)}`);
       if (r.status === 503) { setEnabled(false); return; }
-      if (r.ok) { const v = await r.json(); setView(v); if (v?.you) setSubmitted(true); }
+      if (r.ok) { const v = await r.json(); setView(v); setSubmitted(!!v?.you); }
     } catch { /* offline — leave board hidden */ }
   }, [date]);
 
   useEffect(() => {
-    let on = true;
     (async () => {
       const id = getUid();
-      if (!on) return;
       setAnonUid(id);
       setNameState(getName());
       recordDailyDone(date);
       setStreak(getStreak());
       await loadBoard(user?.uid ?? id);
     })();
-    return () => { on = false; };
   }, [date, user?.uid, loadBoard]);
 
   useEffect(() => {
@@ -59,7 +56,7 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
     try {
       const r = await fetch("/api/daily/submit", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ date, uid: anonUid, anonUid, name: name.trim(), trace }),
+        body: JSON.stringify({ date, uid: anonUid, name: name.trim(), trace }),
       });
       if (r.status === 503) { setEnabled(false); return; }
       const v = await r.json();
@@ -77,12 +74,12 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
     try {
       const r = await fetch("/api/daily/submit", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ date, anonUid, name: name.trim(), trace }),
+        body: JSON.stringify({ date, name: name.trim(), trace }),
       });
       const v = await r.json();
       if (r.ok) { setView(v); setSubmitted(true); track("daily_claim", { rank: v?.you?.rank ?? 0 }); }
     } catch { /* ignore */ } finally { setBusy(false); }
-  }, [refresh, date, anonUid, name, trace]);
+  }, [refresh, date, name, trace]);
 
   return (
     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">

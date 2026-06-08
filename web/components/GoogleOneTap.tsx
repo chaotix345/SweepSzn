@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef } from "react";
+import { getUid } from "@/lib/streak";
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
@@ -22,7 +23,7 @@ function loadGis(): Promise<void> {
     s.src = "https://accounts.google.com/gsi/client";
     s.async = true; s.defer = true;
     s.onload = () => resolve();
-    s.onerror = () => reject(new Error("gis load failed"));
+    s.onerror = () => { gisPromise = null; reject(new Error("gis load failed")); }; // allow retry on a later mount
     document.head.appendChild(s);
   });
   return gisPromise;
@@ -31,6 +32,9 @@ function loadGis(): Promise<void> {
 export default function GoogleOneTap({ onSignIn }: { onSignIn: () => void }) {
   const btnRef = useRef<HTMLDivElement>(null);
   const busyRef = useRef(false);
+  // keep onSignIn in a ref so handleCredential + the init effect stay stable across parent re-renders
+  const onSignInRef = useRef(onSignIn);
+  useEffect(() => { onSignInRef.current = onSignIn; });
 
   const handleCredential = useCallback(async (resp: { credential?: string }) => {
     if (!resp?.credential || busyRef.current) return;
@@ -39,12 +43,12 @@ export default function GoogleOneTap({ onSignIn }: { onSignIn: () => void }) {
       const r = await fetch("/api/auth/google", {
         method: "POST",
         headers: { "content-type": "application/json", "x-requested-with": "fetch" },
-        body: JSON.stringify({ credential: resp.credential }),
+        body: JSON.stringify({ credential: resp.credential, anonUid: getUid() }),
       });
-      if (r.ok) onSignIn();
+      if (r.ok) onSignInRef.current();
     } catch { /* ignore */ }
     finally { busyRef.current = false; }
-  }, [onSignIn]);
+  }, []);
 
   useEffect(() => {
     if (!CLIENT_ID) return;

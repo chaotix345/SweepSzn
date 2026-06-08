@@ -12,10 +12,11 @@ const assert = (c: boolean, m: string) => { if (!c) { console.error("FAIL:", m);
   assert(/^[a-z0-9-]{8,64}$/i.test(u1), "authedUid matches the submit-route uid regex");
   assert(u1.length === 32 && u1.startsWith("g") && /^g[a-f0-9]{31}$/.test(u1), "authedUid is g + 31 hex");
 
-  // session round-trips and rejects tampering
-  const tok = await signSession({ uid: u1, name: "Charlie", picture: "https://x/y.png" });
+  // session round-trips (incl. the anon binding) and rejects tampering
+  const tok = await signSession({ uid: u1, name: "Charlie", picture: "https://x/y.png", anon: "anon-abcd1234" });
   const s = await verifySession(tok);
   assert(!!s && s.uid === u1 && s.name === "Charlie" && s.picture === "https://x/y.png", "session round-trips");
+  assert(s?.anon === "anon-abcd1234", "session carries the anon binding");
   assert((await verifySession(tok.slice(0, -2) + "xy")) === null, "tampered session rejected");
   assert((await verifySession("not.a.jwt")) === null, "garbage session rejected");
 
@@ -24,12 +25,15 @@ const assert = (c: boolean, m: string) => { if (!c) { console.error("FAIL:", m);
   assert((await verifyNonce(nt)) === "abc-123", "nonce round-trips");
   assert((await verifyNonce("bad")) === null, "bad nonce rejected");
 
-  // isAuthEnabled truth table
-  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = "x"; process.env.AUTH_SECRET = "y";
-  assert(isAuthEnabled() === true, "isAuthEnabled true when both env set");
-  delete process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  // isAuthEnabled truth table (requires both vars AND a >=32-char secret)
+  const longSecret = "x".repeat(32);
+  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = "client-id"; process.env.AUTH_SECRET = longSecret;
+  assert(isAuthEnabled() === true, "isAuthEnabled true when both env set + secret long enough");
+  process.env.AUTH_SECRET = "short";
+  assert(isAuthEnabled() === false, "isAuthEnabled false when secret too short");
+  process.env.AUTH_SECRET = longSecret; delete process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   assert(isAuthEnabled() === false, "isAuthEnabled false without client id");
-  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = "x"; delete process.env.AUTH_SECRET;
+  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID = "client-id"; delete process.env.AUTH_SECRET;
   assert(isAuthEnabled() === false, "isAuthEnabled false without secret");
 
   console.log(fail ? `\n${fail} ASSERTION(S) FAILED` : "\nALL AUTH CHECKS PASSED");
