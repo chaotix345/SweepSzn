@@ -79,6 +79,13 @@ export interface DraftCandidate {
   fit?: CandidateFit;
 }
 
+// Daily leaderboard: the client submits the draft as an ordered trace (index = round) so the
+// server can replay today's deterministic spins and verify every pick was legal.
+export type DraftStep = { slot: Slot; pickedId: string; respins: ("team" | "era")[] };
+export interface DailySubmission { date: string; uid: string; name: string; trace: DraftStep[] }
+export interface LeaderboardRow { rank: number; uid: string; name: string; wins: number; losses: number; net: number; lineup: string }
+export interface LeaderboardView { date: string; total: number; top: LeaderboardRow[]; you?: LeaderboardRow }
+
 export interface DefModel {
   intercept: number; dws: number; posC: number; posPF: number; posSF: number; posSG: number; trb?: number;
 }

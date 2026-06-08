@@ -168,8 +168,10 @@ export interface SpinResult {
 
 // Spin a (team, decade) like 82-0: uniform over populated combos, full roster returned.
 // `seed` makes it deterministic (Daily). Locks/excludes implement the two one-time skips.
-export function spin(seed: string, round: number, opts: SpinOptions = {}): SpinResult {
-  const { byId, draftIndex, draftKeys, teamsByDecade, decadesByTeam, coeff } = load();
+// Shared (team, decade, available pool) selection — the deterministic core of a spin.
+// Both spin() (adds draft-fit) and spinPool() (ids only, for leaderboard verification) use it.
+function selectSpin(seed: string, round: number, opts: SpinOptions): { team: string; decade: string; pool: Player[] } {
+  const { byId, draftIndex, draftKeys, teamsByDecade, decadesByTeam } = load();
   const excludeIds = new Set(opts.exclude ?? []);
   const excludePeople = new Set([...excludeIds].map((id) => byId.get(id)?.person_id ?? id));
   const rng = mulberry32(strSeed(seed) ^ (round * 2654435761) ^ ((opts.salt ?? 0) * 40503));
@@ -201,10 +203,24 @@ export function spin(seed: string, round: number, opts: SpinOptions = {}): SpinR
   const pool = (draftIndex.get(`${team}|${decade}`) ?? [])
     .filter(available)
     .sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0));
+  return { team, decade, pool };
+}
+
+export function spin(seed: string, round: number, opts: SpinOptions = {}): SpinResult {
+  const { byId, coeff } = load();
+  const { team, decade, pool } = selectSpin(seed, round, opts);
+  const excludeIds = new Set(opts.exclude ?? []);
   const drafted = excludeIds.size ? [...excludeIds].map((id) => byId.get(id)).filter((p): p is Player => !!p) : [];
   const fits = computeFits(drafted, pool, coeff);
   const candidates = pool.map((p) => toCandidate(p, fits.get(p.id)));
   return { team, decade, candidates };
+}
+
+// Pool-only spin for leaderboard verification: same (team, decade) selection, candidate ids only
+// (skips the per-candidate fit calc, which verification doesn't need).
+export function spinPool(seed: string, round: number, opts: SpinOptions = {}): { team: string; decade: string; ids: string[] } {
+  const { team, decade, pool } = selectSpin(seed, round, opts);
+  return { team, decade, ids: pool.map((p) => p.id) };
 }
 
 export function poolStats() {

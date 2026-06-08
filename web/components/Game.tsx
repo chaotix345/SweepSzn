@@ -1,9 +1,10 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CandidateFit, DraftCandidate, LineupResult, Player, Slot } from "@/lib/types";
+import type { CandidateFit, DraftCandidate, DraftStep, LineupResult, Player, Slot } from "@/lib/types";
 import { SLOTS, FRANCHISES, DECADES, teamColors, teamName, initials, displayName, eraLabel } from "@/lib/teams";
 import { track } from "@vercel/analytics";
 import ResultCard from "@/components/ResultCard";
+import Leaderboard from "@/components/Leaderboard";
 
 type Mode = "daily" | "classic" | "hoopiq";
 type Roster = Record<Slot, DraftCandidate | null>;
@@ -34,7 +35,7 @@ export default function Game() {
   const [selPlayer, setSelPlayer] = useState<DraftCandidate | null>(null);
   const [selSlot, setSelSlot] = useState<Slot | null>(null);
   const [skips, setSkips] = useState({ team: false, era: false });
-  const [result, setResult] = useState<{ result: LineupResult; players: Player[] } | null>(null);
+  const [result, setResult] = useState<{ result: LineupResult; players: Player[]; trace: DraftStep[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // OFF by default: the game is about your judgment. Hints opt-in reveals the engine's fit grade.
@@ -45,6 +46,8 @@ export default function Game() {
   });
   const saltRef = useRef(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const traceRef = useRef<DraftStep[]>([]);            // ordered picks for leaderboard verification
+  const roundRespinsRef = useRef<("team" | "era")[]>([]); // re-spins used in the current round
 
   const toggleHints = useCallback(() => setHints((h) => { const n = !h; try { localStorage.setItem("82-0:hints", n ? "1" : "0"); } catch { /* no storage */ } return n; }), []);
 
@@ -61,6 +64,7 @@ export default function Game() {
     setRoster(EMPTY); setCurrent(null); setResult(null); setError(null);
     setSelPlayer(null); setSelSlot(null); setSkips({ team: false, era: false });
     setReel({ team: "ATL", era: "60's" }); setLockedReel(null); saltRef.current = 0;
+    traceRef.current = []; roundRespinsRef.current = [];
   }, []);
 
   useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
@@ -98,11 +102,13 @@ export default function Game() {
   const reSpinTeam = useCallback(() => {
     if (skips.team || !current) return;
     setSkips((s) => ({ ...s, team: true }));
+    roundRespinsRef.current.push("team");
     runSpin({ lockedDecade: current.decade, excludeTeam: current.team, salt: ++saltRef.current }, "era");
   }, [skips.team, current, runSpin]);
   const reSpinEra = useCallback(() => {
     if (skips.era || !current) return;
     setSkips((s) => ({ ...s, era: true }));
+    roundRespinsRef.current.push("era");
     runSpin({ lockedTeam: current.team, excludeDecade: current.decade, salt: ++saltRef.current }, "team");
   }, [skips.era, current, runSpin]);
 
@@ -115,7 +121,7 @@ export default function Game() {
       });
       if (!res.ok) throw new Error("evaluate failed");
       const data = await res.json();
-      setResult({ result: data.result, players: data.players });
+      setResult({ result: data.result, players: data.players, trace: [...traceRef.current] });
       track("lineup_complete", { wins: data.result.wins, grade: data.result.grade });
     } catch {
       setError("Couldn't simulate the season — tap Simulate to retry.");
@@ -126,6 +132,8 @@ export default function Game() {
 
   const place = useCallback((slot: Slot) => {
     if (!selPlayer || roster[slot] || !selPlayer.eligible.includes(slot)) return;
+    traceRef.current.push({ slot, pickedId: selPlayer.id, respins: [...roundRespinsRef.current] });
+    roundRespinsRef.current = [];
     const next = { ...roster, [slot]: selPlayer };
     setRoster(next); setSelPlayer(null); setCurrent(null); setLockedReel(null);
     if (SLOTS.every((s) => next[s])) simulate(next);
@@ -162,6 +170,7 @@ export default function Game() {
   if (result) return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={mode} onReset={() => start(mode)} />
+      {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} />}
     </Shell>
   );
   if (loading) return (
