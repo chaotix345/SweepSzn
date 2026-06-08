@@ -20,15 +20,18 @@ const enc = (s: string) => btoa(encodeURIComponent(s)).replace(/\+/g, "-").repla
 const dec = (s: string) => { try { return decodeURIComponent(atob(s.replace(/-/g, "+").replace(/_/g, "/"))); } catch { return ""; } };
 
 export function encodeRankCard(c: RankCard): string {
-  return [CODE[c.scope], Math.round(c.rank), Math.round(c.total), Math.round(c.wins), Math.round(c.losses), Math.round(c.net * 10), enc(c.name)].join(".");
+  // normalize net through the same 1-decimal path the board displays, so the card never disagrees
+  const net10 = Math.round(parseFloat(c.net.toFixed(1)) * 10);
+  return [CODE[c.scope], Math.round(c.rank), Math.round(c.total), Math.round(c.wins), Math.round(c.losses), net10, enc(c.name)].join(".");
 }
 
 export function decodeRankCard(seg: string): RankCard | null {
-  const parts = decodeURIComponent(seg).split(".");
+  const parts = seg.split("."); // Next already URL-decodes the route param; base64url has no dots
   if (parts.length !== 7) return null;
   const scope = SCOPE[parts[0]];
   if (!scope) return null;
   const [rank, total, wins, losses, net10] = parts.slice(1, 6).map(Number);
   if ([rank, total, wins, losses, net10].some((n) => !Number.isFinite(n))) return null;
+  if (rank < 1 || total < 1) return null;
   return { scope, rank, total, wins, losses, net: net10 / 10, name: dec(parts[6]) || "Player" };
 }
