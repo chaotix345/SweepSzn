@@ -1,9 +1,10 @@
 import type { DraftStep, Player, LineupResult, Slot } from "./types";
 import { SLOTS, eligibleOf } from "./teams";
 
-// Anti-cheat core: replay a submitted Daily draft against today's deterministic spins and
-// recompute the score. Pure + dependency-injected (no server-only import) so it's unit-testable;
-// the route handler injects the real data.ts/engine functions.
+// Anti-cheat core: replay a submitted draft against deterministic spins and recompute the score.
+// Pure + dependency-injected (no server-only import) so it's unit-testable; the route handler
+// injects the real data.ts/engine functions. verifyTrace is seed-agnostic (Daily uses
+// "daily-<date>", H2H challenges use "h2h-<id>"); verifyDaily is the Daily wrapper.
 
 export interface SpinPoolOpts {
   exclude?: string[]; lockedTeam?: string | null; lockedDecade?: string | null;
@@ -19,9 +20,8 @@ export type VerifyResult =
   | { ok: true; players: Player[]; result: LineupResult; lineup: string }
   | { ok: false; error: string };
 
-export function verifyDaily(date: string, trace: DraftStep[], deps: VerifyDeps): VerifyResult {
+export function verifyTrace(seed: string, trace: DraftStep[], deps: VerifyDeps): VerifyResult {
   if (!Array.isArray(trace) || trace.length !== 5) return { ok: false, error: "trace must have 5 picks" };
-  const seed = `daily-${date}`;
   const exclude: string[] = [];
   const usedSlots = new Set<string>();
   const picked: Player[] = []; // draft order
@@ -58,4 +58,8 @@ export function verifyDaily(date: string, trace: DraftStep[], deps: VerifyDeps):
   if (people.size !== 5) return { ok: false, error: "duplicate player" };
   const result = deps.evaluate(ordered);
   return { ok: true, players: ordered, result, lineup: ordered.map((p) => p.id).join(",") };
+}
+
+export function verifyDaily(date: string, trace: DraftStep[], deps: VerifyDeps): VerifyResult {
+  return verifyTrace(`daily-${date}`, trace, deps);
 }

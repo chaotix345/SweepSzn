@@ -1,4 +1,4 @@
-import { verifyDaily, type VerifyDeps } from "./dailyVerify";
+import { verifyDaily, verifyTrace, type VerifyDeps } from "./dailyVerify";
 import type { DraftStep, Player, LineupResult } from "./types";
 
 // Fake spin world (no real data / no server-only) so we can exercise the verifier's logic.
@@ -64,6 +64,13 @@ const tooMany = clone(legit);
 tooMany[0] = { slot: "PG", pickedId: "r0t", respins: ["team"] };
 tooMany[1] = { slot: "SG", pickedId: "r1t", respins: ["team"] };
 assert(verifyDaily("2025-1-1", tooMany, deps).ok === false, "more than one team re-spin rejected");
+
+// verifyTrace: the seed-agnostic core works for any seed (e.g. an H2H challenge), not just daily
+const chal = verifyTrace("h2h-abc123", legit, deps);
+assert(chal.ok === true, "verifyTrace verifies a legit trace under an arbitrary (challenge) seed");
+assert(chal.ok === true && chal.lineup === "p0pg,p1sg,p2sf,p3pf,p4c", "verifyTrace serializes in slot order");
+const chalBad = clone(legit); chalBad[0].pickedId = "not_on_pool";
+assert(verifyTrace("h2h-abc123", chalBad, deps).ok === false, "verifyTrace rejects an off-pool pick");
 
 console.log(fail ? `\n${fail} ASSERTION(S) FAILED` : "\nALL VERIFY CHECKS PASSED");
 process.exit(fail ? 1 : 0);
