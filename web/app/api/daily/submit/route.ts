@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { spinPool, getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
 import { verifyDaily, type VerifyDeps } from "@/lib/dailyVerify";
 import { isLeaderboardEnabled, submitScore, submitScoreAuthed, removeEntry } from "@/lib/leaderboard";
 import { getSession } from "@/lib/authServer";
+import { redis } from "@/lib/redis";
+import { bump } from "@/lib/evServer";
 
 const todayUTC = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
@@ -48,5 +50,6 @@ export async function POST(req: Request) {
   const view = session
     ? await submitScoreAuthed(date, row, v.result)
     : await submitScore(date, row, v.result);
+  after(() => bump(redis, "submit", { uid }));
   return NextResponse.json(view);
 }

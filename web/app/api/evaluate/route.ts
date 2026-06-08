@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
+import { redis } from "@/lib/redis";
+import { bump } from "@/lib/evServer";
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
@@ -12,5 +14,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "lineup must contain 5 unique players" }, { status: 400 });
   }
   const result = evaluateLineup(players, getCoefficients());
+  after(() => bump(redis, "complete"));
   return NextResponse.json({ result, players });
 }

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { spinPool, getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
 import { verifyTrace, type VerifyDeps } from "@/lib/dailyVerify";
@@ -6,6 +6,8 @@ import { isChallengeEnabled, submitChallenge } from "@/lib/challengeStore";
 import { challengeSeed, compareResults } from "@/lib/challenge";
 import { decodeLineup } from "@/lib/share";
 import { SLOTS } from "@/lib/teams";
+import { redis } from "@/lib/redis";
+import { bump } from "@/lib/evServer";
 import type { ChallengeMiniPlayer, ChallengeSubmitResponse } from "@/lib/types";
 
 const cleanName = (s: unknown) => (typeof s === "string" ? s.trim().slice(0, 24) : "") || "Anonymous";
@@ -29,6 +31,7 @@ export async function POST(req: Request) {
   const row = { uid, name: cleanName(name), wins: v.result.wins, losses: v.result.losses, net: v.result.netRtg, lineup: v.lineup };
   const out = await submitChallenge(id, row, v.result, v.result.grade);
   if (!out) return NextResponse.json({ error: "challenges not configured" }, { status: 503 });
+  after(() => bump(redis, "submit", { uid }));
 
   if (out.role === "creator") {
     const res: ChallengeSubmitResponse = { role: "creator", id, board: out.board };
