@@ -1,11 +1,69 @@
+import type { Metadata } from "next";
 import Game from "@/components/Game";
+import LandingSection from "@/components/LandingSection";
 import { poolStats } from "@/lib/data";
+import { baseUrl } from "@/lib/site";
+
+// Canonical lives here (homepage only) — NOT in the shared root layout, so the noindex
+// /r/[lineup] permalinks don't inherit a canonical pointing back to "/".
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
+
+// Crawlable SEO body copy (server-rendered, visible). The rest of the page above the game is the
+// LandingSection; this paragraph adds keyword-dense basketball terminology below the game.
+const SEO_COPY =
+  "82-0 is a browser-based all-time NBA lineup simulator where you draft a five-player starting " +
+  "five by spinning a franchise reel and a decade reel, then simulate a full 82-game NBA season. " +
+  "The simulation engine is calibrated to 1,170 real NBA team-seasons (1985–2025) across 24,687 " +
+  "player-seasons, with out-of-sample accuracy of 6.07 wins RMSE in year-grouped cross-validation. " +
+  "Unlike lineup tools that simply add up box-score averages, 82-0 models finite possessions and " +
+  "usage overload (too many ball-dominant stars costs wins), era normalization via per-season " +
+  "z-scores (so Wilt Chamberlain's pace-inflated 1962 numbers are not compared directly to modern " +
+  "stats), floor spacing, rim protection, and lineup fit and redundancy. Every result includes a " +
+  "plain-English “Why this record” breakdown — a two-column helping/hurting factor list and a " +
+  "per-player role label (Lead creator, Rim protector, 3&D wing, Floor spacer) — so you understand " +
+  "exactly what is working and what is costing wins. Daily mode gives every player the same spins " +
+  "each day and ranks results on a verified server-side leaderboard with streak tracking. Classic " +
+  "mode shows player statistics during the draft; HoopIQ mode hides them so you draft entirely from " +
+  "memory. Every result generates a unique shareable permalink and result card. The goal: can you " +
+  "build an all-time NBA five that goes 82-0, undefeated over a full season? It is achievable, but " +
+  "the engine makes it brutally honest.";
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  name: "82-0",
+  url: baseUrl,
+  description:
+    "All-time NBA lineup simulator. Draft a starting five by spinning team and era reels. Engine calibrated to 1,170 real NBA team-seasons — and it tells you why your lineup wins or loses.",
+  applicationCategory: "GameApplication",
+  operatingSystem: "Any",
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  genre: "Sports simulation",
+  keywords:
+    "NBA lineup simulator, all-time NBA team builder, best NBA starting five, NBA fantasy draft game, NBA team builder game",
+};
+
+// Escape the three characters that could break out of the <script> context (defense-in-depth;
+// the payload is fully static today, but this keeps the pattern safe if it ever takes dynamic data).
+const jsonLdHtml = JSON.stringify(jsonLd)
+  .replace(/</g, "\\u003c")
+  .replace(/>/g, "\\u003e")
+  .replace(/&/g, "\\u0026");
 
 export default function Home() {
   const stats = poolStats();
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
-      <Game />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml }} />
+      <LandingSection />
+      <div id="game">
+        <Game />
+      </div>
+      <section className="mx-auto max-w-2xl px-5 pb-16 text-sm leading-relaxed text-zinc-500">
+        {SEO_COPY}
+      </section>
       <footer className="pb-10 text-center text-xs text-zinc-600">
         {stats.players.toLocaleString()} players · {stats.franchiseDecades} franchise-eras · engine calibrated to real NBA team-seasons
       </footer>
