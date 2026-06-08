@@ -51,6 +51,15 @@ export interface Player {
   peak_score?: number;
 }
 
+// Roster-aware "reveal before confirm" signal: how much this candidate would help the
+// lineup drafted SO FAR, and which need they fill. Computed server-side per spin.
+export interface CandidateFit {
+  delta: number;        // marginal net-rating swing if added to the current roster now
+  tier: "elite" | "strong" | "solid" | "marginal"; // relative to this spin's candidates
+  best: boolean;        // the single best fit available in this spin
+  adds: string[];       // gaps this player fills for YOUR roster, e.g. ["Rim protection", "Spacing"]
+}
+
 // Trimmed player projection sent to the client during the draft (full stats stay server-side).
 export interface DraftCandidate {
   id: string;
@@ -67,6 +76,7 @@ export interface DraftCandidate {
   stl?: number | null;
   blk?: number | null;
   defense_estimated?: boolean;
+  fit?: CandidateFit;
 }
 
 export interface DefModel {

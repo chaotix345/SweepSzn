@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DraftCandidate, LineupResult, Player, Slot } from "@/lib/types";
+import type { CandidateFit, DraftCandidate, LineupResult, Player, Slot } from "@/lib/types";
 import { SLOTS, FRANCHISES, DECADES, teamColors, teamName, initials, displayName, eraLabel } from "@/lib/teams";
 import ResultCard from "@/components/ResultCard";
 
@@ -36,8 +36,16 @@ export default function Game() {
   const [result, setResult] = useState<{ result: LineupResult; players: Player[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // OFF by default: the game is about your judgment. Hints opt-in reveals the engine's fit grade.
+  // Lazy init from storage is hydration-safe here — the page renders ModeSelect first (no hints UI).
+  const [hints, setHints] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try { return localStorage.getItem("82-0:hints") === "1"; } catch { return false; }
+  });
   const saltRef = useRef(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const toggleHints = useCallback(() => setHints((h) => { const n = !h; try { localStorage.setItem("82-0:hints", n ? "1" : "0"); } catch { /* no storage */ } return n; }), []);
 
   const drafted = useMemo(() => SLOTS.map((s) => roster[s]).filter(Boolean) as DraftCandidate[], [roster]);
   const filled = drafted.length;
@@ -186,6 +194,7 @@ export default function Game() {
         <div className="order-first">
           {current ? (
             <Browser key={`${current.team}|${current.decade}|${roundNum}`} spin={current} mode={mode} selId={selPlayer?.id ?? null}
+              hints={hints} onToggleHints={toggleHints}
               canPlace={(c) => openSlots.some((s) => c.eligible.includes(s))}
               onSelect={(c) => { setSelSlot(null); setSelPlayer((p) => (p?.id === c.id ? null : c)); }} />
           ) : (
@@ -369,15 +378,19 @@ function Court({ roster, selSlot, isTarget, onSlot }: {
   );
 }
 
-type SortKey = "ppg" | "rpg" | "apg" | "az";
-function Browser({ spin, mode, selId, canPlace, onSelect }: {
-  spin: Spin; mode: Mode; selId: string | null;
+type SortKey = "fit" | "ppg" | "rpg" | "apg" | "az";
+function Browser({ spin, mode, selId, hints, onToggleHints, canPlace, onSelect }: {
+  spin: Spin; mode: Mode; selId: string | null; hints: boolean; onToggleHints: () => void;
   canPlace: (c: DraftCandidate) => boolean; onSelect: (c: DraftCandidate) => void;
 }) {
-  const hideStats = mode === "hoopiq";
+  const hideStats = mode === "hoopiq"; // HoopIQ hides stats — draft on memory
+  const canHint = mode === "classic";  // Classic only: Daily is a competition (fairness), HoopIQ is a memory test
+  const showFit = hints && canHint;    // the fit grade only appears when Hints is on (off by default)
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<"All" | "G" | "F" | "C">("All");
-  const [sort, setSort] = useState<SortKey>(hideStats ? "az" : "ppg");
+  const [sort, setSort] = useState<SortKey>(showFit ? "fit" : hideStats ? "az" : "ppg");
+  // if Hints is switched off mid-spin while sorted by fit, fall back without resetting user state
+  const effSort: SortKey = sort === "fit" && !showFit ? (hideStats ? "az" : "ppg") : sort;
 
   const list = useMemo(() => {
     const inGroup = (c: DraftCandidate) =>
@@ -387,11 +400,11 @@ function Browser({ spin, mode, selId, canPlace, onSelect }: {
       c.eligible.includes("C");
     const out = spin.candidates.filter((c) => inGroup(c) && c.name.toLowerCase().includes(q.toLowerCase().trim()));
     const key: Record<SortKey, (c: DraftCandidate) => number> = {
-      ppg: (c) => -(c.pts ?? 0), rpg: (c) => -(c.trb ?? 0), apg: (c) => -(c.ast ?? 0), az: () => 0,
+      fit: (c) => -(c.fit?.delta ?? -99), ppg: (c) => -(c.pts ?? 0), rpg: (c) => -(c.trb ?? 0), apg: (c) => -(c.ast ?? 0), az: () => 0,
     };
-    out.sort((a, b) => (sort === "az" ? a.name.localeCompare(b.name) : key[sort](a) - key[sort](b)));
+    out.sort((a, b) => (effSort === "az" ? a.name.localeCompare(b.name) : key[effSort](a) - key[effSort](b)));
     return out;
-  }, [spin, q, group, sort]);
+  }, [spin, q, group, effSort]);
 
   const c0 = teamColors(spin.team);
   return (
@@ -407,33 +420,59 @@ function Browser({ spin, mode, selId, canPlace, onSelect }: {
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" aria-label="Search players"
           className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 sm:w-36" />
+        {canHint && (
+          <button onClick={onToggleHints} aria-pressed={hints} title="Show the engine's fit grade for each player"
+            className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
+              hints ? "bg-emerald-500/20 text-emerald-300" : "border border-zinc-700 text-zinc-400 hover:text-zinc-200"}`}>
+            💡 Hints{hints ? " on" : ""}
+          </button>
+        )}
         {!hideStats && (
-          <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort players"
+          <select value={effSort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort players"
             className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-300 outline-none">
+            {showFit && <option value="fit">Best fit</option>}
             <option value="ppg">PPG</option><option value="rpg">RPG</option><option value="apg">APG</option><option value="az">A–Z</option>
           </select>
         )}
       </div>
-      <div className="px-3 py-1.5 text-[11px] text-zinc-500">{list.length} player{list.length === 1 ? "" : "s"} available{hideStats ? " · stats hidden" : ""}</div>
+      <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-zinc-500">
+        <span>{list.length} player{list.length === 1 ? "" : "s"} available{hideStats ? " · stats hidden" : ""}</span>
+        {showFit && <span className="text-zinc-600">fit = net swing for <span className="text-zinc-500">your</span> roster</span>}
+      </div>
       <div className="max-h-[420px] overflow-y-auto px-2 pb-2">
         {list.map((c) => {
           const sel = selId === c.id;
           const fits = canPlace(c);
+          const showRowFit = showFit && fits && c.fit;
           return (
             <button key={c.id} onClick={() => onSelect(c)} aria-pressed={sel}
-              aria-label={`Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}`}
+              aria-label={`Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}${showRowFit ? `, fit ${c.fit!.delta > 0 ? "+" : ""}${c.fit!.delta}${c.fit!.adds.length ? ", adds " + c.fit!.adds.join(" and ") : ""}` : ""}`}
               className={`mb-1.5 flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition ${
-                sel ? "border-orange-500 bg-orange-500/10" : fits ? "border-zinc-800 bg-zinc-950/60 hover:border-zinc-600" : "border-zinc-900 bg-zinc-950/40 opacity-55"}`}>
+                sel ? "border-orange-500 bg-orange-500/10" : showRowFit && c.fit!.best ? "border-emerald-600/50 bg-emerald-500/[0.06] hover:border-emerald-500" : fits ? "border-zinc-800 bg-zinc-950/60 hover:border-zinc-600" : "border-zinc-900 bg-zinc-950/40 opacity-55"}`}>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-semibold">{c.name}</div>
                 <div className="text-[11px] text-zinc-500">
                   {c.eligible.join(" · ")}{!fits && <span className="ml-1 text-zinc-600">· no open slot</span>}
                 </div>
+                {showRowFit && c.fit!.adds.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {c.fit!.adds.map((a) => (
+                      <span key={a} className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400/90">+ {a}</span>
+                    ))}
+                  </div>
+                )}
               </div>
               {!hideStats && (
                 <div className="flex shrink-0 gap-2 text-center text-[11px] text-zinc-400">
                   <Mini v={c.pts} k="PPG" /><Mini v={c.trb} k="RPG" /><Mini v={c.ast} k="APG" />
-                  <Mini v={c.stl} k="SPG" /><Mini v={c.blk} k="BPG" />
+                  {/* SPG/BPG hidden on mobile to make room for the fit column; defense shows via fit tags */}
+                  <Mini v={c.stl} k="SPG" className="hidden sm:block" /><Mini v={c.blk} k="BPG" className="hidden sm:block" />
+                </div>
+              )}
+              {showRowFit && (
+                <div className="w-10 shrink-0 text-right">
+                  <div className={`text-sm font-bold tabular-nums ${fitColor(c.fit!)}`}>{c.fit!.delta > 0 ? "+" : ""}{c.fit!.delta}</div>
+                  <div className={`text-[8px] uppercase tracking-wide ${c.fit!.best ? "text-emerald-300" : "text-zinc-600"}`}>{c.fit!.best ? "★ fit" : "fit"}</div>
                 </div>
               )}
             </button>
@@ -445,9 +484,15 @@ function Browser({ spin, mode, selId, canPlace, onSelect }: {
   );
 }
 
-function Mini({ v, k }: { v: number | null | undefined; k: string }) {
+// color the fit swing: green shades by tier when it helps, muted when it doesn't move the needle
+function fitColor(f: CandidateFit): string {
+  if (f.delta <= 0) return "text-zinc-500";
+  return f.tier === "elite" ? "text-emerald-300" : f.tier === "strong" ? "text-emerald-400" : f.tier === "solid" ? "text-emerald-500/80" : "text-zinc-400";
+}
+
+function Mini({ v, k, className }: { v: number | null | undefined; k: string; className?: string }) {
   return (
-    <div className="w-8">
+    <div className={`w-8 ${className ?? ""}`}>
       <div className="font-semibold text-zinc-300 tabular-nums">{v == null ? "–" : v.toFixed(1)}</div>
       <div className="text-[8px] uppercase tracking-wide text-zinc-600">{k}</div>
     </div>
