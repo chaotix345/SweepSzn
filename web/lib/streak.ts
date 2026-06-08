@@ -5,12 +5,17 @@ const K = { uid: "82-0:uid", name: "82-0:name", hist: "82-0:daily:history" };
 const dayMs = 86400000;
 const utcKey = (t: number) => { const d = new Date(t); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
 
+let memUid = ""; // stable per-session fallback when localStorage is unavailable (private mode, quota)
 export function getUid(): string {
   try {
     let u = localStorage.getItem(K.uid);
     if (!u) { u = crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(36).slice(2)}`; localStorage.setItem(K.uid, u); }
     return u;
-  } catch { return "anon"; }
+  } catch {
+    // must satisfy the submit routes' /^[a-z0-9-]{8,64}$/i, so "anon" (4 chars) won't do
+    if (!memUid) memUid = `anon-${Math.random().toString(36).slice(2).padEnd(8, "0")}`;
+    return memUid;
+  }
 }
 
 export function getName(): string { try { return localStorage.getItem(K.name) ?? ""; } catch { return ""; } }
