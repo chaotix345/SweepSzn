@@ -1,0 +1,103 @@
+import type { Redis } from "@upstash/redis";
+import { decodeWins } from "./score";
+import { isoWeek } from "./isoweek";
+import { recentDays } from "./day";
+
+export interface Metrics {
+  days: string[];                              // ascending date-keys
+  funnel: { plays: number; completes: number; shares: number; signins: number; submits: number };
+  rates: { completion: number; shareRate: number; capture: number }; // 0..1
+  dauByDay: number[];                          // distinct active uids per day (ascending)
+  d1: number;                                  // next-day return rate, 0..1
+  d7: number | null;                           // 7-day return rate, null if window < 8
+  modeSplit: Record<string, number>;           // mode → play count over the window
+  boardByDay: number[];                        // ZCARD lb:<day> (ascending)
+  boards: { daily: number; weekly: number; alltime: number };
+  winBuckets: { label: string; count: number }[]; // today's leaderboard win distribution
+  totals: Record<string, number>;              // all-time ev:totals
+}
+
+const num = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+export const pct = (a: number, b: number): number => (b > 0 ? a / b : 0);
+export const intersectCount = (a: string[], b: string[]): number => {
+  const s = new Set(a); let c = 0; for (const x of b) if (s.has(x)) c++; return c;
+};
+
+const WIN_BUCKETS = [
+  { label: "78-82", min: 78, max: 82 },
+  { label: "70-77", min: 70, max: 77 },
+  { label: "60-69", min: 60, max: 69 },
+  { label: "<60", min: 0, max: 59 },
+];
+export const bucketWins = (wins: number[]): { label: string; count: number }[] =>
+  WIN_BUCKETS.map(b => ({ label: b.label, count: wins.filter(w => w >= b.min && w <= b.max).length }));
+
+const SPARK = "▁▂▃▄▅▆▇█";
+export const sparkline = (vals: number[]): string => {
+  if (!vals.length) return "";
+  const max = Math.max(...vals, 1);
+  return vals.map(v => SPARK[Math.min(SPARK.length - 1, Math.floor((v / max) * (SPARK.length - 1)))]).join("");
+};
+
+const STAGES = ["play", "complete", "share", "signin", "submit"] as const;
+
+export async function getMetrics(redis: Redis | null, opts: { days?: number; now?: Date } = {}): Promise<Metrics> {
+  const n = opts.days ?? 14;
+  const days = recentDays(n, opts.now).slice().reverse(); // ascending: oldest … today
+  const today = days[days.length - 1];
+
+  if (!redis) {
+    return {
+      days,
+      funnel: { plays: 0, completes: 0, shares: 0, signins: 0, submits: 0 },
+      rates: { completion: 0, shareRate: 0, capture: 0 },
+      dauByDay: days.map(() => 0), d1: 0, d7: null, modeSplit: {},
+      boardByDay: days.map(() => 0), boards: { daily: 0, weekly: 0, alltime: 0 },
+      winBuckets: bucketWins([]), totals: {},
+    };
+  }
+
+  const [counts, modeHashes, activeSets, boardCards, todayZ, totalsHash, weekCard, allCard] = await Promise.all([
+    Promise.all(STAGES.map(s => redis.mget<(string | number | null)[]>(...days.map(d => `ev:${s}:${d}`)))),
+    Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:mode:${d}`))),
+    Promise.all(days.map(d => redis.smembers(`ev:active:${d}`))),
+    Promise.all(days.map(d => redis.zcard(`lb:${d}`))),
+    redis.zrange<(string | number)[]>(`lb:${today}`, 0, -1, { withScores: true }),
+    redis.hgetall<Record<string, string | number>>("ev:totals"),
+    redis.zcard(`lb:week:${isoWeek(today)}`),
+    redis.zcard("lb:alltime"),
+  ]);
+
+  const sumDays = (arr: (string | number | null)[]) => arr.reduce<number>((a, v) => a + num(v), 0);
+  const funnel = {
+    plays: sumDays(counts[0]), completes: sumDays(counts[1]), shares: sumDays(counts[2]),
+    signins: sumDays(counts[3]), submits: sumDays(counts[4]),
+  };
+  const rates = {
+    completion: pct(funnel.completes, funnel.plays),
+    shareRate: pct(funnel.shares, funnel.completes),
+    capture: pct(funnel.signins, funnel.completes),
+  };
+
+  const active = activeSets as string[][];
+  const dauByDay = active.map(s => s.length);
+  let baseSum = 0, retSum = 0, base7 = 0, ret7 = 0;
+  for (let i = 0; i + 1 < active.length; i++) { baseSum += active[i].length; retSum += intersectCount(active[i], active[i + 1]); }
+  for (let i = 0; i + 7 < active.length; i++) { base7 += active[i].length; ret7 += intersectCount(active[i], active[i + 7]); }
+  const d1 = pct(retSum, baseSum);
+  const d7 = days.length >= 8 ? pct(ret7, base7) : null;
+
+  const modeSplit: Record<string, number> = {};
+  for (const h of modeHashes) if (h) for (const [k, v] of Object.entries(h)) modeSplit[k] = (modeSplit[k] ?? 0) + num(v);
+
+  const wins: number[] = [];
+  for (let i = 1; i < todayZ.length; i += 2) wins.push(decodeWins(num(todayZ[i])));
+
+  const boardByDay = (boardCards as number[]).map(num);
+  return {
+    days, funnel, rates, dauByDay, d1, d7, modeSplit, boardByDay,
+    boards: { daily: boardByDay[boardByDay.length - 1] ?? 0, weekly: num(weekCard), alltime: num(allCard) },
+    winBuckets: bucketWins(wins),
+    totals: Object.fromEntries(Object.entries(totalsHash ?? {}).map(([k, v]) => [k, num(v)])),
+  };
+}
