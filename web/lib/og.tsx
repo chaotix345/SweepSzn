@@ -98,3 +98,39 @@ export function brandOgElement(sub: string) {
     </div>
   );
 }
+
+// H2H challenge card: shows the bar to beat (record + grade) and a CTA — NO player tokens,
+// so a recipient can't copy the creator's five before drafting their own.
+export function challengeOgElement(creatorName: string, r: { wins: number; losses: number; net: number; grade: string }) {
+  const grade = GRADE_HEX[r.grade] ?? "#e4e4e7";
+  const net = `${r.net > 0 ? "+" : ""}${r.net.toFixed(1)}`;
+  return (
+    <div style={shell}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "baseline" }}>
+          <Wordmark />
+          <span style={{ marginLeft: 16, fontSize: 22, color: "#a1a1aa", fontWeight: 600 }}>head-to-head challenge</span>
+        </div>
+        <span style={{ display: "flex", fontSize: 22, color: "#71717a" }}>same draft · your picks</span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", marginTop: "auto", marginBottom: "auto" }}>
+        <span style={{ display: "flex", fontSize: 34, fontWeight: 700, color: "#e4e4e7" }}>{ascii(creatorName)} went</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 36, marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "baseline", fontSize: 150, fontWeight: 900, lineHeight: 1, color: grade }}>
+            <span>{r.wins}</span><span style={{ color: "#3f3f46" }}>–</span><span>{r.losses}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={{ display: "flex", fontSize: 46, fontWeight: 800, color: grade }}>{r.grade}</span>
+            <span style={{ display: "flex", marginTop: 8, fontSize: 26, color: "#a1a1aa" }}>Net {net}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ display: "flex", fontSize: 30, fontWeight: 700, color: "#fafafa" }}>Can you beat it?</span>
+        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#f97316" }}>Build your five →</span>
+      </div>
+    </div>
+  );
+}
