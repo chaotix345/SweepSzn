@@ -37,10 +37,12 @@ export default function ChallengeResult({ id, role, result, players, trace, onCr
 
   // auto-submit when we already know the player's name; otherwise prompt for it first
   useEffect(() => {
-    setUid(getUid());
-    const n = getName();
-    setName(n);
-    if (n.trim()) submit(n);
+    (async () => {
+      setUid(getUid());
+      const n = getName();
+      setName(n);
+      if (n.trim()) await submit(n);
+    })();
   }, [submit]);
 
   const copy = useCallback(async () => {

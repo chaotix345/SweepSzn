@@ -5,8 +5,10 @@ import { SLOTS, FRANCHISES, DECADES, teamColors, teamName, initials, displayName
 import { track } from "@vercel/analytics";
 import ResultCard from "@/components/ResultCard";
 import Leaderboard from "@/components/Leaderboard";
+import ChallengeResult from "@/components/ChallengeResult";
+import { newChallengeId, challengeSeed } from "@/lib/challenge";
 
-type Mode = "daily" | "classic" | "hoopiq";
+type Mode = "daily" | "classic" | "hoopiq" | "challenge";
 type Roster = Record<Slot, DraftCandidate | null>;
 const EMPTY: Roster = { PG: null, SG: null, SF: null, PF: null, C: null };
 interface Spin { team: string; decade: string; candidates: DraftCandidate[] }
@@ -36,6 +38,8 @@ export default function Game() {
   const [selSlot, setSelSlot] = useState<Slot | null>(null);
   const [skips, setSkips] = useState({ team: false, era: false });
   const [result, setResult] = useState<{ result: LineupResult; players: Player[]; trace: DraftStep[] } | null>(null);
+  const [challengeId, setChallengeId] = useState<string | null>(null);
+  const [challengeRole, setChallengeRole] = useState<"create" | "respond" | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // OFF by default: the game is about your judgment. Hints opt-in reveals the engine's fit grade.
@@ -57,10 +61,20 @@ export default function Game() {
   const roundNum = Math.min(filled + 1, 5);
   const openSlots = useMemo(() => SLOTS.filter((s) => !roster[s]), [roster]);
 
-  const start = useCallback((m: Mode) => {
+  const start = useCallback((m: Mode, challenge?: { id: string; role: "create" | "respond" }) => {
     track("mode_start", { mode: m });
     setMode(m);
-    setSeed(m === "daily" ? `daily-${todaySeed()}` : `${m}-${rand()}`);
+    let cid: string | null = null;
+    let crole: "create" | "respond" | null = null;
+    let s: string;
+    if (m === "challenge") {
+      cid = challenge?.id ?? newChallengeId();
+      crole = challenge?.role ?? "create";
+      s = challengeSeed(cid);
+    } else {
+      s = m === "daily" ? `daily-${todaySeed()}` : `${m}-${rand()}`;
+    }
+    setChallengeId(cid); setChallengeRole(crole); setSeed(s);
     setRoster(EMPTY); setCurrent(null); setResult(null); setError(null);
     setSelPlayer(null); setSelSlot(null); setSkips({ team: false, era: false });
     setReel({ team: "ATL", era: "60's" }); setLockedReel(null); saltRef.current = 0;
@@ -68,6 +82,22 @@ export default function Game() {
   }, []);
 
   useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
+
+  // Deep link from a challenge landing page: /?c=<id> auto-enters challenge respond mode.
+  useEffect(() => {
+    (async () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const cid = params.get("c");
+        if (cid && /^[a-z0-9]{6,16}$/.test(cid)) {
+          start("challenge", { id: cid, role: "respond" });
+          params.delete("c");
+          const qs = params.toString();
+          window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+        }
+      } catch { /* no query / no history API */ }
+    })();
+  }, [start]);
 
   const runSpin = useCallback(async (opts: SpinOpts, locked: "team" | "era" | null = null) => {
     if (spinning) return;
@@ -171,6 +201,16 @@ export default function Game() {
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={mode} onReset={() => start(mode)} />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} />}
+      {mode === "challenge" && challengeId && challengeRole && (
+        <ChallengeResult id={challengeId} role={challengeRole} result={result.result} players={result.players}
+          trace={result.trace} onCreateOwn={() => start("challenge")} />
+      )}
+      {mode !== "challenge" && (
+        <button onClick={() => start("challenge")}
+          className="mt-4 w-full rounded-xl border border-orange-500/50 bg-orange-500/10 py-3 text-sm font-bold text-orange-300 hover:bg-orange-500/20">
+          ⚔️ Challenge a friend to beat this
+        </button>
+      )}
     </Shell>
   );
   if (loading) return (
@@ -303,12 +343,13 @@ function ModeSelect({ onPick }: { onPick: (m: Mode) => void }) {
     { id: "daily", emoji: "📅", title: "Daily", desc: "Everyone gets the same spins today. Compare your record." },
     { id: "classic", emoji: "💯", title: "Classic", desc: "Full stats visible — draft on what you can see." },
     { id: "hoopiq", emoji: "🧠", title: "HoopIQ", desc: "Stats hidden — draft by memory, test your ball knowledge." },
+    { id: "challenge", emoji: "⚔️", title: "Challenge a Friend", desc: "Build a five, send a link. They draft the same teams — beat your record." },
   ];
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 text-center">
-      <h1 className="text-5xl font-black tracking-tight">82<span className="text-orange-500">-</span>0</h1>
+      <div className="text-5xl font-black tracking-tight">82<span className="text-orange-500">-</span>0</div>
       <p className="mt-2 text-lg text-zinc-400">Build an all-time NBA starting five. Can you go undefeated?</p>
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {modes.map((m) => (
           <button key={m.id} onClick={() => onPick(m.id)}
             className="group rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-left transition hover:border-orange-500 hover:bg-zinc-800/60">
