@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CandidateFit, DraftCandidate, DraftStep, LineupResult, Player, Slot } from "@/lib/types";
 import { SLOTS, FRANCHISES, DECADES, teamColors, teamName, initials, displayName, eraLabel } from "@/lib/teams";
 import { track } from "@vercel/analytics";
+import { ev } from "@/lib/ev";
+import { getUid } from "@/lib/streak";
 import ResultCard from "@/components/ResultCard";
 import Leaderboard from "@/components/Leaderboard";
 import ChallengeResult from "@/components/ChallengeResult";
@@ -63,6 +65,7 @@ export default function Game() {
 
   const start = useCallback((m: Mode, challenge?: { id: string; role: "create" | "respond" }) => {
     track("mode_start", { mode: m });
+    ev("play", { uid: getUid(), mode: m });
     setMode(m);
     let cid: string | null = null;
     let crole: "create" | "respond" | null = null;

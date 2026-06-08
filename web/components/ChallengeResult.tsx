@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
+import { ev } from "@/lib/ev";
 import type { DraftStep, LineupResult, Player, ChallengeSubmitResponse, ChallengeMiniPlayer, ChallengeBoard, ChallengeBoardRow } from "@/lib/types";
 import { getUid, getName, setName as persistName } from "@/lib/streak";
 import { SLOTS, teamColors, initials, eraLabel, displayName } from "@/lib/teams";
@@ -48,7 +49,7 @@ export default function ChallengeResult({ id, role, result, players, trace, onCr
   const copy = useCallback(async () => {
     try {
       await navigator.clipboard?.writeText(link);
-      setCopied(true); track("share", { target: "challenge_copy" }); setTimeout(() => setCopied(false), 1500);
+      setCopied(true); track("share", { target: "challenge_copy" }); ev("share", { uid: getUid() }); setTimeout(() => setCopied(false), 1500);
     } catch { /* clipboard unavailable */ }
   }, [link]);
 
