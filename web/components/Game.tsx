@@ -84,6 +84,7 @@ export default function Game() {
   useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
 
   // Deep link from a challenge landing page: /?c=<id> auto-enters challenge respond mode.
+  // (async IIFE keeps start()'s setState out of the effect body for react-hooks/set-state-in-effect.)
   useEffect(() => {
     (async () => {
       try {

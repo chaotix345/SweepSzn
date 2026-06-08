@@ -40,8 +40,10 @@ export async function POST(req: Request) {
     { wins: v.result.wins, netRtg: v.result.netRtg },
     { wins: out.creator.wins, netRtg: out.creator.net },
   );
-  const players: ChallengeMiniPlayer[] = getPlayersByIds(decodeLineup(out.creator.lineup))
-    .map((p, i) => ({ id: p.id, name: p.name, team: p.team, decade: p.decade, slot: SLOTS[i] }));
+  // resolve by index so the slot label stays correct even if a stored id went stale (data update)
+  const players: ChallengeMiniPlayer[] = decodeLineup(out.creator.lineup)
+    .map((cid, i) => { const p = getPlayersByIds([cid])[0]; return p ? { id: p.id, name: p.name, team: p.team, decade: p.decade, slot: SLOTS[i] } : null; })
+    .filter((p): p is ChallengeMiniPlayer => !!p);
   const res: ChallengeSubmitResponse = {
     role: "responder", id,
     creator: { name: out.creator.name, wins: out.creator.wins, losses: out.creator.losses, net: out.creator.net, grade: out.creator.grade, lineup: out.creator.lineup, players },

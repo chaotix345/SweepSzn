@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
-import type { DraftStep, LineupResult, Player, ChallengeSubmitResponse, ChallengeMiniPlayer, LeaderboardRow } from "@/lib/types";
+import type { DraftStep, LineupResult, Player, ChallengeSubmitResponse, ChallengeMiniPlayer, ChallengeBoard, ChallengeBoardRow } from "@/lib/types";
 import { getUid, getName, setName as persistName } from "@/lib/streak";
 import { SLOTS, teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 
@@ -158,7 +158,7 @@ function FiveStrip({ title, five, href }: { title: string; five: ChallengeMiniPl
   return href ? <Link href={href}>{body}</Link> : body;
 }
 
-function Board({ board, uid }: { board: { total: number; top: LeaderboardRow[]; you?: LeaderboardRow }; uid: string }) {
+function Board({ board, uid }: { board: ChallengeBoard; uid: string }) {
   const rows = board.top;
   if (!rows.length) return null;
   const youOutside = board.you && !rows.some((r) => r.uid === uid);
@@ -175,14 +175,13 @@ function Board({ board, uid }: { board: { total: number; top: LeaderboardRow[]; 
   );
 }
 
-function Row({ r, me }: { r: LeaderboardRow; me?: boolean }) {
+function Row({ r, me }: { r: ChallengeBoardRow; me?: boolean }) {
   return (
-    <Link href={`/r/${r.lineup}`}
-      className={`flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : "bg-zinc-950/50 hover:bg-zinc-800/60"}`}>
+    <div className={`flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : "bg-zinc-950/50"}`}>
       <span className="w-7 shrink-0 text-right text-xs font-bold tabular-nums text-zinc-500">{r.rank}</span>
       <span className="min-w-0 flex-1 truncate font-semibold text-zinc-200">{r.name}{me && <span className="ml-1 text-[10px] text-orange-300">you</span>}</span>
       <span className="shrink-0 tabular-nums font-bold text-zinc-100">{r.wins}-{r.losses}</span>
       <span className="w-12 shrink-0 text-right text-xs tabular-nums text-zinc-500">{r.net > 0 ? "+" : ""}{r.net.toFixed(1)}</span>
-    </Link>
+    </div>
   );
 }

@@ -92,7 +92,8 @@ export interface LeaderboardView { date: string; total: number; top: Leaderboard
 export interface ChallengeInfo { uid: string; name: string; wins: number; losses: number; net: number; grade: string; lineup: string }
 export interface ChallengeMiniPlayer { id: string; name: string; team: string; decade: string; slot: Slot }
 export interface ChallengeVerdict { outcome: "win" | "loss" | "tie"; winsMargin: number; netMargin: number }
-export interface ChallengeBoard { total: number; top: LeaderboardRow[]; you?: LeaderboardRow }
+export interface ChallengeBoardRow { rank: number; uid: string; name: string; wins: number; losses: number; net: number } // no lineup: challenge board never exposes others' fives
+export interface ChallengeBoard { total: number; top: ChallengeBoardRow[]; you?: ChallengeBoardRow }
 export interface ChallengePublic { id: string; creatorName: string; wins: number; losses: number; net: number; grade: string; attempts: number }
 export type ChallengeSubmitResponse =
   | { role: "creator"; id: string; board: ChallengeBoard }
