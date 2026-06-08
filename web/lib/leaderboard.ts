@@ -43,3 +43,10 @@ export async function submitScore(date: string, row: StoredRow, result: LineupRe
   }
   return getLeaderboard(date, row.uid);
 }
+
+// Claim cleanup: drop a uid's row entirely (used when a signed-in user had posted anonymously today).
+export async function removeEntry(date: string, uid: string): Promise<void> {
+  if (!redis) return;
+  await redis.zrem(keyZ(date), uid);
+  await redis.hdel(keyH(date), uid);
+}

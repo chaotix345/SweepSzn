@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { spinPool, getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
 import { verifyDaily, type VerifyDeps } from "@/lib/dailyVerify";
-import { isLeaderboardEnabled, submitScore } from "@/lib/leaderboard";
+import { isLeaderboardEnabled, submitScore, removeEntry } from "@/lib/leaderboard";
+import { getSession } from "@/lib/authServer";
 
 const todayUTC = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
-// names render as text (React-escaped); just trim + cap length, default to Anonymous
-const cleanName = (s: unknown) => (typeof s === "string" ? s.trim().slice(0, 24) : "") || "Anonymous";
+const UID_RE = /^[a-z0-9-]{8,64}$/i;
+const cleanName = (s: unknown) => (typeof s === "string" ? s.trim().slice(0, 24) : "");
 
 const deps: VerifyDeps = {
   spinPool,
@@ -16,15 +17,33 @@ const deps: VerifyDeps = {
 
 export async function POST(req: Request) {
   if (!isLeaderboardEnabled()) return NextResponse.json({ error: "leaderboard not configured" }, { status: 503 });
-  const body = await req.json().catch(() => ({}));
-  const { date, uid, name, trace } = body ?? {};
+  const body = (await req.json().catch(() => ({}))) ?? {};
+  const { date, trace } = body;
   if (date !== todayUTC()) return NextResponse.json({ error: "stale date" }, { status: 400 });
-  if (typeof uid !== "string" || !/^[a-z0-9-]{8,64}$/i.test(uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+
+  // Identity: a valid session is authoritative (un-fakeable); otherwise fall back to the anon uid.
+  const session = await getSession();
+  let uid: string, name: string;
+  if (session) {
+    uid = session.uid;
+    name = cleanName(body.name) || session.name || "Player";
+  } else {
+    if (typeof body.uid !== "string" || !UID_RE.test(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+    uid = body.uid;
+    name = cleanName(body.name) || "Anonymous";
+  }
 
   const v = verifyDaily(date, trace, deps);
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
 
-  const row = { uid, name: cleanName(name), wins: v.result.wins, losses: v.result.losses, net: v.result.netRtg, lineup: v.lineup };
+  const row = { uid, name, wins: v.result.wins, losses: v.result.losses, net: v.result.netRtg, lineup: v.lineup };
   const view = await submitScore(date, row, v.result);
+
+  // Claim cleanup: signed-in user who posted anonymously earlier today -> remove the anon duplicate.
+  // The anon uid is an unguessable client UUID, so passing it is proof of ownership of that row.
+  if (session && typeof body.anonUid === "string" && UID_RE.test(body.anonUid) && body.anonUid !== uid) {
+    await removeEntry(date, body.anonUid);
+  }
+
   return NextResponse.json(view);
 }
