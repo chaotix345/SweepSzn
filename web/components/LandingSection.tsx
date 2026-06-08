@@ -1,0 +1,174 @@
+// Server component (NO "use client"): the landing / positioning section above the game.
+// Pure static, crawlable HTML — converts the cold, mostly-mobile inbound from the share loop
+// + Daily leaderboard. Copy is rendered via {expressions} so apostrophes/quotes don't trip the
+// react/no-unescaped-entities lint rule. In-page CTAs use plain <a href="#game"> anchors.
+// (No "Modes" section here — the game's own ModeSelect picker sits right below and lists the
+// three modes; the Daily leaderboard hook is folded into the "Get graded" step instead.)
+import ResultPreview from "./ResultPreview";
+
+export default function LandingSection() {
+  return (
+    <div className="bg-zinc-950 text-zinc-100">
+      {/* ── Section 1: Hero ───────────────────────────────────────────── */}
+      <section className="px-5 pt-12 pb-8 text-center sm:px-8 sm:pt-16">
+        <div className="text-2xl font-black tracking-tight sm:text-3xl">
+          82<span className="text-orange-500">-</span>0
+        </div>
+        <h1 className="mx-auto mt-4 max-w-2xl text-4xl font-black tracking-tight sm:text-5xl">
+          Can you go 82-0?
+        </h1>
+        <p className="mx-auto mt-4 max-w-xl text-base text-zinc-400">
+          {"Draft an all-time NBA starting five — spin a team reel and an era reel, pick your five, and let the engine find every hole in your lineup. Going undefeated is achievable. It's also brutally hard."}
+        </p>
+        <div className="mt-6 flex justify-center">
+          <a
+            href="#game"
+            className="rounded-xl bg-orange-500 px-7 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400"
+          >
+            Build your five →
+          </a>
+        </div>
+        <div className="mx-auto mt-8 max-w-lg">
+          <ResultPreview />
+        </div>
+      </section>
+
+      {/* ── Section 2: Contrast (naive vs. engine) ────────────────────── */}
+      <section className="mx-auto max-w-2xl px-5 py-10 sm:px-8">
+        <div className="mb-3 text-center text-xs font-bold uppercase tracking-widest text-zinc-500">
+          Why it matters
+        </div>
+        <p className="mx-auto mb-6 max-w-xl text-center text-sm text-zinc-400">
+          {"Most all-time lineup builders just add up box-score averages. That gets it backwards."}
+        </p>
+        <div className="flex flex-col gap-4 sm:flex-row">
+          {/* naive box-score sum (strawman — NOT our engine) */}
+          <div className="flex-1 rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+            <div className="text-xs font-bold uppercase tracking-wide text-zinc-500">Box-score sum</div>
+            <div className="mt-0.5 text-[11px] italic text-zinc-500">rewards five ball-dominant scorers</div>
+            <div className="mt-3 text-5xl font-black tabular-nums text-red-400">74<span className="text-zinc-600">–</span>8</div>
+            <p className="mt-3 text-xs text-zinc-400">
+              {"Five 30%-usage stars, one basketball — on paper it never breaks down."}
+            </p>
+            <p className="mt-2 text-sm font-black text-red-400">{"That's backwards."}</p>
+          </div>
+          {/* our engine (live output for the hero five) */}
+          <div className="flex-1 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 ring-1 ring-orange-500/20">
+            <div className="text-xs font-bold uppercase tracking-wide text-orange-400">82-0 engine</div>
+            <div className="mt-0.5 text-[11px] italic text-zinc-500">rewards a balanced two-way five</div>
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className="text-5xl font-black tabular-nums text-green-400">78<span className="text-zinc-600">–</span>4</span>
+              <span className="rounded-full bg-green-400/10 px-2 py-0.5 text-xs font-black text-green-400">A+ HISTORIC</span>
+            </div>
+            <p className="mt-3 text-xs text-zinc-400">
+              {"Curry, Jordan, LeBron, Giannis, Jokić — and it still docks them −13.2 for usage overload."}
+            </p>
+            <p className="mt-2 text-sm font-semibold text-green-400">The engine gets it right.</p>
+          </div>
+        </div>
+        <p className="mx-auto mt-6 max-w-xl text-center text-sm text-zinc-400">
+          {"One basketball can't feed five ball-dominant stars. Our engine knows that. A box-score adder doesn't."}
+        </p>
+      </section>
+
+      {/* ── Section 3: How it works ───────────────────────────────────── */}
+      <section className="mx-auto max-w-3xl px-5 py-10 sm:px-8">
+        <div className="mb-6 text-xs font-bold uppercase tracking-widest text-zinc-500">How to play</div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-5">
+          <Step n="1" title="Spin the reels">
+            {"A gold TEAM reel and a violet ERA reel land on a franchise and decade. Lock one and re-spin the other to hunt the player you want."}
+          </Step>
+          <Step n="2" title="Draft your five">
+            {"Browse that era's roster and slot a player at each position — PG, SG, SF, PF, C. Eligibility is enforced: five point guards is not a lineup."}
+          </Step>
+          <Step n="3" title="Get graded">
+            {"The engine simulates all 82 games and returns a record, a letter grade, and a plain-English breakdown of what helped and what hurt — and in Daily mode, ranks you on a server-verified leaderboard."}
+          </Step>
+        </div>
+      </section>
+
+      {/* ── Section 4: The engine (credibility) ───────────────────────── */}
+      <section className="mx-auto max-w-2xl px-5 py-10 sm:px-8">
+        <div className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+          What the engine actually models
+        </div>
+        <h2 className="mt-2 text-2xl font-black text-zinc-100">An engine that plays real basketball</h2>
+        <p className="mt-3 text-sm text-zinc-400">
+          {"Most lineup simulators add up box-score averages. Ours is fit to 1,170 real NBA team-seasons — and the difference is exactly what separates a 74-win lineup from a 40-win one."}
+        </p>
+        <ul className="mt-6 space-y-3">
+          <Bullet term="Finite possessions">
+            {"Five ball-dominant stars can't each take 30 shots. The engine tracks every player's usage demand and penalizes lineups that blow the possession budget — because real teams do too."}
+          </Bullet>
+          <Bullet term="Era normalization">
+            {"Every player is z-scored against their own season's league average, so Wilt Chamberlain's pace-inflated 1962 line isn't compared head-to-head with a modern stat."}
+          </Bullet>
+          <Bullet term="Defense at full weight">
+            {"Defense carries close to equal weight with offense. Rim protection, perimeter stopping, and the defensive glass all count — not just steals and blocks."}
+          </Bullet>
+          <Bullet term="Floor spacing">
+            {"Not enough outside shooting clogs the paint and drags down the whole offense, no matter who is on the floor."}
+          </Bullet>
+          <Bullet term="Lineup fit">
+            {"Redundancy costs wins. Five creators, no spacing, or no rim protection each show up in the math."}
+          </Bullet>
+        </ul>
+        <p className="mt-5 border-t border-zinc-800 pt-5 text-sm text-zinc-400">
+          {"The proof: stack five ball-dominant scorers and a box-score adder calls them historic at 74-8. The engine knows one ball can't feed them all — even a balanced GOAT five loses 13 wins to usage overload, and the stat-stuffers never close the gap."}
+        </p>
+      </section>
+
+      {/* ── Section 5: Final CTA ──────────────────────────────────────── */}
+      <section className="mx-auto max-w-md px-5 pt-6 pb-4 text-center sm:px-8">
+        <h2 className="text-3xl font-black text-zinc-100">Spin the reels. Draft your five. Go for 82-0.</h2>
+        <a
+          href="#game"
+          className="mt-5 inline-block rounded-xl bg-orange-500 px-8 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400"
+        >
+          Build your five →
+        </a>
+        <p className="mt-3 text-xs text-zinc-500">
+          {"No account needed. Runs in your browser. Daily mode resets every 24 hours."}
+        </p>
+      </section>
+
+      {/* ── Section 6: Stats rail (crawlable credibility) ─────────────── */}
+      <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 border-y border-zinc-800 bg-zinc-900 px-5 py-4 text-center">
+        <Stat n="24,687" label="player-seasons" />
+        <Stat n="1,170" label="NBA team-seasons" />
+        <Stat n="6.07" label="win RMSE (out-of-sample)" />
+        <Stat n="k = 14.0" label="Pythagorean exponent" />
+      </div>
+    </div>
+  );
+}
+
+function Step({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+      <div className="text-4xl font-black leading-none text-orange-500/20">{n}</div>
+      <div className="mt-1 text-sm font-black text-zinc-100">{title}</div>
+      <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">{children}</p>
+    </div>
+  );
+}
+
+function Bullet({ term, children }: { term: string; children: React.ReactNode }) {
+  return (
+    <li className="flex gap-3">
+      <span aria-hidden className="mt-0.5 shrink-0 font-black text-orange-500">—</span>
+      <span className="text-sm text-zinc-300">
+        <span className="font-semibold text-zinc-100">{term}</span>
+        <span className="text-zinc-500"> · {children}</span>
+      </span>
+    </li>
+  );
+}
+
+function Stat({ n, label }: { n: string; label: string }) {
+  return (
+    <span className="text-xs text-zinc-500">
+      <span className="font-mono font-black text-zinc-300">{n}</span> {label}
+    </span>
+  );
+}
