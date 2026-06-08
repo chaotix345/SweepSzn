@@ -3,9 +3,11 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
 import type { DraftStep, LeaderboardView, LeaderboardRow, AggBoardView, AggLeaderboardRow } from "@/lib/types";
+import type { RankCard } from "@/lib/rankShare";
 import { getUid, getName, setName as persistName, recordDailyDone, getStreak, msToNextUtcMidnight } from "@/lib/streak";
 import { useSession } from "@/lib/useSession";
 import GoogleOneTap from "@/components/GoogleOneTap";
+import RankShareButton from "@/components/RankShareButton";
 
 type Tab = "daily" | "week" | "alltime";
 const TABS: [Tab, string][] = [["daily", "Daily"], ["week", "Weekly"], ["alltime", "All-time"]];
@@ -104,6 +106,17 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
     } catch { /* ignore */ } finally { setBusy(false); }
   }, [refresh, date, name, trace]);
 
+  // the sharer's current standing on the active tab (if they're on the board)
+  const youCard: RankCard | null = (() => {
+    if (tab === "daily") {
+      const y = view?.you;
+      return y ? { scope: "daily", rank: y.rank, total: view?.total ?? 0, name: y.name, wins: y.wins, losses: y.losses, net: y.net } : null;
+    }
+    const a = agg[tab]; const y = a?.you;
+    return y ? { scope: tab, rank: y.rank, total: a?.total ?? 0, name: y.name, wins: y.wins, losses: 0, net: 0 } : null;
+  })();
+  const whenLabel = tab === "daily" ? " today" : tab === "week" ? " this week" : " all-time";
+
   return (
     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
       <div className="flex items-center justify-between">
@@ -155,6 +168,13 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
 
           {tab === "daily" && view && <Board view={view} uid={effectiveUid} />}
           {tab !== "daily" && <AggBoard view={agg[tab] ?? null} uid={effectiveUid} scope={tab} />}
+
+          {youCard && (
+            <div className="mt-3 flex items-center justify-between rounded-lg bg-zinc-950/40 px-2.5 py-2 text-xs text-zinc-400">
+              <span>You&apos;re <span className="font-bold text-orange-300">#{youCard.rank}</span>{whenLabel} — show it off</span>
+              <RankShareButton card={youCard} />
+            </div>
+          )}
         </>
       ) : (
         <div className="mt-2 text-xs text-zinc-600">Leaderboard opens soon — keep your streak going.</div>
