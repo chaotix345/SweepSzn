@@ -2,6 +2,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
+import { ev } from "@/lib/ev";
+import { getUid } from "@/lib/streak";
 import type { LineupResult, Player, Slot } from "@/lib/types";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { encodeLineup } from "@/lib/share";
@@ -126,10 +128,10 @@ function ShareButton({ result, path, names }: { result: LineupResult; path: stri
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
 
   const copy = async () => {
-    try { await navigator.clipboard?.writeText(`${text} ${url}`); setCopied(true); track("share", { target: "copy" }); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard unavailable */ }
+    try { await navigator.clipboard?.writeText(`${text} ${url}`); setCopied(true); track("share", { target: "copy" }); ev("share", { uid: getUid() }); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard unavailable */ }
   };
   const native = async () => {
-    try { await (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }).share?.({ title: "82-0", text, url }); track("share", { target: "native" }); } catch { /* dismissed */ }
+    try { await (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }).share?.({ title: "82-0", text, url }); track("share", { target: "native" }); ev("share", { uid: getUid() }); } catch { /* dismissed */ }
   };
   const links: [string, string][] = [
     ["X", `https://twitter.com/intent/tweet?text=${t}&url=${u}&hashtags=NBA,82and0`],
@@ -154,7 +156,7 @@ function ShareButton({ result, path, names }: { result: LineupResult; path: stri
           </button>
           <div className="grid grid-cols-3 gap-1">
             {links.map(([name, href]) => (
-              <a key={name} href={href} target="_blank" rel="noreferrer" onClick={() => track("share", { target: name })}
+              <a key={name} href={href} target="_blank" rel="noreferrer" onClick={() => { track("share", { target: name }); ev("share", { uid: getUid() }); }}
                 className="rounded-lg bg-zinc-800 py-1.5 text-center text-[11px] font-semibold text-zinc-300 hover:bg-zinc-700 hover:text-white">{name}</a>
             ))}
           </div>

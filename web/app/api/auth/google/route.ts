@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { isAuthEnabled, authedUid, signSession, verifyNonce, sha256hex, NONCE_COOKIE } from "@/lib/auth";
 import { setSessionCookie } from "@/lib/authServer";
+import { redis } from "@/lib/redis";
+import { bump } from "@/lib/evServer";
 
 export const runtime = "nodejs";
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
@@ -52,5 +54,6 @@ export async function POST(req: Request) {
   };
   await setSessionCookie(await signSession(user));
   c.delete(NONCE_COOKIE);
+  after(() => bump(redis, "signin", { uid: user.uid }));
   return NextResponse.json({ user: { uid: user.uid, name: user.name, picture: user.picture } });
 }
