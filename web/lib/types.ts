@@ -86,6 +86,23 @@ export interface DailySubmission { date: string; uid: string; name: string; trac
 export interface LeaderboardRow { rank: number; uid: string; name: string; wins: number; losses: number; net: number; lineup: string }
 export interface LeaderboardView { date: string; total: number; top: LeaderboardRow[]; you?: LeaderboardRow }
 
+// H2H Challenge: a shared draft seed (h2h-<id>) + the creator's verified result as the bar.
+// The board reuses the leaderboard row/store shape; lineups are only ever sent to a uid that
+// has itself submitted (public reads are redacted).
+export interface ChallengeInfo { uid: string; name: string; wins: number; losses: number; net: number; grade: string; lineup: string }
+export interface ChallengeMiniPlayer { id: string; name: string; team: string; decade: string; slot: Slot }
+export interface ChallengeVerdict { outcome: "win" | "loss" | "tie"; winsMargin: number; netMargin: number }
+export interface ChallengeBoard { total: number; top: LeaderboardRow[]; you?: LeaderboardRow }
+export interface ChallengePublic { id: string; creatorName: string; wins: number; losses: number; net: number; grade: string; attempts: number }
+export type ChallengeSubmitResponse =
+  | { role: "creator"; id: string; board: ChallengeBoard }
+  | {
+      role: "responder"; id: string;
+      creator: { name: string; wins: number; losses: number; net: number; grade: string; lineup: string; players: ChallengeMiniPlayer[] };
+      verdict: ChallengeVerdict;
+      board: ChallengeBoard;
+    };
+
 export interface DefModel {
   intercept: number; dws: number; posC: number; posPF: number; posSF: number; posSG: number; trb?: number;
 }
