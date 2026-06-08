@@ -86,6 +86,12 @@ export interface DailySubmission { date: string; uid: string; name: string; trac
 export interface LeaderboardRow { rank: number; uid: string; name: string; wins: number; losses: number; net: number; lineup: string }
 export interface LeaderboardView { date: string; total: number; top: LeaderboardRow[]; you?: LeaderboardRow }
 
+// Weekly + all-time boards rank by CUMULATIVE wins (a single number), not a W-L record — so the
+// row deliberately omits losses/net/lineup (don't reuse StoredRow, whose fields would be undefined).
+export interface AggRow { uid: string; name: string; wins: number }
+export interface AggLeaderboardRow extends AggRow { rank: number }
+export interface AggBoardView { scope: "week" | "alltime"; key: string; total: number; top: AggLeaderboardRow[]; you?: AggLeaderboardRow }
+
 // H2H Challenge: a shared draft seed (h2h-<id>) + the creator's verified result as the bar.
 // The board reuses the leaderboard row/store shape; lineups are only ever sent to a uid that
 // has itself submitted (public reads are redacted).

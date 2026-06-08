@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { spinPool, getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
 import { verifyDaily, type VerifyDeps } from "@/lib/dailyVerify";
-import { isLeaderboardEnabled, submitScore, removeEntry } from "@/lib/leaderboard";
+import { isLeaderboardEnabled, submitScore, submitScoreAuthed, removeEntry } from "@/lib/leaderboard";
 import { getSession } from "@/lib/authServer";
 
 const todayUTC = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
@@ -44,6 +44,9 @@ export async function POST(req: Request) {
   }
 
   const row = { uid, name, wins: v.result.wins, losses: v.result.losses, net: v.result.netRtg, lineup: v.lineup };
-  const view = await submitScore(date, row, v.result);
+  // signed-in: daily keep-best + credit wins to weekly/all-time. anon: daily only.
+  const view = session
+    ? await submitScoreAuthed(date, row, v.result)
+    : await submitScore(date, row, v.result);
   return NextResponse.json(view);
 }
