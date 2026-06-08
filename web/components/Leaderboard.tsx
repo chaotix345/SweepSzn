@@ -4,6 +4,8 @@ import Link from "next/link";
 import { track } from "@vercel/analytics";
 import type { DraftStep, LeaderboardView, LeaderboardRow } from "@/lib/types";
 import { getUid, getName, setName as persistName, recordDailyDone, getStreak, msToNextUtcMidnight } from "@/lib/streak";
+import { useSession } from "@/lib/useSession";
+import GoogleOneTap from "@/components/GoogleOneTap";
 
 const hhmmss = (ms: number) => {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -12,30 +14,37 @@ const hhmmss = (ms: number) => {
 };
 
 export default function Leaderboard({ date, trace }: { date: string; trace: DraftStep[] }) {
+  const { user, refresh, signOut } = useSession();
   const [view, setView] = useState<LeaderboardView | null>(null);
   const [enabled, setEnabled] = useState(true);
-  const [uid, setUid] = useState("");
-  const [name, setName] = useState("");
+  const [anonUid, setAnonUid] = useState("");
+  const [name, setNameState] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
   const [countdown, setCountdown] = useState(() => msToNextUtcMidnight());
 
+  const effectiveUid = user?.uid ?? anonUid; // who "you" is on the board
+
+  const loadBoard = useCallback(async (uid: string) => {
+    try {
+      const r = await fetch(`/api/daily/leaderboard?date=${encodeURIComponent(date)}&uid=${encodeURIComponent(uid)}`);
+      if (r.status === 503) { setEnabled(false); return; }
+      if (r.ok) { const v = await r.json(); setView(v); setSubmitted(!!v?.you); }
+    } catch { /* offline — leave board hidden */ }
+  }, [date]);
+
   useEffect(() => {
     (async () => {
       const id = getUid();
-      setUid(id);
-      setName(getName());
+      setAnonUid(id);
+      setNameState(getName());
       recordDailyDone(date);
       setStreak(getStreak());
-      try {
-        const r = await fetch(`/api/daily/leaderboard?date=${encodeURIComponent(date)}&uid=${encodeURIComponent(id)}`);
-        if (r.status === 503) { setEnabled(false); return; }
-        if (r.ok) { const v = await r.json(); setView(v); if (v?.you) setSubmitted(true); }
-      } catch { /* offline — leave board hidden */ }
+      await loadBoard(user?.uid ?? id);
     })();
-  }, [date]);
+  }, [date, user?.uid, loadBoard]);
 
   useEffect(() => {
     const t = setInterval(() => setCountdown(msToNextUtcMidnight()), 1000);
@@ -47,16 +56,30 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
     try {
       const r = await fetch("/api/daily/submit", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ date, uid, name: name.trim(), trace }),
+        body: JSON.stringify({ date, uid: anonUid, name: name.trim(), trace }),
       });
       if (r.status === 503) { setEnabled(false); return; }
       const v = await r.json();
       if (!r.ok) { setErr(v?.error ?? "submit failed"); return; }
-      persistName(name.trim());
+      if (name.trim()) persistName(name.trim());
       setView(v); setSubmitted(true);
-      track("daily_submit", { rank: v?.you?.rank ?? 0 });
+      track("daily_submit", { rank: v?.you?.rank ?? 0, authed: !!user });
     } catch { setErr("network error"); } finally { setBusy(false); }
-  }, [date, uid, name, trace]);
+  }, [date, anonUid, name, trace, user]);
+
+  // On sign-in: refresh session, then auto-claim today's result under the Google identity.
+  const onSignIn = useCallback(async () => {
+    await refresh();
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch("/api/daily/submit", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ date, name: name.trim(), trace }),
+      });
+      const v = await r.json();
+      if (r.ok) { setView(v); setSubmitted(true); track("daily_claim", { rank: v?.you?.rank ?? 0 }); }
+    } catch { /* ignore */ } finally { setBusy(false); }
+  }, [refresh, date, name, trace]);
 
   return (
     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
@@ -72,7 +95,7 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
         <>
           {!submitted && (
             <div className="mt-3 flex gap-2">
-              <input value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="Your name"
+              <input value={name} onChange={(e) => setNameState(e.target.value)} maxLength={24} placeholder={user ? user.name : "Your name"}
                 className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-orange-500" />
               <button onClick={submit} disabled={busy}
                 className="shrink-0 rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-black hover:bg-orange-400 disabled:opacity-60">
@@ -80,8 +103,24 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
               </button>
             </div>
           )}
+
+          {/* Identity row: claim prompt (anon) or signed-in badge */}
+          {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+            user ? (
+              <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
+                <span>Signed in{user.name ? ` as ${user.name}` : ""} · ranks are yours to keep</span>
+                <button onClick={signOut} className="text-zinc-400 underline hover:text-zinc-200">Sign out</button>
+              </div>
+            ) : (
+              <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+                <div className="mb-2 text-xs text-zinc-400">Sign in to claim your rank — and join the weekly &amp; all-time boards.</div>
+                <GoogleOneTap onSignIn={onSignIn} />
+              </div>
+            )
+          )}
+
           {err && <div className="mt-2 text-xs text-red-400">{err}</div>}
-          {view && <Board view={view} uid={uid} />}
+          {view && <Board view={view} uid={effectiveUid} />}
         </>
       ) : (
         <div className="mt-2 text-xs text-zinc-600">Leaderboard opens soon — keep your streak going.</div>
