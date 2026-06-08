@@ -1,6 +1,7 @@
 import type { LineupResult, Player } from "./types";
 import { SLOTS, teamColors, initials, eraLabel, displayName } from "./teams";
 import { headline } from "./explain";
+import type { RankCard } from "./rankShare";
 
 // Shared building blocks for the dynamic Open Graph cards (next/og + satori).
 // Satori only supports flexbox + a CSS subset, so every multi-child node sets display:flex
@@ -129,6 +130,38 @@ export function challengeOgElement(creatorName: string, r: { wins: number; losse
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ display: "flex", fontSize: 30, fontWeight: 700, color: "#fafafa" }}>Can you beat it?</span>
+        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#f97316" }}>Build your five →</span>
+      </div>
+    </div>
+  );
+}
+
+// Share-your-rank card: shows the sharer's leaderboard standing + a CTA. Snapshot from the URL.
+export function rankOgElement(c: RankCard) {
+  const scopeLabel = c.scope === "daily" ? "Daily leaderboard" : c.scope === "week" ? "Weekly leaderboard" : "All-time leaderboard";
+  const net = `${c.net > 0 ? "+" : ""}${c.net.toFixed(1)}`;
+  const metric = c.scope === "daily" ? `${c.wins}–${c.losses} · Net ${net}` : `${c.wins.toLocaleString()} career wins`;
+  return (
+    <div style={shell}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "baseline" }}>
+          <Wordmark />
+          <span style={{ marginLeft: 16, fontSize: 22, color: "#a1a1aa", fontWeight: 600 }}>{scopeLabel}</span>
+        </div>
+        <span style={{ display: "flex", fontSize: 22, color: "#71717a" }}>my rank</span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", marginTop: "auto", marginBottom: "auto" }}>
+        <span style={{ display: "flex", fontSize: 34, fontWeight: 700, color: "#e4e4e7" }}>{ascii(c.name)} is</span>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 24, marginTop: 6 }}>
+          <span style={{ display: "flex", fontSize: 170, fontWeight: 900, lineHeight: 1, color: "#f97316" }}>#{c.rank}</span>
+          <span style={{ display: "flex", fontSize: 34, color: "#a1a1aa" }}>of {c.total.toLocaleString()}</span>
+        </div>
+        <span style={{ display: "flex", marginTop: 14, fontSize: 30, color: "#e4e4e7" }}>{metric}</span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ display: "flex", fontSize: 30, fontWeight: 700, color: "#fafafa" }}>Can you rank higher?</span>
         <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#f97316" }}>Build your five →</span>
       </div>
     </div>
