@@ -7,7 +7,9 @@ import { getMetrics, sparkline, type Metrics } from "@/lib/metrics";
 export const metadata: Metadata = { title: "82-0 · admin", robots: { index: false } };
 
 const ADMIN_UIDS = (process.env.ADMIN_UIDS ?? "").split(",").map(s => s.trim()).filter(Boolean);
+if (ADMIN_UIDS.length === 0) console.warn("[admin] ADMIN_UIDS is empty — /admin will 404 for everyone");
 const fmtPct = (x: number) => `${(x * 100).toFixed(1)}%`;
+const fmtRate = (x: number) => fmtPct(Math.min(1, x)); // funnel rates can exceed 100% if a stage's beacon is lossy/spammed
 
 function Bar({ label, value, max }: { label: string; value: number; max: number }) {
   const w = max > 0 ? Math.round((value / max) * 100) : 0;
@@ -23,9 +25,9 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
 function Funnel({ m }: { m: Metrics }) {
   const rows = [
     { label: "Plays", value: m.funnel.plays, rate: "" },
-    { label: "Completed", value: m.funnel.completes, rate: fmtPct(m.rates.completion) + " of plays" },
-    { label: "Shared", value: m.funnel.shares, rate: fmtPct(m.rates.shareRate) + " of completes" },
-    { label: "Signed in", value: m.funnel.signins, rate: fmtPct(m.rates.capture) + " of completes" },
+    { label: "Completed", value: m.funnel.completes, rate: fmtRate(m.rates.completion) + " of plays" },
+    { label: "Shared", value: m.funnel.shares, rate: fmtRate(m.rates.shareRate) + " of completes" },
+    { label: "Signed in", value: m.funnel.signins, rate: fmtRate(m.rates.capture) + " of completes" },
   ];
   const max = Math.max(m.funnel.plays, 1);
   return (

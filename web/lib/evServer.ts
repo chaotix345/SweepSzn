@@ -6,6 +6,7 @@ import { dayUTC } from "./day";
 export type EvStage = "play" | "complete" | "share" | "signin" | "submit";
 
 export const EV_TTL = 60 * 60 * 24 * 45; // ~45 days, enough for a 14-day window + retention look-back
+export const EV_ACTIVE_CAP = 50_000;     // max distinct uids tracked per day (far above realistic DAU)
 
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
 const MODES = new Set(["daily", "classic", "hoopiq", "challenge"]);
@@ -43,10 +44,15 @@ export async function bump(
       await redis.expire(modeKey, EV_TTL);
     }
     // play/share/signin/submit carry a uid → contribute to the day's distinct-active set.
+    // Cap distinct-member growth: the beacon is unauthenticated, so without a bound a flood of
+    // unique uids could exhaust shared Redis memory (the set lives EV_TTL and is materialised by
+    // /admin). Beyond the cap, DAU/retention become approximate — acceptable for internal metrics.
     if (opts.uid && stage !== "complete") {
       const activeKey = `ev:active:${day}`;
-      await redis.sadd(activeKey, opts.uid);
-      await redis.expire(activeKey, EV_TTL);
+      if ((await redis.scard(activeKey)) < EV_ACTIVE_CAP) {
+        await redis.sadd(activeKey, opts.uid);
+        await redis.expire(activeKey, EV_TTL);
+      }
     }
   } catch {
     /* analytics must never break the calling route */

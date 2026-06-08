@@ -7,6 +7,8 @@ import { getSession } from "@/lib/authServer";
 import { redis } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
 
+export const runtime = "nodejs";
+
 const todayUTC = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
 const cleanName = (s: unknown) => (typeof s === "string" ? s.trim().slice(0, 24) : "");

@@ -10,6 +10,8 @@ import { redis } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
 import type { ChallengeMiniPlayer, ChallengeSubmitResponse } from "@/lib/types";
 
+export const runtime = "nodejs";
+
 const cleanName = (s: unknown) => (typeof s === "string" ? s.trim().slice(0, 24) : "") || "Anonymous";
 
 const deps: VerifyDeps = {

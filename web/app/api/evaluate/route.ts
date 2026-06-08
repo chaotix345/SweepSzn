@@ -4,6 +4,8 @@ import { evaluateLineup } from "@/lib/engine";
 import { redis } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const ids: string[] = Array.isArray(body?.ids) ? body.ids.filter((x: unknown) => typeof x === "string") : [];

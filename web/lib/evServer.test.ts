@@ -1,4 +1,4 @@
-import { parseEvBody, bump, EV_TTL } from "./evServer";
+import { parseEvBody, bump, EV_TTL, EV_ACTIVE_CAP } from "./evServer";
 import type { Redis } from "@upstash/redis";
 
 let fail = 0;
@@ -15,6 +15,7 @@ function fakeRedis() {
     sadd: async (k: string, ...m: string[]) => { calls.push(`sadd ${k} ${m.join(",")}`); (sets[k] ??= new Set()); m.forEach(x => sets[k].add(x)); return m.length; },
     hincrby: async (k: string, f: string, n: number) => { calls.push(`hincrby ${k} ${f} ${n}`); (hashes[k] ??= {}); return (hashes[k][f] = (hashes[k][f] ?? 0) + n); },
     expire: async (k: string, s: number) => { calls.push(`expire ${k} ${s}`); return 1; },
+    scard: async (k: string) => sets[k]?.size ?? 0,
   };
   return r;
 }
@@ -65,6 +66,13 @@ assert(parseEvBody({ ev: "share", uid: "abcdefgh", mode: "daily" })?.mode === un
   let threw = false;
   try { await bump(thrower as unknown as Redis, "complete", { day: "2026-6-9" }); } catch { threw = true; }
   assert(!threw, "throwing redis is swallowed — bump never throws");
+
+  // --- bump: active-set cap skips sadd once the set is full (memory-exhaustion guard) ---
+  const rCap = fakeRedis();
+  rCap.scard = async () => EV_ACTIVE_CAP; // pretend today's active set is already at the cap
+  await bump(rCap as unknown as Redis, "play", { uid: "abcdefgh", day: "2026-6-9" });
+  assert(rCap.store["ev:play:2026-6-9"] === 1, "counter still increments at the active-set cap");
+  assert(rCap.sets["ev:active:2026-6-9"] === undefined, "sadd skipped when active set is at the cap");
 
   console.log(fail ? `\n${fail} ASSERTION(S) FAILED` : "\nALL EVSERVER CHECKS PASSED");
   process.exit(fail ? 1 : 0);

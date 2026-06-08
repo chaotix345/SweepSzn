@@ -85,7 +85,7 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
   for (let i = 0; i + 1 < active.length; i++) { baseSum += active[i].length; retSum += intersectCount(active[i], active[i + 1]); }
   for (let i = 0; i + 7 < active.length; i++) { base7 += active[i].length; ret7 += intersectCount(active[i], active[i + 7]); }
   const d1 = pct(retSum, baseSum);
-  const d7 = days.length >= 8 ? pct(ret7, base7) : null;
+  const d7 = days.length >= 8 && base7 > 0 ? pct(ret7, base7) : null;
 
   const modeSplit: Record<string, number> = {};
   for (const h of modeHashes) if (h) for (const [k, v] of Object.entries(h)) modeSplit[k] = (modeSplit[k] ?? 0) + num(v);
