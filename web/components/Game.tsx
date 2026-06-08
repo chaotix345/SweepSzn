@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CandidateFit, DraftCandidate, LineupResult, Player, Slot } from "@/lib/types";
 import { SLOTS, FRANCHISES, DECADES, teamColors, teamName, initials, displayName, eraLabel } from "@/lib/teams";
+import { track } from "@vercel/analytics";
 import ResultCard from "@/components/ResultCard";
 
 type Mode = "daily" | "classic" | "hoopiq";
@@ -54,6 +55,7 @@ export default function Game() {
   const openSlots = useMemo(() => SLOTS.filter((s) => !roster[s]), [roster]);
 
   const start = useCallback((m: Mode) => {
+    track("mode_start", { mode: m });
     setMode(m);
     setSeed(m === "daily" ? `daily-${todaySeed()}` : `${m}-${rand()}`);
     setRoster(EMPTY); setCurrent(null); setResult(null); setError(null);
@@ -114,6 +116,7 @@ export default function Game() {
       if (!res.ok) throw new Error("evaluate failed");
       const data = await res.json();
       setResult({ result: data.result, players: data.players });
+      track("lineup_complete", { wins: data.result.wins, grade: data.result.grade });
     } catch {
       setError("Couldn't simulate the season — tap Simulate to retry.");
     } finally {
