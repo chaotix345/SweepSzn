@@ -1,8 +1,8 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
-import type { Player, Coefficients, DraftCandidate, Slot } from "./types";
-import { DEFAULT_COEFFICIENTS } from "./engine";
+import type { Player, Coefficients, DraftCandidate, CandidateFit, Slot } from "./types";
+import { DEFAULT_COEFFICIENTS, quickScore, playerFeatures } from "./engine";
 
 const DATA_DIR = path.join(process.cwd(), "public", "data");
 
@@ -89,12 +89,66 @@ function strSeed(s: string): number {
   return h >>> 0;
 }
 
-function toCandidate(p: Player): DraftCandidate {
+function toCandidate(p: Player, fit?: CandidateFit): DraftCandidate {
   return {
     id: p.id, person_id: p.person_id, name: p.name, year: p.year, decade: p.decade, team: p.team,
     pos: p.pos, eligible: (p.eligible && p.eligible.length ? p.eligible : [p.pos as Slot]),
-    pts: p.pts, trb: p.trb, ast: p.ast, stl: p.stl, blk: p.blk, defense_estimated: p.defense_estimated,
+    pts: p.pts, trb: p.trb, ast: p.ast, stl: p.stl, blk: p.blk, defense_estimated: p.defense_estimated, fit,
   };
+}
+
+// A replacement-level filler (≈ -2 OBPM / -1 DBPM wing, no rim/shooting/steals). Used to pad a
+// partial roster to a full 5 so fit is measured in a real 5-man context — otherwise a 1-man lineup
+// eats the no-rim / thin-perimeter penalties and every candidate looks negative.
+function filler(i: number): Player {
+  return {
+    id: `__filler_${i}`, name: "Replacement", year: 2015, decade: "2010s", tier: "complete",
+    team: "FA", pos: "SF", g: 70, mp: 24, obpm: -2, dbpm: -1, usg: 18,
+  } as Player;
+}
+const FILLERS: Player[] = [0, 1, 2, 3, 4].map(filler);
+
+// "Reveal before confirm": for each candidate, their value OVER a replacement player given the
+// roster drafted so far (VORP-style net-rating swing), plus the specific need they fill. Roster-aware
+// — a rim protector scores higher precisely when the lineup lacks one. Tiers are relative to the spin.
+function computeFits(drafted: Player[], cands: Player[], c: Coefficients): Map<string, CandidateFit> {
+  const round1 = (x: number) => Math.round(x * 10) / 10;
+  const feats = drafted.map((p) => playerFeatures(p, c));
+  const need = {
+    rim: !feats.some((f) => f.rim),
+    spacing: feats.reduce((a, f) => a + f.shoot, 0) < 2,
+    perim: !feats.some((f) => f.perim),
+    playmaking: !drafted.some((p) => (p.ast ?? 0) >= 6),
+  };
+  const slots = 5 - drafted.length;                          // open starting slots
+  const base = [...drafted, ...FILLERS.slice(0, slots)];     // full 5 with replacement fillers
+  const baseNet = quickScore(base, c).netRtg;
+
+  const raw = cands.map((p) => {
+    const f = playerFeatures(p, c);
+    // swap one replacement filler for this candidate, keep a full 5-man lineup
+    const delta = quickScore([...drafted, p, ...FILLERS.slice(0, slots - 1)], c).netRtg - baseNet;
+    const gap: string[] = [];
+    if (need.rim && f.rim) gap.push("Rim protection");
+    if (need.spacing && f.shoot >= 0.4) gap.push("Spacing");
+    if (need.perim && f.perim) gap.push("Perimeter D");
+    if (need.playmaking && (p.ast ?? 0) >= 6) gap.push("Playmaking");
+    const generic: string[] = [];
+    if (f.def >= 3) generic.push("Defense");
+    if (f.off >= 5) generic.push("Scoring");
+    const adds = [...gap, ...generic].slice(0, 2);
+    return { id: p.id, delta, adds };
+  });
+
+  const maxDelta = Math.max(0.001, ...raw.map((r) => r.delta));
+  const bestId = raw.reduce((a, b) => (b.delta > a.delta ? b : a), raw[0])?.id;
+  const out = new Map<string, CandidateFit>();
+  for (const r of raw) {
+    const ratio = r.delta / maxDelta;
+    const tier: CandidateFit["tier"] = ratio >= 0.85 ? "elite" : ratio >= 0.6 ? "strong" : ratio >= 0.3 ? "solid" : "marginal";
+    out.set(r.id, { delta: round1(r.delta), tier, best: r.id === bestId, adds: r.adds });
+  }
+  return out;
 }
 
 export interface SpinOptions {
@@ -115,7 +169,7 @@ export interface SpinResult {
 // Spin a (team, decade) like 82-0: uniform over populated combos, full roster returned.
 // `seed` makes it deterministic (Daily). Locks/excludes implement the two one-time skips.
 export function spin(seed: string, round: number, opts: SpinOptions = {}): SpinResult {
-  const { byId, draftIndex, draftKeys, teamsByDecade, decadesByTeam } = load();
+  const { byId, draftIndex, draftKeys, teamsByDecade, decadesByTeam, coeff } = load();
   const excludeIds = new Set(opts.exclude ?? []);
   const excludePeople = new Set([...excludeIds].map((id) => byId.get(id)?.person_id ?? id));
   const rng = mulberry32(strSeed(seed) ^ (round * 2654435761) ^ ((opts.salt ?? 0) * 40503));
@@ -144,10 +198,12 @@ export function spin(seed: string, round: number, opts: SpinOptions = {}): SpinR
     [team, decade] = key.split("|");
   }
 
-  const candidates = (draftIndex.get(`${team}|${decade}`) ?? [])
+  const pool = (draftIndex.get(`${team}|${decade}`) ?? [])
     .filter(available)
-    .sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0))
-    .map(toCandidate);
+    .sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0));
+  const drafted = excludeIds.size ? [...excludeIds].map((id) => byId.get(id)).filter((p): p is Player => !!p) : [];
+  const fits = computeFits(drafted, pool, coeff);
+  const candidates = pool.map((p) => toCandidate(p, fits.get(p.id)));
   return { team, decade, candidates };
 }
 
