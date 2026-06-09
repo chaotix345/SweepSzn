@@ -4,6 +4,7 @@ import { track } from "@vercel/analytics";
 import { getUid } from "@/lib/streak";
 import type { ChallengeOwnerView } from "@/lib/types";
 import FiveStrip from "@/components/FiveStrip";
+import PushPrompt from "@/components/PushPrompt";
 
 type State = "loading" | "ok" | "forbidden" | "notfound" | "disabled" | "error";
 
@@ -94,6 +95,9 @@ export default function ChallengeOwner({ id, created }: { id: string; created?: 
           {copied ? "Copied!" : copyErr ? "Copy failed" : "Copy link"}
         </button>
       </div>
+
+      {/* opt into a push alert when a friend responds — only shown after creating (this screen) */}
+      <PushPrompt />
 
       {/* the creator's own bar */}
       <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 text-center">

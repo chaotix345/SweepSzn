@@ -1,0 +1,84 @@
+import "server-only";
+import { createHash } from "crypto";
+import webpush from "web-push";
+import { redis, TTL } from "./redis";
+import { notificationText, type PushSub } from "./notify";
+import type { Notif } from "./types";
+
+// Web-push subscription store + sender. Self-disabling: push is OFF unless all three VAPID env vars
+// are present (mirrors isRedisEnabled/isAuthEnabled), so the build/deploy never breaks without them.
+// Key: push:<uid> = HASH { sha256(endpoint) -> PushSub } (multi-device), 31-day TTL. Every operation
+// is error-swallowing — push must NEVER break the calling route.
+
+const keyPush = (uid: string) => `push:${uid}`;
+const field = (endpoint: string) => createHash("sha256").update(endpoint).digest("hex");
+
+// Cap distinct devices per uid. Bounds the blast radius of a cross-uid subscription injection (an anon
+// uid is a bearer token; a signed-in uid is un-fakeable) AND the parallel push fan-out cost per event.
+export const PUSH_SUB_CAP = 10;
+
+// The public key may be exposed to the client (NEXT_PUBLIC_…) or kept server-side; accept either.
+export function pushPublicKey(): string | undefined {
+  return process.env.VAPID_PUBLIC_KEY || process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || undefined;
+}
+
+function vapidSubject(): string | undefined {
+  const s = process.env.VAPID_SUBJECT;
+  if (!s) return undefined;
+  return /^(mailto:|https:\/\/)/.test(s) ? s : `mailto:${s}`;
+}
+
+export function isPushEnabled(): boolean {
+  return !!(pushPublicKey() && process.env.VAPID_PRIVATE_KEY && vapidSubject());
+}
+
+let vapidConfigured = false;
+function configureVapid(): boolean {
+  if (!isPushEnabled()) return false;
+  if (!vapidConfigured) {
+    webpush.setVapidDetails(vapidSubject()!, pushPublicKey()!, process.env.VAPID_PRIVATE_KEY!);
+    vapidConfigured = true;
+  }
+  return true;
+}
+
+// Persist a (validated) subscription under a uid. Best-effort; returns whether it was stored. Enforces
+// PUSH_SUB_CAP, but always allows re-storing an endpoint that's already present (key rotation / refresh).
+export async function saveSubscription(uid: string, sub: PushSub): Promise<boolean> {
+  if (!redis) return false;
+  try {
+    const f = field(sub.endpoint);
+    const already = await redis.hexists(keyPush(uid), f);
+    if (!already && (await redis.hlen(keyPush(uid))) >= PUSH_SUB_CAP) return false;
+    await redis.hset(keyPush(uid), { [f]: sub });
+    await redis.expire(keyPush(uid), TTL);
+    return true;
+  } catch { return false; }
+}
+
+// Remove one subscription (client toggle-off / browser revoke). Best-effort.
+export async function removeSubscription(uid: string, endpoint: string): Promise<void> {
+  if (!redis) return;
+  try { await redis.hdel(keyPush(uid), field(endpoint)); } catch { /* best-effort */ }
+}
+
+// Fan a notification out to all of a uid's devices. No-op when push or redis is unavailable, or the
+// uid has no subscriptions. Capped at PUSH_SUB_CAP. Dead endpoints (404/410 Gone) are pruned. Never throws.
+export async function sendPushToUid(uid: string, n: Notif): Promise<void> {
+  if (!redis || !configureVapid()) return;
+  try {
+    const subs = (await redis.hgetall<Record<string, PushSub>>(keyPush(uid))) ?? {};
+    const entries = Object.entries(subs).slice(0, PUSH_SUB_CAP);
+    if (!entries.length) return;
+    const { title, body } = notificationText(n);
+    const payload = JSON.stringify({ title, body, url: `/play?own=${n.challengeId}` });
+    await Promise.all(entries.map(async ([f, sub]) => {
+      try {
+        await webpush.sendNotification(sub, payload);
+      } catch (err) {
+        const code = (err as { statusCode?: number }).statusCode;
+        if (code === 404 || code === 410) { try { await redis!.hdel(keyPush(uid), f); } catch { /* ignore */ } }
+      }
+    }));
+  } catch { /* push must never break the caller */ }
+}

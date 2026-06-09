@@ -10,6 +10,9 @@ import { getSession } from "@/lib/authServer";
 import { SLOTS } from "@/lib/teams";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
+import { buildChallengeNotification } from "@/lib/notify";
+import { enqueueNotif } from "@/lib/notifyStore";
+import { sendPushToUid } from "@/lib/pushStore";
 import type { ChallengeMiniPlayer, ChallengeSubmitResponse } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -74,6 +77,26 @@ export async function POST(req: Request) {
     { wins: v.result.wins, netRtg: v.result.netRtg },
     { wins: out.creator.wins, netRtg: out.creator.net },
   );
+
+  // Flagship re-engagement: when a responder posts a NEW personal best, ping the creator so they come
+  // back ("Sam beat your 72-10 — reclaim it"). Notifying only on `improved` avoids spamming the creator
+  // on worse retries. Runs post-response + error-swallowing (after()), so it can NEVER break the submit;
+  // both the in-app inbox write and the web push self-disable when their deps are absent.
+  if (out.improved) {
+    const outcome = cmp.winner === "a" ? "beaten" : cmp.winner === "b" ? "held" : "tied";
+    const creatorUid = out.creator.uid;
+    const notif = buildChallengeNotification({
+      challengeId: id, opponent: name, outcome,
+      // only "took #1" when the creator was actually beaten AND the responder now leads the board —
+      // a board-rank of 1 on a "held"/"tied" submit (from prior responders) would be incoherent.
+      tookLead: outcome === "beaten" && out.board.you?.rank === 1,
+      oppWins: v.result.wins, oppLosses: v.result.losses,
+      yourWins: out.creator.wins, yourLosses: out.creator.losses,
+      ts: Date.now(),
+    });
+    after(async () => { await enqueueNotif(creatorUid, notif); await sendPushToUid(creatorUid, notif); });
+  }
+
   const creatorIds = decodeLineup(out.creator.lineup);
   // resolve by index so the slot label stays correct even if a stored id went stale (data update)
   const players: ChallengeMiniPlayer[] = creatorIds
