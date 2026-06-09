@@ -48,20 +48,22 @@ export default function Game() {
   const [challengeRole, setChallengeRole] = useState<"create" | "respond" | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // OFF by default: the game is about your judgment. Hints opt-in reveals the engine's fit grade.
-  // Lazy init from storage is hydration-safe here — the page renders ModeSelect first (no hints UI).
-  const [hints, setHints] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try { return localStorage.getItem("82-0:hints") === "1"; } catch { return false; }
-  });
-  const [hintsUsed, setHintsUsed] = useState(0);   // assisted picks spent this game (UI mirror of the ref)
+  // Hints are OFF by default for everyone, every session, every pick — never persisted. In Classic you
+  // spend a hint to REVEAL the engine's fit grades for the current pick (HINT_BUDGET per game). Revealing
+  // charges immediately, so there's no "peek, then toggle off, then pick" to dodge the cost.
+  const [hintsUsed, setHintsUsed] = useState(0);   // hints spent this game (UI mirror of the ref)
   const hintsUsedRef = useRef(0);                  // synchronous count, read at simulate time
   const saltRef = useRef(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const traceRef = useRef<DraftStep[]>([]);            // ordered picks for leaderboard verification
   const roundRespinsRef = useRef<("team" | "era")[]>([]); // re-spins used in the current round
 
-  const toggleHints = useCallback(() => setHints((h) => { const n = !h; try { localStorage.setItem("82-0:hints", n ? "1" : "0"); } catch { /* no storage */ } return n; }), []);
+  // Spend a hint to reveal fit grades for the current pick. Charges on reveal (not on placement), so
+  // there is no way to peek and then dodge the cost. No-op once the per-game budget is spent.
+  const revealHint = useCallback(() => {
+    if (mode !== "classic" || hintsUsedRef.current >= HINT_BUDGET) return;
+    hintsUsedRef.current += 1; setHintsUsed(hintsUsedRef.current);
+  }, [mode]);
 
   const drafted = useMemo(() => SLOTS.map((s) => roster[s]).filter(Boolean) as DraftCandidate[], [roster]);
   const filled = drafted.length;
@@ -173,16 +175,12 @@ export default function Game() {
 
   const place = useCallback((slot: Slot) => {
     if (!selPlayer || roster[slot] || !selPlayer.eligible.includes(slot)) return;
-    // an assisted pick = Hints on with budget left (the fit grade was visible for this pick)
-    if (hints && mode === "classic" && hintsUsedRef.current < HINT_BUDGET) {
-      hintsUsedRef.current += 1; setHintsUsed(hintsUsedRef.current);
-    }
     traceRef.current.push({ slot, pickedId: selPlayer.id, respins: [...roundRespinsRef.current] });
     roundRespinsRef.current = [];
     const next = { ...roster, [slot]: selPlayer };
     setRoster(next); setSelPlayer(null); setCurrent(null); setLockedReel(null);
     if (SLOTS.every((s) => next[s])) simulate(next);
-  }, [selPlayer, roster, simulate, hints, mode]);
+  }, [selPlayer, roster, simulate]);
 
   const canSwap = useCallback((a: Slot, b: Slot) => {
     if (a === b) return false;
@@ -266,7 +264,7 @@ export default function Game() {
         <div className="order-first">
           {current ? (
             <Browser key={`${current.team}|${current.decade}|${roundNum}`} spin={current} mode={mode} selId={selPlayer?.id ?? null}
-              hints={hints} onToggleHints={toggleHints} hintsLeft={Math.max(0, HINT_BUDGET - hintsUsed)}
+              hintsLeft={Math.max(0, HINT_BUDGET - hintsUsed)} onReveal={revealHint}
               canPlace={(c) => openSlots.some((s) => c.eligible.includes(s))}
               onSelect={(c) => { setSelSlot(null); setSelPlayer((p) => (p?.id === c.id ? null : c)); }} />
           ) : (
@@ -451,13 +449,14 @@ function Court({ roster, selSlot, isTarget, onSlot, maskColors }: {
 }
 
 type SortKey = "fit" | "ppg" | "rpg" | "apg" | "az";
-function Browser({ spin, mode, selId, hints, onToggleHints, hintsLeft, canPlace, onSelect }: {
-  spin: Spin; mode: Mode; selId: string | null; hints: boolean; onToggleHints: () => void; hintsLeft: number;
+function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect }: {
+  spin: Spin; mode: Mode; selId: string | null; hintsLeft: number; onReveal: () => void;
   canPlace: (c: DraftCandidate) => boolean; onSelect: (c: DraftCandidate) => void;
 }) {
   const hideStats = mode === "hoopiq"; // HoopIQ hides stats — draft on memory
   const canHint = mode === "classic";  // Classic only: Daily is a competition (fairness), HoopIQ is a memory test
-  const showFit = hints && canHint && hintsLeft > 0;  // fit grade shows only when Hints on AND budget remains
+  const [revealed, setRevealed] = useState(false); // spent a hint to reveal fit for THIS pick? resets on remount (each spin/round)
+  const showFit = revealed && canHint;
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<"All" | "G" | "F" | "C">("All");
   const [sort, setSort] = useState<SortKey>(showFit ? "fit" : hideStats ? "az" : "ppg");
@@ -498,11 +497,14 @@ function Browser({ spin, mode, selId, hints, onToggleHints, hintsLeft, canPlace,
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" aria-label="Search players"
           className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 sm:w-36" />
-        {canHint && (hintsLeft > 0 ? (
-          <button onClick={onToggleHints} aria-pressed={hints} title={`Reveal the engine's fit grade — ${hintsLeft} hint${hintsLeft === 1 ? "" : "s"} left this game`}
-            className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
-              hints ? "bg-emerald-500/20 text-emerald-300" : "border border-zinc-700 text-zinc-400 hover:text-zinc-200"}`}>
-            💡 Hints{hints ? " on" : ""} · {hintsLeft} left
+        {canHint && (revealed ? (
+          <span title="Fit grades revealed for this pick (cost 1 hint)" className="rounded-md bg-emerald-500/20 px-2 py-1.5 text-xs font-semibold text-emerald-300">
+            💡 Hints on
+          </span>
+        ) : hintsLeft > 0 ? (
+          <button onClick={() => { onReveal(); setRevealed(true); }} title={`Spend 1 hint to reveal the engine's fit grades for this pick — ${hintsLeft} left this game`}
+            className="rounded-md border border-zinc-700 px-2 py-1.5 text-xs font-semibold text-zinc-400 transition hover:border-emerald-600/60 hover:text-emerald-300">
+            💡 Hints · {hintsLeft} left
           </button>
         ) : (
           <span title="You've used all your hints this game" className="rounded-md border border-zinc-800 px-2 py-1.5 text-xs font-semibold text-zinc-600">

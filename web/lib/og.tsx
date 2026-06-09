@@ -32,7 +32,7 @@ const shell = {
   color: "#fafafa", padding: "56px 64px", fontFamily: "sans-serif",
 };
 
-export function resultOgElement(result: LineupResult, players: Player[]) {
+export function resultOgElement(result: LineupResult, players: Player[], hinted = false) {
   const grade = GRADE_HEX[result.grade] ?? "#e4e4e7";
   const net = `${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`;
   return (
@@ -42,6 +42,9 @@ export function resultOgElement(result: LineupResult, players: Player[]) {
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <Wordmark />
           <span style={{ marginLeft: 16, fontSize: 22, color: "#a1a1aa", fontWeight: 600 }}>all-time starting five</span>
+          {hinted && (
+            <span style={{ display: "flex", alignSelf: "center", marginLeft: 16, padding: "5px 14px", borderRadius: 999, background: "rgba(74,222,128,0.14)", color: "#4ade80", fontSize: 18, fontWeight: 700 }}>HINTS USED</span>
+          )}
         </div>
         <span style={{ display: "flex", fontSize: 22, color: "#71717a" }}>projected 82-game record</span>
       </div>
