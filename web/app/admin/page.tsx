@@ -4,7 +4,7 @@ import { redis, isRedisEnabled } from "@/lib/redis";
 import { getSession } from "@/lib/authServer";
 import { getMetrics, sparkline, type Metrics } from "@/lib/metrics";
 
-export const metadata: Metadata = { title: "82-0 · admin", robots: { index: false } };
+export const metadata: Metadata = { title: "SweepSzn · admin", robots: { index: false } };
 
 const ADMIN_UIDS = (process.env.ADMIN_UIDS ?? "").split(",").map(s => s.trim()).filter(Boolean);
 if (ADMIN_UIDS.length === 0) console.warn("[admin] ADMIN_UIDS is empty — /admin will 404 for everyone");
@@ -61,7 +61,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   return (
     <main className="mx-auto max-w-2xl space-y-8 p-6 text-zinc-100">
       <header className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">82-0 metrics</h1>
+        <h1 className="text-2xl font-bold">SweepSzn metrics</h1>
         <span className="text-xs text-zinc-500">window: {m.days[0]} → {m.days[m.days.length - 1]}</span>
       </header>
 

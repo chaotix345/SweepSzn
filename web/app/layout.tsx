@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Anton } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { baseUrl, SITE_NAME } from "@/lib/site";
 import "./globals.css";
@@ -14,7 +14,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const title = "82-0 — Can you build an undefeated all-time NBA five?";
+const anton = Anton({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-anton",
+});
+
+const title = "SweepSzn — Can you build an undefeated all-time NBA five?";
 const description = "Draft a five-player all-time NBA lineup and find out if it can go undefeated. Engine calibrated to 1,170 real team-seasons — and it tells you why.";
 
 export const metadata: Metadata = {
@@ -33,7 +39,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${anton.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         {children}

@@ -18,7 +18,7 @@ const HERO_IDS = [
 ];
 
 const GRADE_COLOR: Record<string, string> = {
-  S: "text-fuchsia-400", "A+": "text-green-400", A: "text-green-400",
+  S: "text-gold", "A+": "text-gold", A: "text-green-400",
   B: "text-blue-400", C: "text-amber-400", D: "text-slate-400", F: "text-red-400",
 };
 
@@ -33,14 +33,14 @@ export default function ResultPreview() {
   return (
     <div
       className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900"
-      style={{ boxShadow: "0 0 40px 0 rgba(249,115,22,0.15)" }}
+      style={{ boxShadow: "0 0 44px 0 rgba(255,197,61,0.16)" }}
     >
       {/* record hero */}
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
         <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
           example result · projected record
         </div>
-        <div className={`mt-1 text-7xl font-black tabular-nums ${gradeColor}`}>
+        <div className={`mt-1 font-display text-7xl tabular-nums ${gradeColor}`}>
           {result.wins}<span className="text-zinc-600">–</span>{result.losses}
         </div>
         <div className="mt-1 text-lg font-bold tracking-wide">

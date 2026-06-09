@@ -28,7 +28,7 @@ export default function RankShareButton({ card }: { card: RankCard }) {
 
   const where = card.scope === "daily" ? "today's Daily board" : card.scope === "week" ? "this week's board" : "the all-time board";
   const metric = card.scope === "daily" ? `${card.wins}-${card.losses}` : `${card.wins.toLocaleString()} wins`;
-  const text = `I'm #${card.rank} of ${card.total.toLocaleString()} on ${where} (${metric}) at 82-0. Can you rank higher?`;
+  const text = `I'm #${card.rank} of ${card.total.toLocaleString()} on ${where} (${metric}) at SweepSzn. Can you rank higher?`;
   const path = `/rank/${encodeRankCard(card)}`;
   const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
@@ -37,7 +37,7 @@ export default function RankShareButton({ card }: { card: RankCard }) {
     try { await navigator.clipboard?.writeText(`${text} ${url}`); setCopied(true); track("share_rank", { target: "copy", scope: card.scope }); ev("share", { uid: getUid() }); setTimeout(() => setCopied(false), 1500); } catch { /* no clipboard */ }
   };
   const native = async () => {
-    try { await (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }).share?.({ title: "82-0", text, url }); track("share_rank", { target: "native", scope: card.scope }); ev("share", { uid: getUid() }); } catch { /* dismissed */ }
+    try { await (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }).share?.({ title: "SweepSzn", text, url }); track("share_rank", { target: "native", scope: card.scope }); ev("share", { uid: getUid() }); } catch { /* dismissed */ }
   };
   const links: [string, string][] = [
     ["X", `https://twitter.com/intent/tweet?text=${t}&url=${u}&hashtags=NBA,82and0`],

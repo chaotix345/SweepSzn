@@ -21,11 +21,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { lineup } = await params;
   const data = loadLineup(lineup);
   // Per-lineup pages are noindex: they're shareable permalinks, not search content.
-  if (!data) return { title: "82-0 — all-time NBA lineup", robots: { index: false } };
+  if (!data) return { title: "SweepSzn — all-time NBA lineup", robots: { index: false } };
   const { result, players } = data;
   const names = players.map((p) => displayName(p.name)).join(", ");
   const net = `${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`;
-  const title = `${result.wins}-${result.losses} (${result.grade}) — ${names} · 82-0`;
+  const title = `${result.wins}-${result.losses} (${result.grade}) — ${names} · SweepSzn`;
   const description = `${names} project to ${result.wins}-${result.losses} (${result.label}) — Net ${net}. Can you build a better all-time five?`;
   return {
     title,
@@ -43,8 +43,8 @@ export default async function SharedResult({ params }: Props) {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <Link href="/" className="flex items-baseline text-2xl font-black tracking-tight">
-          <span>82</span><span className="text-orange-500">-0</span>
+        <Link href="/" className="flex items-baseline text-2xl tracking-tight">
+          <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
           <span className="ml-3 text-sm font-semibold text-zinc-500">a friend shared their five</span>
         </Link>
         <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" shared />

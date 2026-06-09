@@ -8,10 +8,10 @@ import type { RankCard } from "./rankShare";
 // and colors are hex (no Tailwind classes here).
 
 export const OG_SIZE = { width: 1200, height: 630 };
-export const OG_ALT = "82-0 — build an all-time NBA starting five";
+export const OG_ALT = "SweepSzn — build an all-time NBA starting five";
 
 const GRADE_HEX: Record<string, string> = {
-  S: "#e879f9", "A+": "#4ade80", A: "#4ade80", B: "#60a5fa", C: "#fbbf24", D: "#94a3b8", F: "#f87171",
+  S: "#ffc53d", "A+": "#ffc53d", A: "#4ade80", B: "#60a5fa", C: "#fbbf24", D: "#94a3b8", F: "#f87171",
 };
 
 // satori's default font is latin-only; strip diacritics so names like Dončić/Jokić don't tofu.
@@ -19,9 +19,9 @@ const ascii = (s: string) => s.normalize("NFKD").replace(/[̀-ͯ]/g, "");
 
 function Wordmark({ size = 40 }: { size?: number }) {
   return (
-    <div style={{ display: "flex", alignItems: "baseline", fontSize: size, fontWeight: 800, letterSpacing: -1 }}>
-      <span style={{ color: "#fafafa" }}>82</span>
-      <span style={{ color: "#f97316" }}>-0</span>
+    <div style={{ display: "flex", alignItems: "baseline", fontSize: size, fontWeight: 900, letterSpacing: -1 }}>
+      <span style={{ color: "#fafafa" }}>Sweep</span>
+      <span style={{ color: "#ff6a00" }}>Szn</span>
     </div>
   );
 }
@@ -82,7 +82,7 @@ export function resultOgElement(result: LineupResult, players: Player[]) {
       {/* footer */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 28 }}>
         <span style={{ display: "flex", fontSize: 22, color: "#a1a1aa", maxWidth: 820 }}>{ascii(headline(result))}</span>
-        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#f97316" }}>Can you beat it?</span>
+        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#ff6a00" }}>Can you beat it?</span>
       </div>
     </div>
   );
@@ -130,7 +130,7 @@ export function challengeOgElement(creatorName: string, r: { wins: number; losse
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ display: "flex", fontSize: 30, fontWeight: 700, color: "#fafafa" }}>Can you beat it?</span>
-        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#f97316" }}>Build your five →</span>
+        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#ff6a00" }}>Build your five →</span>
       </div>
     </div>
   );
@@ -154,7 +154,7 @@ export function rankOgElement(c: RankCard) {
       <div style={{ display: "flex", flexDirection: "column", marginTop: "auto", marginBottom: "auto" }}>
         <span style={{ display: "flex", fontSize: 34, fontWeight: 700, color: "#e4e4e7" }}>{ascii(c.name)} is</span>
         <div style={{ display: "flex", alignItems: "baseline", gap: 24, marginTop: 6 }}>
-          <span style={{ display: "flex", fontSize: 170, fontWeight: 900, lineHeight: 1, color: "#f97316" }}>#{c.rank}</span>
+          <span style={{ display: "flex", fontSize: 170, fontWeight: 900, lineHeight: 1, color: "#ff6a00" }}>#{c.rank}</span>
           <span style={{ display: "flex", fontSize: 34, color: "#a1a1aa" }}>of {c.total.toLocaleString()}</span>
         </div>
         <span style={{ display: "flex", marginTop: 14, fontSize: 30, color: "#e4e4e7" }}>{metric}</span>
@@ -162,7 +162,7 @@ export function rankOgElement(c: RankCard) {
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ display: "flex", fontSize: 30, fontWeight: 700, color: "#fafafa" }}>Can you rank higher?</span>
-        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#f97316" }}>Build your five →</span>
+        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#ff6a00" }}>Build your five →</span>
       </div>
     </div>
   );
