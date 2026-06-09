@@ -1,11 +1,14 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
 import type { DraftStep, LineupResult, Player, ChallengeSubmitResponse, ChallengeMiniPlayer, ChallengeBoard, ChallengeBoardRow } from "@/lib/types";
 import { getUid, getName, setName as persistName } from "@/lib/streak";
-import { SLOTS, teamColors, initials, eraLabel, displayName } from "@/lib/teams";
+import { saveResult } from "@/lib/resultHistory";
+import { encodeLineup } from "@/lib/share";
+import { SLOTS } from "@/lib/teams";
+import FiveStrip from "@/components/FiveStrip";
+import ChallengeOwner from "@/components/ChallengeOwner";
 
 export default function ChallengeResult({ id, role, result, players, trace, seed, usedHints, onCreateOwn }: {
   id: string; role: "create" | "respond"; result: LineupResult; players: Player[]; trace: DraftStep[];
@@ -38,9 +41,14 @@ export default function ChallengeResult({ id, role, result, players, trace, seed
       if (!r.ok) { setErr(v?.error ?? "submit failed"); return; }
       persistName(nm.trim());
       setResp(v as ChallengeSubmitResponse);
-      track("challenge_submit", { role: (v as ChallengeSubmitResponse)?.role ?? role });
+      // Remember this game so it survives a refresh and shows under "Your results". A creator entry
+      // carries the challenge id (re-opens the live dashboard); a responder entry opens their /r/ five.
+      const role2 = (v as ChallengeSubmitResponse)?.role;
+      const common = { encoded: encodeLineup(players.map((p) => p.id), !!usedHints), mode: "challenge" as const, wins: result.wins, losses: result.losses, grade: result.grade };
+      saveResult(role2 === "creator" ? { ...common, challengeId: id } : common);
+      track("challenge_submit", { role: role2 ?? role });
     } catch { setErr("network error"); } finally { setBusy(false); submittingRef.current = false; }
-  }, [id, trace, role, seed, usedHints, resp]);
+  }, [id, trace, role, seed, usedHints, resp, players, result]);
 
   // Pre-fill the player's known name. We deliberately do NOT auto-submit: the responder must click
   // "Reveal" (consent before the matchup is shown + recorded), and the creator's name must be captured
@@ -81,25 +89,10 @@ export default function ChallengeResult({ id, role, result, players, trace, seed
     );
   }
 
+  // Creator: the live dashboard (share link + your five + every responder's five & verdict). Polls and
+  // restores on refresh — replaces the old frozen one-row snapshot.
   if (resp.role === "creator") {
-    return (
-      <div className="mt-4 rounded-2xl border border-orange-500/40 bg-zinc-900 p-5">
-        <div className="text-center">
-          <div className="text-sm font-black uppercase tracking-widest text-orange-400">Challenge created</div>
-          <p className="mx-auto mt-2 max-w-sm text-sm text-zinc-400">
-            Send this link. The first friend to beat your <b className="text-zinc-200">{result.wins}-{result.losses}</b> from the same draft wins.
-            {usedHints && <span className="text-zinc-500"> (you drafted with hints)</span>}
-          </p>
-        </div>
-        <div className="mt-4 flex gap-2">
-          <input readOnly value={link} aria-label="Challenge link" className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-zinc-300 outline-none" />
-          <button onClick={copy} className="shrink-0 rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-black hover:bg-orange-400">
-            {copied ? "Copied!" : copyErr ? "Copy failed" : "Copy link"}
-          </button>
-        </div>
-        <Board board={resp.board} />
-      </div>
-    );
+    return <ChallengeOwner id={id} created />;
   }
 
   // responder
@@ -142,32 +135,6 @@ export default function ChallengeResult({ id, role, result, players, trace, seed
       </div>
     </div>
   );
-}
-
-function FiveStrip({ title, five, href }: { title: string; five: ChallengeMiniPlayer[]; href?: string }) {
-  const body = (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
-      <div className="mb-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-zinc-500">
-        <span>{title}</span>{href && <span className="text-orange-400/80">view →</span>}
-      </div>
-      <div className="flex justify-between gap-1">
-        {five.map((p) => {
-          const c = teamColors(p.team);
-          return (
-            <div key={p.id} className="flex min-w-0 flex-col items-center">
-              <div className="flex h-9 w-9 flex-col items-center justify-center rounded-lg text-[10px] font-black leading-none"
-                style={{ background: c.bg, color: c.text }}>
-                <span>{initials(p.name)}</span><span className="mt-0.5 text-[7px] opacity-80">{p.slot}</span>
-              </div>
-              <span className="mt-1 w-full truncate text-center text-[9px] text-zinc-400">{displayName(p.name)}</span>
-              <span className="text-[8px] text-zinc-500">{p.team} · {eraLabel(p.decade)}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-  return href ? <Link href={href}>{body}</Link> : body;
 }
 
 function Board({ board }: { board: ChallengeBoard }) {

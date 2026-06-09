@@ -1,7 +1,8 @@
 import "server-only";
 import { redis, isRedisEnabled, TTL, encScore, readSortedRows, type StoredRow } from "./redis";
-import { challengeSeed } from "./challenge";
-import type { ChallengeInfo, ChallengePublic, ChallengeBoard, ChallengeBoardRow, LineupResult, LeaderboardRow } from "./types";
+import { challengeSeed, buildOwnerView } from "./challenge";
+import { getPlayersByIds } from "./data";
+import type { ChallengeInfo, ChallengePublic, ChallengeBoard, ChallengeBoardRow, ChallengeOwnerView, LineupResult, LeaderboardRow } from "./types";
 
 // Per-challenge persistence. Keys: chal:<id> (sorted set, ranking), chal:<id>:meta (hash,
 // per-uid row payload), chal:<id>:info (the creator's bar + draft seed, write-once). 31-day TTL
@@ -63,6 +64,30 @@ export async function getChallengePublic(id: string): Promise<ChallengePublic | 
     seed: info.seed ?? challengeSeed(id),  // legacy challenges (no stored seed) used h2h-<id>
     hinted: !!info.hinted,
   };
+}
+
+// The creator's own dashboard: their five plus every responder's five + verdict. Gated to the creator
+// — `uid` must equal the write-once creator uid (info.uid). That uid lives only on the creator's
+// device (the board strips uids), so this match is as strong as identity gets in the anonymous model,
+// and it stays consistent with "you only see a five once you've played": creating IS the creator's
+// play. Responders use their own reveal flow; they are not the creator and get `forbidden` here.
+export type ChallengeOwnerResult =
+  | { status: "not_found" }
+  | { status: "forbidden" }
+  | { status: "ok"; view: ChallengeOwnerView };
+
+export async function getChallengeOwnerView(id: string, uid: string): Promise<ChallengeOwnerResult | null> {
+  if (!redis) return null;
+  const info = await redis.get<ChallengeInfo>(keyInfo(id));
+  if (!info) return { status: "not_found" };
+  if (info.uid !== uid) return { status: "forbidden" };
+  const total = await redis.zcard(keyZ(id));
+  const rows = await readSortedRows(keyZ(id), keyH(id), 0, 99); // server-side rows still carry uid + lineup
+  const view = buildOwnerView(id, info, rows, total, (pid) => {
+    const p = getPlayersByIds([pid])[0];
+    return p ? { id: p.id, name: p.name, team: p.team, decade: p.decade } : null;
+  });
+  return { status: "ok", view };
 }
 
 // The stored draft seed for an existing challenge, or null if the challenge has no creator yet

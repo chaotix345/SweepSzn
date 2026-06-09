@@ -116,6 +116,22 @@ export type ChallengeSubmitResponse =
       board: ChallengeBoard;
     };
 
+// The creator's own dashboard for a challenge they made: their five plus every responder's five and
+// verdict. Only ever returned to the creator (uid === info.uid), since creating the challenge IS the
+// creator's submission — so the "reveal after you've played" rule already entitles them to see it.
+// `outcome` is the RESPONDER's result vs the creator (a "win" means the responder beat the creator).
+export interface ChallengeOwnerResponder {
+  rank: number; name: string; wins: number; losses: number; net: number;
+  outcome: "win" | "loss" | "tie"; winsMargin: number; netMargin: number;
+  players: ChallengeMiniPlayer[]; resultUrl: string;
+}
+export interface ChallengeOwnerView {
+  id: string;
+  creator: { name: string; wins: number; losses: number; net: number; grade: string; hinted: boolean; rank: number | null; players: ChallengeMiniPlayer[]; resultUrl: string };
+  total: number;
+  responders: ChallengeOwnerResponder[];
+}
+
 export interface DefModel {
   intercept: number; dws: number; posC: number; posPF: number; posSF: number; posSG: number; trb?: number;
 }

@@ -8,13 +8,19 @@ import { getUid } from "@/lib/streak";
 import ResultCard from "@/components/ResultCard";
 import Leaderboard from "@/components/Leaderboard";
 import ChallengeResult from "@/components/ChallengeResult";
+import ChallengeOwner from "@/components/ChallengeOwner";
+import ResultsHistory from "@/components/ResultsHistory";
 import { newChallengeId, challengeSeed } from "@/lib/challenge";
+import { encodeLineup, decodeShare } from "@/lib/share";
+import { saveResult, writeLastResult, readLastResult } from "@/lib/resultHistory";
 
 type Mode = "daily" | "classic" | "hoopiq" | "challenge";
 type Roster = Record<Slot, DraftCandidate | null>;
 const EMPTY: Roster = { PG: null, SG: null, SF: null, PF: null, C: null };
 interface Spin { team: string; decade: string; candidates: DraftCandidate[] }
 type SpinOpts = { lockedTeam?: string; lockedDecade?: string; excludeTeam?: string; excludeDecade?: string; salt?: number };
+// The full current result kept in localStorage for a same-session refresh (carries the draft trace).
+type LastResult = { mode: Mode; seed: string; result: { result: LineupResult; players: Player[]; trace: DraftStep[]; usedHints: boolean } };
 
 // court slot positions (% of the half-court panel; basket at top)
 const COURT: Record<Slot, { left: number; top: number }> = {
@@ -46,6 +52,8 @@ export default function Game() {
   const [result, setResult] = useState<{ result: LineupResult; players: Player[]; trace: DraftStep[]; usedHints: boolean } | null>(null);
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [challengeRole, setChallengeRole] = useState<"create" | "respond" | null>(null);
+  const [ownerId, setOwnerId] = useState<string | null>(null); // viewing a challenge I created (restored from URL or opened from "Your results")
+  const [restoring, setRestoring] = useState(false);           // briefly true while a refresh rebuilds a finished result
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Hints are OFF by default for everyone, every session, every pick — never persisted. In Classic you
@@ -95,6 +103,15 @@ export default function Game() {
     setReel({ team: "ATL", era: "60's" }); setLockedReel(null); saltRef.current = 0;
     traceRef.current = []; roundRespinsRef.current = []; setConvertedId(null);
     hintsUsedRef.current = 0; setHintsUsed(0);
+    setOwnerId(null);
+    // a new game owns the URL — drop any restore params so a later refresh won't resurrect an old screen
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.has("r") || u.searchParams.has("m") || u.searchParams.has("own") || u.searchParams.has("d")) {
+        u.searchParams.delete("r"); u.searchParams.delete("m"); u.searchParams.delete("own"); u.searchParams.delete("d");
+        window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+      }
+    } catch { /* no history API */ }
   }, []);
 
   useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
@@ -108,15 +125,18 @@ export default function Game() {
     return () => prev?.focus?.();
   }, [selPlayer, selSlot]);
 
-  // Deep link from a challenge landing page: /play?c=<id> auto-enters challenge respond mode.
-  // (async IIFE keeps start()'s setState out of the effect body for react-hooks/set-state-in-effect.)
+  // Bootstrap the view from the URL (hold-your-place restore on refresh). Priority: a joiner deep link
+  // (?c=<id>) → respond mode; then a creator dashboard (?own=<id>); then a finished-result restore
+  // (?r=<encoded>&m=<mode>). A bare URL falls through to the mode picker. (async IIFE keeps start()'s
+  // setState out of the effect body for react-hooks/set-state-in-effect.)
   useEffect(() => {
     let cancelled = false;
+    const idRe = /^[a-z0-9]{6,16}$/;
     (async () => {
       try {
         const params = new URLSearchParams(window.location.search);
         const cid = params.get("c");
-        if (cid && /^[a-z0-9]{6,16}$/.test(cid)) {
+        if (cid && idRe.test(cid)) {
           // fetch the challenge's draft seed so respond mode replays the SAME spins the creator faced
           // (a daily/classic-originated challenge does NOT use the h2h-<id> default seed)
           let seedOverride: string | undefined;
@@ -129,11 +149,59 @@ export default function Game() {
           params.delete("c");
           const qs = params.toString();
           window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+          return;
+        }
+
+        const own = params.get("own");
+        if (own && idRe.test(own)) { if (!cancelled) setOwnerId(own); return; }
+
+        const enc = params.get("r");
+        const m = params.get("m") as Mode | null;
+        if (enc && (m === "daily" || m === "classic" || m === "hoopiq")) {
+          setRestoring(true);
+          // same-session full restore: keeps the draft trace the Daily board needs to submit
+          const last = readLastResult<LastResult>();
+          if (last && last.mode === m && last.result && encodeLineup(last.result.players.map((p) => p.id), last.result.usedHints) === enc) {
+            if (cancelled) return;
+            setMode(m); setSeed(last.seed); setResult(last.result); setRestoring(false); return;
+          }
+          // cold restore (other device / cleared storage): rebuild from the five's ids. No trace, so the
+          // Daily leaderboard renders read-only (still shows your standing, just no re-submit).
+          const { ids, hinted } = decodeShare(enc);
+          if (ids.length !== 5 || new Set(ids).size !== 5) { if (!cancelled) setRestoring(false); return; }
+          try {
+            const res = await fetch("/api/evaluate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids }) });
+            if (!res.ok) throw new Error("evaluate failed");
+            const data = await res.json();
+            if (cancelled) return;
+            // daily boards are per-date — use the date carried in the URL so a cold restore shows the
+            // result's own day (read-only), not today's empty board. Fall back to today if absent/bad.
+            const d = params.get("d");
+            const dailyDate = d && /^\d{4}-\d{1,2}-\d{1,2}$/.test(d) ? d : todaySeed();
+            setMode(m); setSeed(m === "daily" ? `daily-${dailyDate}` : `${m}-restored`);
+            setResult({ result: data.result, players: data.players, trace: [], usedHints: hinted });
+          } catch { /* leave on the mode picker */ }
+          finally { if (!cancelled) setRestoring(false); }
         }
       } catch { /* no query / no history API */ }
     })();
     return () => { cancelled = true; };
   }, [start]);
+
+  // Hold-your-place: while a finished result is on screen, mirror it into the URL (?r=&m=) so a refresh
+  // restores it. Challenge mode owns the URL via ?own=<id> (set by ChallengeOwner), so it's skipped here.
+  useEffect(() => {
+    if (!result || !mode || mode === "challenge") return;
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("r", encodeLineup(result.players.map((p) => p.id), result.usedHints));
+      u.searchParams.set("m", mode);
+      // daily boards are per-date — carry the date so a cold restore shows the right day's board, not today's
+      if (mode === "daily") u.searchParams.set("d", seed.replace("daily-", "")); else u.searchParams.delete("d");
+      u.searchParams.delete("c"); u.searchParams.delete("own");
+      window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+    } catch { /* no history API */ }
+  }, [result, mode, seed]);
 
   const runSpin = useCallback(async (opts: SpinOpts, locked: "team" | "era" | null = null) => {
     if (spinning) return;
@@ -199,7 +267,12 @@ export default function Game() {
       });
       if (!res.ok) throw new Error("evaluate failed");
       const data = await res.json();
-      setResult({ result: data.result, players: data.players, trace: [...traceRef.current], usedHints: hintsUsedRef.current > 0 });
+      const full = { result: data.result, players: data.players as Player[], trace: [...traceRef.current], usedHints: hintsUsedRef.current > 0 };
+      setResult(full);
+      // Persist so the result survives a refresh (full object, incl. trace) and shows under "Your
+      // results". A challenge entry is upgraded with its challengeId later, when the link is created.
+      writeLastResult({ mode, seed, result: full });
+      if (mode) saveResult({ encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints), mode, wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
       track("lineup_complete", { wins: data.result.wins, grade: data.result.grade });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return; // superseded by a restart — ignore
@@ -207,7 +280,7 @@ export default function Game() {
     } finally {
       if (!ctrl.signal.aborted) setLoading(false);
     }
-  }, []);
+  }, [mode, seed]);
 
   const place = useCallback((slot: Slot) => {
     if (!selPlayer || roster[slot] || !selPlayer.eligible.includes(slot)) return;
@@ -245,11 +318,21 @@ export default function Game() {
     return false;
   }, [selPlayer, selSlot, roster, canSwap]);
 
-  if (!mode) return <ModeSelect onPick={start} />;
+  if (restoring) return <div className="mx-auto max-w-4xl px-4 py-24 text-center text-sm text-zinc-400 animate-pulse">Loading your result…</div>;
+  if (!mode) {
+    if (ownerId) return (
+      <div className="mx-auto max-w-xl px-4 py-8">
+        <button onClick={() => { setOwnerId(null); try { const u = new URL(window.location.href); u.searchParams.delete("own"); window.history.replaceState(null, "", u.pathname + u.search + u.hash); } catch { /* no history API */ } }}
+          className="mb-4 text-sm text-zinc-400 hover:text-zinc-200">← All modes</button>
+        <ChallengeOwner id={ownerId} />
+      </div>
+    );
+    return <ModeSelect onPick={start} onOpenChallenge={(cid) => setOwnerId(cid)} />;
+  }
   if (result) return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={mode} usedHints={result.usedHints} onReset={() => start(mode)} />
-      {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} />}
+      {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
       {mode === "challenge" && challengeId && challengeRole && (
         <ChallengeResult id={challengeId} role={challengeRole} seed={seed} usedHints={false} result={result.result} players={result.players}
           trace={result.trace} onCreateOwn={() => start("challenge")} />
@@ -408,7 +491,7 @@ function Shell({ children, roundNum, mode, onRestart, showRestart }: {
   );
 }
 
-function ModeSelect({ onPick }: { onPick: (m: Mode) => void }) {
+function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => void; onOpenChallenge: (challengeId: string) => void }) {
   const modes: { id: Mode; emoji: string; title: string; desc: string }[] = [
     { id: "daily", emoji: "📅", title: "Daily", desc: "Everyone gets the same spins today. Compare your record." },
     { id: "classic", emoji: "💯", title: "Classic", desc: "Full stats visible — draft on what you can see." },
@@ -430,6 +513,7 @@ function ModeSelect({ onPick }: { onPick: (m: Mode) => void }) {
           </button>
         ))}
       </div>
+      <ResultsHistory onOpenChallenge={onOpenChallenge} />
       <p className="mt-8 text-xs text-zinc-600">Smarter engine: every team is scored by a model fit to 1,170 real NBA seasons — and it tells you <em>why</em>.</p>
     </div>
   );
