@@ -1,9 +1,10 @@
-// Server component (NO "use client"): the landing / positioning section above the game.
+// Server component (NO "use client"): the home page landing / positioning section.
 // Pure static, crawlable HTML — converts the cold, mostly-mobile inbound from the share loop
 // + Daily leaderboard. Copy is rendered via {expressions} so apostrophes/quotes don't trip the
-// react/no-unescaped-entities lint rule. In-page CTAs use plain <a href="#game"> anchors.
-// (No "Modes" section here — the game's own ModeSelect picker sits right below and lists the
-// three modes; the Daily leaderboard hook is folded into the "Get graded" step instead.)
+// react/no-unescaped-entities lint rule. CTAs link to /play.
+// (No "Modes" section here — the /play mode picker covers that; the Daily leaderboard hook is
+// folded into the "Get graded" step instead.)
+import Link from "next/link";
 import ResultPreview from "./ResultPreview";
 
 export default function LandingSection() {
@@ -22,7 +23,7 @@ export default function LandingSection() {
         </p>
         <div className="mt-6 flex justify-center">
           <a
-            href="#game"
+            href="/play"
             className="rounded-xl bg-orange-500 px-7 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400"
           >
             Build your five →
@@ -116,13 +117,16 @@ export default function LandingSection() {
         <p className="mt-5 border-t border-zinc-800 pt-5 text-sm text-zinc-400">
           {"The proof: stack five ball-dominant scorers and a box-score adder calls them historic at 74-8. The engine knows one ball can't feed them all — even a balanced GOAT five loses 13 wins to usage overload, and the stat-stuffers never close the gap."}
         </p>
+        <Link href="/how-it-works" className="mt-5 inline-block text-sm font-bold text-orange-400 hover:text-orange-300">
+          See exactly how the engine works →
+        </Link>
       </section>
 
       {/* ── Section 5: Final CTA ──────────────────────────────────────── */}
       <section className="mx-auto max-w-md px-5 pt-6 pb-4 text-center sm:px-8">
         <h2 className="text-3xl font-black text-zinc-100">Spin the reels. Draft your five. Go for 82-0.</h2>
         <a
-          href="#game"
+          href="/play"
           className="mt-5 inline-block rounded-xl bg-orange-500 px-8 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400"
         >
           Build your five →

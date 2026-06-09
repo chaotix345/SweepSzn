@@ -111,7 +111,7 @@ export default function ResultCard({
       <div className="flex gap-3 border-t border-zinc-800 px-6 py-4">
         <ShareButton result={result} path={sharePath} names={names} />
         {shared ? (
-          <Link href="/" className="flex-1 rounded-xl bg-orange-500 py-2.5 text-center text-sm font-bold text-black hover:bg-orange-400">Build your own five →</Link>
+          <Link href="/play" className="flex-1 rounded-xl bg-orange-500 py-2.5 text-center text-sm font-bold text-black hover:bg-orange-400">Build your own five →</Link>
         ) : (
           <button onClick={onReset} className="flex-1 rounded-xl bg-orange-500 py-2.5 text-sm font-bold text-black hover:bg-orange-400">Build Another</button>
         )}
