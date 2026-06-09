@@ -77,7 +77,7 @@ export default function LandingSection() {
         <div className="mb-6 text-xs font-bold uppercase tracking-widest text-zinc-500">How to play</div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-5">
           <Step n="1" title="Spin the reels">
-            {"A gold TEAM reel and a violet ERA reel land on a franchise and decade. Lock one and re-spin the other to hunt the player you want."}
+            {"An orange TEAM reel and a violet ERA reel land on a franchise and decade. Lock one and re-spin the other to hunt the player you want."}
           </Step>
           <Step n="2" title="Draft your five">
             {"Browse that era's roster and slot a player at each position — PG, SG, SF, PF, C. Eligibility is enforced: five point guards is not a lineup."}
