@@ -132,6 +132,24 @@ export interface ChallengeOwnerView {
   responders: ChallengeOwnerResponder[];
 }
 
+// Re-engagement notifications (challenge responses). Written server-side ONLY inside the verified
+// submit path; read via the uid-gated /api/notifications inbox. The payload carries only
+// non-sensitive data already on / derivable from the public challenge board (a display name + a W-L
+// record + an unguessable challenge id) — no lineup, no uid. `outcome` is from the CREATOR's POV
+// (the notified party): "beaten" = a responder beat the creator's bar, "held" = the creator held.
+export interface Notif {
+  id: string;
+  type: "challenge_response";
+  challengeId: string;
+  opponent: string;
+  outcome: "beaten" | "tied" | "held";
+  tookLead: boolean;
+  oppWins: number; oppLosses: number;
+  yourWins: number; yourLosses: number;
+  ts: number;
+}
+export interface NotifView { items: Notif[]; unread: number }
+
 export interface DefModel {
   intercept: number; dws: number; posC: number; posPF: number; posSF: number; posSG: number; trb?: number;
 }

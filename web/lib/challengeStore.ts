@@ -109,7 +109,7 @@ export async function submitChallenge(
   result: LineupResult,
   grade: string,
   meta: { seed: string; hinted: boolean },
-): Promise<{ role: "creator" | "responder"; creator: ChallengeInfo; board: ChallengeBoard } | null> {
+): Promise<{ role: "creator" | "responder"; creator: ChallengeInfo; improved: boolean; board: ChallengeBoard } | null> {
   if (!redis) return null;
   const info: ChallengeInfo = { uid: row.uid, name: row.name, wins: row.wins, losses: row.losses, net: row.net, grade, lineup: row.lineup, seed: meta.seed, hinted: meta.hinted };
   const claimed = await redis.set(keyInfo(id), info, { nx: true, ex: TTL });
@@ -124,10 +124,12 @@ export async function submitChallenge(
     role = existing.uid === row.uid ? "creator" : "responder"; // the creator re-submitting stays the creator (idempotent)
   }
 
+  let improved = false; // a new personal best for this uid (drives the "your challenge got beaten" notification)
   const score = encScore(result.wins, result.netRtg);
   if (Number.isFinite(score)) {
     const prev = await redis.zscore(keyZ(id), row.uid);
     if (prev == null || score > Number(prev)) {
+      improved = true;
       await redis.zadd(keyZ(id), { score, member: row.uid });
       await redis.hset(keyH(id), { [row.uid]: row });
     }
@@ -137,5 +139,5 @@ export async function submitChallenge(
   }
   // a classic-originated challenge exposes its classic seed to responders — lock fit on it (see isFitLockedSeed)
   if (meta.seed.startsWith("classic")) await redis.set(keyFitLock(meta.seed), "1", { ex: TTL });
-  return { role, creator, board: await board(id, row.uid) };
+  return { role, creator, improved, board: await board(id, row.uid) };
 }
