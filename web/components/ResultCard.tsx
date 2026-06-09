@@ -32,7 +32,7 @@ export default function ResultCard({
   );
   const gradeColor = GRADE_COLOR[result.grade] ?? "text-zinc-300";
   // a recipient can reconstruct the exact result from these 5 ids (slot order)
-  const sharePath = `/r/${encodeLineup(players.map((p) => p.id))}`;
+  const sharePath = `/r/${encodeLineup(players.map((p) => p.id), usedHints)}`;
   const names = players.map((p) => displayName(p.name));
 
   return (

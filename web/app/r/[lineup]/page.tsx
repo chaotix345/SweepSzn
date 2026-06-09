@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
-import { decodeLineup } from "@/lib/share";
+import { decodeShare } from "@/lib/share";
 import { SLOTS, displayName } from "@/lib/teams";
 import ResultCard from "@/components/ResultCard";
 
@@ -12,9 +12,10 @@ type Props = { params: Promise<{ lineup: string }> };
 
 // cache() dedupes the lookup+evaluate across generateMetadata and the page render (same request).
 const loadLineup = cache((lineup: string) => {
-  const players = getPlayersByIds(decodeLineup(lineup));
+  const { ids, hinted } = decodeShare(lineup);
+  const players = getPlayersByIds(ids);
   if (players.length !== 5) return null;
-  return { players, result: evaluateLineup(players, getCoefficients()) };
+  return { players, result: evaluateLineup(players, getCoefficients()), hinted };
 });
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -47,7 +48,7 @@ export default async function SharedResult({ params }: Props) {
           <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
           <span className="ml-3 text-sm font-semibold text-zinc-500">a friend shared their five</span>
         </Link>
-        <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" shared />
+        <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared />
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">
         engine calibrated to real NBA team-seasons
