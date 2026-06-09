@@ -16,7 +16,7 @@ export default function SiteFooter() {
             <div className="font-display text-2xl tracking-tight">
               Sweep<span className="text-orange-500">Szn</span>
             </div>
-            <p className="mt-2 max-w-xs text-sm text-zinc-500">
+            <p className="mt-2 max-w-xs text-sm text-zinc-400">
               Can you go 82-0? Draft an all-time NBA five and find out. It&apos;s sweep season.
             </p>
           </div>
