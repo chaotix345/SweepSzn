@@ -16,9 +16,9 @@ const GRADE_COLOR: Record<string, string> = {
 const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1));
 
 export default function ResultCard({
-  result, players, slots, mode, onReset, shared,
+  result, players, slots, mode, onReset, shared, usedHints,
 }: {
-  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean;
+  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean;
 }) {
   const factors = factorViews(result);
   // split by the value's sign (what actually helped/hurt), not the engine's fixed label —
@@ -46,6 +46,10 @@ export default function ResultCard({
         <div className="mt-1 text-lg font-bold tracking-wide">
           <span className={gradeColor}>{result.grade}</span> <span className="text-zinc-300">{result.label}</span>
         </div>
+        {usedHints && (
+          <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300/90"
+            title="You used the engine's fit hints while drafting this five">💡 Hints used</div>
+        )}
         <p className="mx-auto mt-3 max-w-md text-sm text-zinc-400">{headline(result)}</p>
         <div className="mt-4 flex justify-center gap-2 text-sm">
           <Metric label="ORtg" value={result.ortg.toFixed(1)} />
@@ -109,7 +113,7 @@ export default function ResultCard({
       </div>
 
       <div className="flex gap-3 border-t border-zinc-800 px-6 py-4">
-        <ShareButton result={result} path={sharePath} names={names} />
+        <ShareButton result={result} path={sharePath} names={names} usedHints={usedHints} />
         {shared ? (
           <Link href="/play" className="flex-1 rounded-xl bg-orange-500 py-2.5 text-center text-sm font-bold text-black hover:bg-orange-400">Build your own five →</Link>
         ) : (
@@ -120,10 +124,10 @@ export default function ResultCard({
   );
 }
 
-function ShareButton({ result, path, names }: { result: LineupResult; path: string; names: string[] }) {
+function ShareButton({ result, path, names, usedHints }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const text = `My all-time five (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}. Can you build a better one?`;
+  const text = `My all-time five (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""} — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}. Can you build a better one?`;
   const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
 
