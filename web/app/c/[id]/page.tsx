@@ -28,7 +28,7 @@ export default async function ChallengePage({ params }: Props) {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-xl px-4 py-10">
-        <Link href="/" className="flex items-baseline text-2xl font-black tracking-tight">
+        <Link href="/" className="flex items-baseline text-2xl tracking-tight">
           <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
           <span className="ml-3 text-sm font-semibold text-zinc-500">head-to-head challenge</span>
         </Link>

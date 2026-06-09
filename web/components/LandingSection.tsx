@@ -46,7 +46,7 @@ export default function LandingSection() {
           <div className="flex-1 rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
             <div className="text-xs font-bold uppercase tracking-wide text-zinc-500">Box-score sum</div>
             <div className="mt-0.5 text-[11px] italic text-zinc-500">rewards five ball-dominant scorers</div>
-            <div className="mt-3 text-5xl font-black tabular-nums text-red-400">74<span className="text-zinc-600">–</span>8</div>
+            <div className="mt-3 font-display text-5xl tabular-nums text-red-400">74<span className="text-zinc-600">–</span>8</div>
             <p className="mt-3 text-xs text-zinc-400">
               {"Five 30%-usage stars, one basketball — on paper it never breaks down."}
             </p>
@@ -57,7 +57,7 @@ export default function LandingSection() {
             <div className="text-xs font-bold uppercase tracking-wide text-orange-400">SweepSzn engine</div>
             <div className="mt-0.5 text-[11px] italic text-zinc-500">rewards a balanced two-way five</div>
             <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-5xl font-black tabular-nums text-green-400">78<span className="text-zinc-600">–</span>4</span>
+              <span className="font-display text-5xl tabular-nums text-green-400">78<span className="text-zinc-600">–</span>4</span>
               <span className="rounded-full bg-green-400/10 px-2 py-0.5 text-xs font-black text-green-400">A+ HISTORIC</span>
             </div>
             <p className="mt-3 text-xs text-zinc-400">

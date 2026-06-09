@@ -40,7 +40,7 @@ export default function ResultPreview() {
         <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
           example result · projected record
         </div>
-        <div className={`mt-1 text-7xl font-black tabular-nums ${gradeColor}`}>
+        <div className={`mt-1 font-display text-7xl tabular-nums ${gradeColor}`}>
           {result.wins}<span className="text-zinc-600">–</span>{result.losses}
         </div>
         <div className="mt-1 text-lg font-bold tracking-wide">

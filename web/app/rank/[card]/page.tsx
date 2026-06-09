@@ -31,13 +31,13 @@ export default async function RankPage({ params }: Props) {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <Link href="/" className="flex items-baseline text-2xl font-black tracking-tight">
+        <Link href="/" className="flex items-baseline text-2xl tracking-tight">
           <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
           <span className="ml-3 text-sm font-semibold text-zinc-500">a friend shared their rank</span>
         </Link>
         <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center">
           <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{scopeLabel(c)}</div>
-          <div className="mt-2 text-7xl font-black tabular-nums text-orange-500">#{c.rank}</div>
+          <div className="mt-2 font-display text-7xl tabular-nums text-orange-500">#{c.rank}</div>
           <div className="mt-1 text-sm text-zinc-400">of {c.total.toLocaleString()} players</div>
           <div className="mt-5 text-lg font-bold text-zinc-100">{c.name}</div>
           <div className="mt-1 text-zinc-300">{metric(c)}</div>

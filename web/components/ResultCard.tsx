@@ -40,7 +40,7 @@ export default function ResultCard({
       {/* hero */}
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
         <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{mode} · projected record</div>
-        <div className={`mt-1 text-7xl font-black tabular-nums ${gradeColor}`}>
+        <div className={`mt-1 font-display text-7xl tabular-nums ${gradeColor}`}>
           {result.wins}<span className="text-zinc-600">–</span>{result.losses}
         </div>
         <div className="mt-1 text-lg font-bold tracking-wide">
