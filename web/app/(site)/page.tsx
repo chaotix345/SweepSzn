@@ -5,6 +5,7 @@ import { baseUrl } from "@/lib/site";
 // Canonical lives here (homepage only) — NOT in the shared root layout, so the noindex
 // /r/[lineup] permalinks don't inherit a canonical pointing back to "/".
 export const metadata: Metadata = {
+  title: "SweepSzn — Can you build an undefeated all-time NBA five?",
   alternates: { canonical: "/" },
 };
 

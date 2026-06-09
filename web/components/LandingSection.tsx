@@ -95,27 +95,7 @@ export default function LandingSection() {
         </div>
         <h2 className="mt-2 text-2xl font-black text-zinc-100">An engine that plays real basketball</h2>
         <p className="mt-3 text-sm text-zinc-400">
-          {"Most lineup simulators add up box-score averages. Ours is fit to 1,170 real NBA team-seasons — and the difference is exactly what separates a 74-win lineup from a 40-win one."}
-        </p>
-        <ul className="mt-6 space-y-3">
-          <Bullet term="Finite possessions">
-            {"Five ball-dominant stars can't each take 30 shots. The engine tracks every player's usage demand and penalizes lineups that blow the possession budget — because real teams do too."}
-          </Bullet>
-          <Bullet term="Era normalization">
-            {"Every player is z-scored against their own season's league average, so Wilt Chamberlain's pace-inflated 1962 line isn't compared head-to-head with a modern stat."}
-          </Bullet>
-          <Bullet term="Defense at full weight">
-            {"Defense carries close to equal weight with offense. Rim protection, perimeter stopping, and the defensive glass all count — not just steals and blocks."}
-          </Bullet>
-          <Bullet term="Floor spacing">
-            {"Not enough outside shooting clogs the paint and drags down the whole offense, no matter who is on the floor."}
-          </Bullet>
-          <Bullet term="Lineup fit">
-            {"Redundancy costs wins. Five creators, no spacing, or no rim protection each show up in the math."}
-          </Bullet>
-        </ul>
-        <p className="mt-5 border-t border-zinc-800 pt-5 text-sm text-zinc-400">
-          {"The proof: stack five ball-dominant scorers and a box-score adder calls them historic at 74-8. The engine knows one ball can't feed them all — even a balanced GOAT five loses 13 wins to usage overload, and the stat-stuffers never close the gap."}
+          {"SweepSzn is fit to 1,170 real NBA team-seasons — not hand-tuned. It tracks finite possessions, era-normalizes every player, gives defense equal weight with offense, and scores spacing and fit. The result punishes exactly the lineups a box-score adder adores — the difference between a 74-win team and a 40-win one."}
         </p>
         <Link href="/how-it-works" className="mt-5 inline-block text-sm font-bold text-orange-400 hover:text-orange-300">
           See exactly how the engine works →
@@ -136,13 +116,6 @@ export default function LandingSection() {
         </p>
       </section>
 
-      {/* ── Section 6: Stats rail (crawlable credibility) ─────────────── */}
-      <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 border-y border-zinc-800 bg-zinc-900 px-5 py-4 text-center">
-        <Stat n="24,687" label="player-seasons" />
-        <Stat n="1,170" label="NBA team-seasons" />
-        <Stat n="6.07" label="win RMSE (out-of-sample)" />
-        <Stat n="k = 14.0" label="Pythagorean exponent" />
-      </div>
     </div>
   );
 }
@@ -157,22 +130,3 @@ function Step({ n, title, children }: { n: string; title: string; children: Reac
   );
 }
 
-function Bullet({ term, children }: { term: string; children: React.ReactNode }) {
-  return (
-    <li className="flex gap-3">
-      <span aria-hidden className="mt-0.5 shrink-0 font-black text-orange-500">—</span>
-      <span className="text-sm text-zinc-300">
-        <span className="font-semibold text-zinc-100">{term}</span>
-        <span className="text-zinc-500"> · {children}</span>
-      </span>
-    </li>
-  );
-}
-
-function Stat({ n, label }: { n: string; label: string }) {
-  return (
-    <span className="text-xs text-zinc-500">
-      <span className="font-mono font-black text-zinc-300">{n}</span> {label}
-    </span>
-  );
-}

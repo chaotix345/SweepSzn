@@ -27,6 +27,7 @@ export default function SiteHeader() {
             <Link
               key={n.href}
               href={n.href}
+              aria-current={isActive(n.href) ? "page" : undefined}
               className={`text-sm font-semibold transition ${isActive(n.href) ? "text-orange-400" : "text-zinc-400 hover:text-zinc-100"}`}
             >
               {n.label}
@@ -45,20 +46,22 @@ export default function SiteHeader() {
             onClick={() => setOpen((o) => !o)}
             aria-label="Toggle menu"
             aria-expanded={open}
+            aria-controls="mobile-nav"
             className="rounded-lg border border-zinc-700 px-2.5 py-1 text-zinc-300 hover:border-zinc-500 sm:hidden"
           >
-            {open ? "✕" : "☰"}
+            <span aria-hidden="true">{open ? "✕" : "☰"}</span>
           </button>
         </div>
       </div>
 
       {open && (
-        <nav className="border-t border-zinc-800 px-4 pb-3 pt-1 sm:hidden">
+        <nav id="mobile-nav" className="border-t border-zinc-800 px-4 pb-3 pt-1 sm:hidden">
           {NAV.map((n) => (
             <Link
               key={n.href}
               href={n.href}
               onClick={() => setOpen(false)}
+              aria-current={isActive(n.href) ? "page" : undefined}
               className={`block rounded-lg px-2 py-2 text-sm font-semibold ${isActive(n.href) ? "text-orange-400" : "text-zinc-300 hover:text-zinc-100"}`}
             >
               {n.label}

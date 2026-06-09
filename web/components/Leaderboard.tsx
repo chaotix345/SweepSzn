@@ -48,8 +48,8 @@ export default function Leaderboard({ date, trace, readOnly = false }: { date: s
       const id = getUid();
       setAnonUid(id);
       setNameState(getName());
-      if (!readOnly) recordDailyDone(date); // don't mark a daily as "done" just for viewing the board
-      setStreak(getStreak());
+      // Don't record a daily or show a streak just for viewing the board.
+      if (!readOnly) { recordDailyDone(date); setStreak(getStreak()); }
       await loadBoard(user?.uid ?? id);
     })();
   }, [date, user?.uid, loadBoard, readOnly]);
