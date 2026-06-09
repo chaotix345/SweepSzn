@@ -1,17 +1,16 @@
 import type { Metadata } from "next";
-import Game from "@/components/Game";
 import LandingSection from "@/components/LandingSection";
-import { poolStats } from "@/lib/data";
 import { baseUrl } from "@/lib/site";
 
 // Canonical lives here (homepage only) — NOT in the shared root layout, so the noindex
 // /r/[lineup] permalinks don't inherit a canonical pointing back to "/".
 export const metadata: Metadata = {
+  title: "SweepSzn — Can you build an undefeated all-time NBA five?",
   alternates: { canonical: "/" },
 };
 
-// Crawlable SEO body copy (server-rendered, visible). The rest of the page above the game is the
-// LandingSection; this paragraph adds keyword-dense basketball terminology below the game.
+// Crawlable SEO body copy (server-rendered, visible). Sits below the LandingSection on the home
+// page and adds keyword-dense basketball terminology for search.
 const SEO_COPY =
   "SweepSzn is a browser-based all-time NBA lineup simulator where you draft a five-player starting " +
   "five by spinning a franchise reel and a decade reel, then simulate a full 82-game NBA season. " +
@@ -53,20 +52,13 @@ const jsonLdHtml = JSON.stringify(jsonLd)
   .replace(/&/g, "\\u0026");
 
 export default function Home() {
-  const stats = poolStats();
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+    <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml }} />
       <LandingSection />
-      <div id="game">
-        <Game />
-      </div>
       <section className="mx-auto max-w-2xl px-5 pb-16 text-sm leading-relaxed text-zinc-500">
         {SEO_COPY}
       </section>
-      <footer className="pb-10 text-center text-xs text-zinc-600">
-        {stats.players.toLocaleString()} players · {stats.franchiseDecades} franchise-eras · engine calibrated to real NBA team-seasons
-      </footer>
-    </main>
+    </>
   );
 }

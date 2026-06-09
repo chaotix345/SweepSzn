@@ -41,7 +41,7 @@ export default async function RankPage({ params }: Props) {
           <div className="mt-1 text-sm text-zinc-400">of {c.total.toLocaleString()} players</div>
           <div className="mt-5 text-lg font-bold text-zinc-100">{c.name}</div>
           <div className="mt-1 text-zinc-300">{metric(c)}</div>
-          <Link href="/#game" className="mt-7 inline-block rounded-xl bg-orange-500 px-6 py-2.5 text-sm font-bold text-black hover:bg-orange-400">
+          <Link href="/play" className="mt-7 inline-block rounded-xl bg-orange-500 px-6 py-2.5 text-sm font-bold text-black hover:bg-orange-400">
             Build your five →
           </Link>
         </div>

@@ -47,7 +47,7 @@ export default async function ChallengePage({ params }: Props) {
               You&apos;ll draft from the <strong className="text-zinc-200">same teams and eras</strong> — their five
               stays hidden until you submit yours. Pure judgment, no luck.
             </p>
-            <Link href={`/?c=${info.id}#game`}
+            <Link href={`/play?c=${info.id}`}
               className="mt-6 inline-block rounded-xl bg-orange-500 px-8 py-3 text-base font-black text-black hover:bg-orange-400">
               ⚔️ Accept Challenge
             </Link>
@@ -61,7 +61,7 @@ export default async function ChallengePage({ params }: Props) {
             <p className="mx-auto mt-3 max-w-sm text-sm text-zinc-400">
               It may have expired, or challenges aren&apos;t configured right now. Build your own all-time five instead.
             </p>
-            <Link href="/#game" className="mt-6 inline-block rounded-xl bg-orange-500 px-8 py-3 text-base font-black text-black hover:bg-orange-400">
+            <Link href="/play" className="mt-6 inline-block rounded-xl bg-orange-500 px-8 py-3 text-base font-black text-black hover:bg-orange-400">
               Build your five →
             </Link>
           </div>

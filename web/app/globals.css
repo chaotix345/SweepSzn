@@ -31,3 +31,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Page transition: app/template.tsx remounts per navigation, replaying this fade. */
+@keyframes pageFade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.page-fade { animation: pageFade 240ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .page-fade { animation: none; }
+}

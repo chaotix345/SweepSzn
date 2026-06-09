@@ -18,7 +18,7 @@ const hhmmss = (ms: number) => {
   return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
 };
 
-export default function Leaderboard({ date, trace }: { date: string; trace: DraftStep[] }) {
+export default function Leaderboard({ date, trace, readOnly = false }: { date: string; trace: DraftStep[]; readOnly?: boolean }) {
   const { user, refresh, signOut } = useSession();
   const [tab, setTab] = useState<Tab>("daily");
   const [view, setView] = useState<LeaderboardView | null>(null);
@@ -48,11 +48,11 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
       const id = getUid();
       setAnonUid(id);
       setNameState(getName());
-      recordDailyDone(date);
-      setStreak(getStreak());
+      // Don't record a daily or show a streak just for viewing the board.
+      if (!readOnly) { recordDailyDone(date); setStreak(getStreak()); }
       await loadBoard(user?.uid ?? id);
     })();
-  }, [date, user?.uid, loadBoard]);
+  }, [date, user?.uid, loadBoard, readOnly]);
 
   // lazy-load the weekly / all-time board when its tab is active (and after a submit/sign-in)
   useEffect(() => {
@@ -94,6 +94,7 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
   // (which also credits the weekly + all-time boards).
   const onSignIn = useCallback(async () => {
     await refresh();
+    if (readOnly) { setReload((n) => n + 1); return; } // browsing the board: just highlight my rows, don't claim
     setBusy(true); setErr(null);
     try {
       const r = await fetch("/api/daily/submit", {
@@ -104,7 +105,7 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
       const v = await r.json();
       if (r.ok) { setView(v); setSubmitted(true); setReload((n) => n + 1); track("daily_claim", { rank: v?.you?.rank ?? 0 }); }
     } catch { /* ignore */ } finally { setBusy(false); }
-  }, [refresh, date, name, trace]);
+  }, [refresh, date, name, trace, readOnly]);
 
   // the sharer's current standing on the active tab (if they're on the board)
   const youCard: RankCard | null = (() => {
@@ -136,7 +137,7 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
             ))}
           </div>
 
-          {tab === "daily" && !submitted && (
+          {tab === "daily" && !submitted && !readOnly && (
             <div className="mt-3 flex gap-2">
               <input value={name} onChange={(e) => setNameState(e.target.value)} maxLength={24} placeholder={user ? user.name : "Your name"}
                 className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-orange-500" />
@@ -157,7 +158,7 @@ export default function Leaderboard({ date, trace }: { date: string; trace: Draf
             ) : (
               <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
                 <div className="mb-2 text-xs text-zinc-400">
-                  {tab === "daily" ? "Sign in to claim your rank — and join the weekly & all-time boards." : "Sign in and play to climb the weekly & all-time boards."}
+                  {readOnly ? "Sign in to highlight your ranks across every board." : tab === "daily" ? "Sign in to claim your rank — and join the weekly & all-time boards." : "Sign in and play to climb the weekly & all-time boards."}
                 </div>
                 <GoogleOneTap onSignIn={onSignIn} />
               </div>
