@@ -93,7 +93,7 @@ export default function LandingSection() {
         <div className="text-xs font-bold uppercase tracking-widest text-zinc-500">
           What the engine actually models
         </div>
-        <h2 className="mt-2 text-2xl font-black text-zinc-100">An engine that plays real basketball</h2>
+        <h2 className="mt-2 font-display text-2xl text-zinc-100">An engine that plays real basketball</h2>
         <p className="mt-3 text-sm text-zinc-400">
           {"SweepSzn is fit to 1,170 real NBA team-seasons — not hand-tuned. It tracks finite possessions, era-normalizes every player, gives defense equal weight with offense, and scores spacing and fit. The result punishes exactly the lineups a box-score adder adores — the difference between a 74-win team and a 40-win one."}
         </p>
@@ -104,7 +104,7 @@ export default function LandingSection() {
 
       {/* ── Section 5: Final CTA ──────────────────────────────────────── */}
       <section className="mx-auto max-w-md px-5 pt-6 pb-4 text-center sm:px-8">
-        <h2 className="text-3xl font-black text-zinc-100">Spin the reels. Draft your five. Go for 82-0.</h2>
+        <h2 className="font-display text-3xl text-zinc-100">Spin the reels. Draft your five. Go for 82-0.</h2>
         <a
           href="/play"
           className="mt-5 inline-block rounded-xl bg-orange-500 px-8 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400"
