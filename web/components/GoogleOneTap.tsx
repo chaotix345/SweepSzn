@@ -55,7 +55,10 @@ export default function GoogleOneTap({ onSignIn }: { onSignIn: () => void }) {
     let cancelled = false;
     (async () => {
       let nonce = "";
-      try { const r = await fetch("/api/auth/nonce"); if (r.ok) nonce = (await r.json()).nonce; } catch { /* ignore */ }
+      try {
+        const r = await fetch("/api/auth/nonce", { method: "POST", headers: { "content-type": "application/json", "x-requested-with": "fetch" }, body: "{}" });
+        if (r.ok) nonce = (await r.json()).nonce;
+      } catch { /* ignore */ }
       if (cancelled || !nonce) return;
       try { await loadGis(); } catch { return; }
       if (cancelled || !window.google) return;

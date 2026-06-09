@@ -57,6 +57,9 @@ export default function Game() {
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const traceRef = useRef<DraftStep[]>([]);            // ordered picks for leaderboard verification
   const roundRespinsRef = useRef<("team" | "era")[]>([]); // re-spins used in the current round
+  const [convertedId, setConvertedId] = useState<string | null>(null); // challenge minted from a finished game
+  const abortSimRef = useRef<AbortController | null>(null);             // cancels an in-flight simulate on restart
+  const sheetRef = useRef<HTMLDivElement>(null);                        // mobile "choose position" dialog
 
   // Spend a hint to reveal fit grades for the current pick. Charges on reveal (not on placement), so
   // there is no way to peek and then dodge the cost. No-op once the per-game budget is spent.
@@ -71,9 +74,10 @@ export default function Game() {
   const roundNum = Math.min(filled + 1, 5);
   const openSlots = useMemo(() => SLOTS.filter((s) => !roster[s]), [roster]);
 
-  const start = useCallback((m: Mode, challenge?: { id: string; role: "create" | "respond" }) => {
+  const start = useCallback((m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string }) => {
     track("mode_start", { mode: m });
     ev("play", { uid: getUid(), mode: m });
+    abortSimRef.current?.abort(); abortSimRef.current = null; // cancel any in-flight simulate
     setMode(m);
     let cid: string | null = null;
     let crole: "create" | "respond" | null = null;
@@ -81,35 +85,54 @@ export default function Game() {
     if (m === "challenge") {
       cid = challenge?.id ?? newChallengeId();
       crole = challenge?.role ?? "create";
-      s = challengeSeed(cid);
+      s = challenge?.seed ?? challengeSeed(cid); // a converted/legacy challenge replays its own carried seed
     } else {
       s = m === "daily" ? `daily-${todaySeed()}` : `${m}-${rand()}`;
     }
     setChallengeId(cid); setChallengeRole(crole); setSeed(s);
-    setRoster(EMPTY); setCurrent(null); setResult(null); setError(null);
+    setRoster(EMPTY); setCurrent(null); setResult(null); setError(null); setLoading(false);
     setSelPlayer(null); setSelSlot(null); setSkips({ team: false, era: false });
     setReel({ team: "ATL", era: "60's" }); setLockedReel(null); saltRef.current = 0;
-    traceRef.current = []; roundRespinsRef.current = [];
+    traceRef.current = []; roundRespinsRef.current = []; setConvertedId(null);
     hintsUsedRef.current = 0; setHintsUsed(0);
   }, []);
 
   useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
 
+  // move keyboard focus into the mobile position sheet when it opens, and restore it to the
+  // triggering element when it closes (paired with the Tab trap in the sheet's onKeyDown below)
+  useEffect(() => {
+    if (!(selPlayer || selSlot)) return;
+    const prev = document.activeElement as HTMLElement | null;
+    sheetRef.current?.focus();
+    return () => prev?.focus?.();
+  }, [selPlayer, selSlot]);
+
   // Deep link from a challenge landing page: /play?c=<id> auto-enters challenge respond mode.
   // (async IIFE keeps start()'s setState out of the effect body for react-hooks/set-state-in-effect.)
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const params = new URLSearchParams(window.location.search);
         const cid = params.get("c");
         if (cid && /^[a-z0-9]{6,16}$/.test(cid)) {
-          start("challenge", { id: cid, role: "respond" });
+          // fetch the challenge's draft seed so respond mode replays the SAME spins the creator faced
+          // (a daily/classic-originated challenge does NOT use the h2h-<id> default seed)
+          let seedOverride: string | undefined;
+          try {
+            const r = await fetch(`/api/challenge/${cid}`);
+            if (r.ok) { const info = await r.json(); if (typeof info?.seed === "string") seedOverride = info.seed; }
+          } catch { /* offline — fall back to the h2h-<id> default below */ }
+          if (cancelled) return; // effect re-ran (or unmounted) while the seed fetch was in flight
+          start("challenge", { id: cid, role: "respond", seed: seedOverride });
           params.delete("c");
           const qs = params.toString();
           window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
         }
       } catch { /* no query / no history API */ }
     })();
+    return () => { cancelled = true; };
   }, [start]);
 
   const runSpin = useCallback(async (opts: SpinOpts, locked: "team" | "era" | null = null) => {
@@ -125,7 +148,9 @@ export default function Game() {
     try {
       const r = await fetch("/api/spin", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ seed, round: filled, exclude: drafted.map((p) => p.id), ...opts }),
+        // fit grades are a Classic-only assist; only Classic free-play requests them (keeps them off
+        // the wire in Daily/HoopIQ/Challenge so the network response can't be read to draft optimally)
+        body: JSON.stringify({ seed, round: filled, exclude: drafted.map((p) => p.id), fit: mode === "classic", ...opts }),
       });
       if (!r.ok) throw new Error("spin failed");
       const res: Spin = await r.json();
@@ -134,12 +159,19 @@ export default function Game() {
       setCurrent(res);
     } catch {
       setLockedReel(null); setReel({ team: "ATL", era: "60's" });
+      // roll back the re-spin we optimistically charged before this call so a network error doesn't
+      // silently burn the skip (and don't leave a phantom re-spin in the verification trace)
+      if (locked === "era") setSkips((s) => ({ ...s, team: false }));
+      else if (locked === "team") setSkips((s) => ({ ...s, era: false }));
+      // also roll back the pre-incremented salt — the next successful re-spin must reuse this salt
+      // value, or verifyTrace (which counts only the re-spins in the trace) would reject the submit.
+      if (locked !== null) { roundRespinsRef.current = roundRespinsRef.current.slice(0, -1); saltRef.current--; }
       setError("Network hiccup — tap SPIN to try again.");
     } finally {
       if (tickRef.current) clearInterval(tickRef.current);
       setSpinning(false);
     }
-  }, [spinning, seed, filled, drafted]);
+  }, [spinning, seed, filled, drafted, mode]);
 
   const spin = useCallback(() => runSpin({}), [runSpin]);
   const reSpinTeam = useCallback(() => {
@@ -156,20 +188,24 @@ export default function Game() {
   }, [skips.era, current, runSpin]);
 
   const simulate = useCallback(async (r: Roster) => {
+    abortSimRef.current?.abort();
+    const ctrl = new AbortController();
+    abortSimRef.current = ctrl;
     setLoading(true); setError(null);
     try {
       const ids = SLOTS.map((s) => r[s]?.id);
       const res = await fetch("/api/evaluate", {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids }),
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids }), signal: ctrl.signal,
       });
       if (!res.ok) throw new Error("evaluate failed");
       const data = await res.json();
       setResult({ result: data.result, players: data.players, trace: [...traceRef.current], usedHints: hintsUsedRef.current > 0 });
       track("lineup_complete", { wins: data.result.wins, grade: data.result.grade });
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return; // superseded by a restart — ignore
       setError("Couldn't simulate the season — tap Simulate to retry.");
     } finally {
-      setLoading(false);
+      if (!ctrl.signal.aborted) setLoading(false);
     }
   }, []);
 
@@ -213,17 +249,22 @@ export default function Game() {
   if (result) return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={mode} usedHints={result.usedHints} onReset={() => start(mode)} />
-      {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} />}
+      {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} />}
       {mode === "challenge" && challengeId && challengeRole && (
-        <ChallengeResult id={challengeId} role={challengeRole} result={result.result} players={result.players}
+        <ChallengeResult id={challengeId} role={challengeRole} seed={seed} usedHints={false} result={result.result} players={result.players}
           trace={result.trace} onCreateOwn={() => start("challenge")} />
       )}
-      {mode !== "challenge" && (
-        <button onClick={() => start("challenge")}
+      {mode !== "challenge" && (convertedId ? (
+        // Convert THIS finished five into a real H2H challenge in place, carrying the original seed:
+        // the friend drafts the same teams/eras and tries to beat this exact record — no re-draft.
+        <ChallengeResult id={convertedId} role="create" seed={seed} usedHints={result.usedHints}
+          result={result.result} players={result.players} trace={result.trace} />
+      ) : (
+        <button onClick={() => setConvertedId(newChallengeId())}
           className="mt-4 w-full rounded-xl border border-orange-500/50 bg-orange-500/10 py-3 text-sm font-bold text-orange-300 hover:bg-orange-500/20">
           ⚔️ Challenge a friend to beat this
         </button>
-      )}
+      ))}
     </Shell>
   );
   if (loading) return (
@@ -240,8 +281,8 @@ export default function Game() {
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart={filled > 0 || !!current}>
       {/* reels */}
       <div className="flex flex-wrap items-center justify-center gap-3">
-        <Reel kind="TEAM" value={reel.team} sub={teamName(reel.team)} color="orange" locked={lockedReel === "team"} masked={reelMasked(lockedReel === "team")} />
-        <Reel kind="ERA" value={reel.era} sub="decade" color="violet" locked={lockedReel === "era"} masked={reelMasked(lockedReel === "era")} />
+        <Reel kind="TEAM" value={reel.team} sub={teamName(reel.team)} color="orange" locked={lockedReel === "team"} masked={reelMasked(lockedReel === "team")} spinning={spinning || !current} />
+        <Reel kind="ERA" value={reel.era} sub="decade" color="violet" locked={lockedReel === "era"} masked={reelMasked(lockedReel === "era")} spinning={spinning || !current} />
         {!current && (
           <button onClick={spin} disabled={spinning}
             className="rounded-xl bg-orange-500 px-7 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400 disabled:opacity-50">
@@ -272,8 +313,8 @@ export default function Game() {
               {allFilled ? (
                 <>
                   <p className="mb-3 text-sm text-zinc-400">Your starting five is set.</p>
-                  <button onClick={() => simulate(roster)}
-                    className="rounded-xl bg-green-500 px-6 py-2.5 font-bold text-black hover:bg-green-400">Simulate Season</button>
+                  <button onClick={() => simulate(roster)} disabled={loading}
+                    className="rounded-xl bg-green-500 px-6 py-2.5 font-bold text-black hover:bg-green-400 disabled:opacity-50">Simulate Season</button>
                 </>
               ) : (
                 <p className="text-sm text-zinc-500">{filled === 0 ? "Spin to draft your first player." : `Spin for round ${roundNum} of 5.`}</p>
@@ -293,12 +334,12 @@ export default function Game() {
         <div className="order-last">
           <Court roster={roster} selSlot={selSlot} isTarget={slotTarget} onSlot={clickSlot} maskColors={hideIQ} />
           {selPlayer && (
-            <p role="status" aria-live="polite" className="mt-2 text-center text-xs font-semibold text-orange-400">
+            <p role="status" aria-live="polite" className="mt-2 hidden text-center text-xs font-semibold text-orange-400 lg:block">
               Placing {displayName(selPlayer.name)} — tap a glowing position
             </p>
           )}
           {selSlot && (
-            <p role="status" aria-live="polite" className="mt-2 text-center text-xs font-semibold text-orange-400">
+            <p role="status" aria-live="polite" className="mt-2 hidden text-center text-xs font-semibold text-orange-400 lg:block">
               Moving {displayName(roster[selSlot]!.name)} — tap a glowing slot to swap
             </p>
           )}
@@ -307,7 +348,19 @@ export default function Game() {
 
       {/* mobile "choose position" sheet (82-0 parity) */}
       {(selPlayer || selSlot) && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-700 bg-zinc-900/95 p-3 backdrop-blur lg:hidden">
+        <div ref={sheetRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Choose a position"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { setSelPlayer(null); setSelSlot(null); return; }
+            if (e.key === "Tab") {
+              // aria-modal claims modality — actually trap Tab within the sheet's buttons
+              const f = sheetRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
+              if (!f || f.length === 0) return;
+              const first = f[0], last = f[f.length - 1];
+              if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+              else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+          }}
+          className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-700 bg-zinc-900/95 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] outline-none backdrop-blur lg:hidden">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-semibold text-orange-400" role="status" aria-live="polite">
               {selPlayer ? `Place ${displayName(selPlayer.name)} — choose a position` : `Move ${displayName(roster[selSlot!]!.name)}`}
@@ -340,7 +393,7 @@ function Shell({ children, roundNum, mode, onRestart, showRestart }: {
   children: React.ReactNode; roundNum: number; mode: Mode; onRestart: () => void; showRestart?: boolean;
 }) {
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 pb-28 lg:pb-6">
+    <div className="mx-auto max-w-4xl px-4 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
       <header className="mb-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold capitalize text-zinc-300">{mode}</span>
@@ -382,8 +435,8 @@ function ModeSelect({ onPick }: { onPick: (m: Mode) => void }) {
   );
 }
 
-function Reel({ kind, value, sub, color, locked, masked }: {
-  kind: string; value: string; sub: string; color: "orange" | "violet"; locked?: boolean; masked?: boolean;
+function Reel({ kind, value, sub, color, locked, masked, spinning }: {
+  kind: string; value: string; sub: string; color: "orange" | "violet"; locked?: boolean; masked?: boolean; spinning?: boolean;
 }) {
   const ring = locked ? "border-amber-500" : color === "orange" ? "border-orange-500" : "border-violet-500";
   const tag = locked ? "text-amber-400" : color === "orange" ? "text-orange-500" : "text-violet-400";
@@ -392,6 +445,8 @@ function Reel({ kind, value, sub, color, locked, masked }: {
       <div className={`text-[10px] font-bold uppercase tracking-widest ${tag}`}>{locked ? "🔒 LOCKED" : kind}</div>
       <div className="text-2xl font-black leading-tight">{masked ? "???" : value}</div>
       <div className="truncate text-[10px] text-zinc-500">{masked ? "hidden" : sub}</div>
+      {/* announce the settled reel once (stay quiet while cycling and when the value is masked) */}
+      <span className="sr-only" aria-live="polite" aria-atomic="true">{spinning || masked ? "" : `${kind}: ${value}`}</span>
     </div>
   );
 }
@@ -507,7 +562,7 @@ function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect }:
             💡 Hints · {hintsLeft} left
           </button>
         ) : (
-          <span title="You've used all your hints this game" className="rounded-md border border-zinc-800 px-2 py-1.5 text-xs font-semibold text-zinc-600">
+          <span title="You've used all your hints this game" className="rounded-md border border-zinc-800 px-2 py-1.5 text-xs font-semibold text-zinc-500">
             💡 Hints used up
           </span>
         ))}
@@ -521,7 +576,7 @@ function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect }:
       </div>
       <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-zinc-500">
         <span>{list.length} player{list.length === 1 ? "" : "s"} available{hideStats ? " · stats hidden" : ""}</span>
-        {showFit && <span className="text-zinc-600">fit = net swing for <span className="text-zinc-500">your</span> roster</span>}
+        {showFit && <span className="text-zinc-500">fit = net swing for <span className="text-zinc-400">your</span> roster</span>}
       </div>
       <div className="max-h-[420px] overflow-y-auto px-2 pb-2">
         {list.map((c) => {
@@ -536,7 +591,7 @@ function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect }:
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-semibold">{c.name}</div>
                 <div className="text-[11px] text-zinc-500">
-                  {c.eligible.join(" · ")}{!fits && <span className="ml-1 text-zinc-600">· no open slot</span>}
+                  {c.eligible.join(" · ")}{!fits && <span className="ml-1 text-zinc-500">· no open slot</span>}
                 </div>
                 {showRowFit && c.fit!.adds.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
@@ -556,13 +611,13 @@ function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect }:
               {showRowFit && (
                 <div className="w-10 shrink-0 text-right">
                   <div className={`text-sm font-bold tabular-nums ${fitColor(c.fit!)}`}>{c.fit!.delta > 0 ? "+" : ""}{c.fit!.delta}</div>
-                  <div className={`text-[8px] uppercase tracking-wide ${c.fit!.best ? "text-emerald-300" : "text-zinc-600"}`}>{c.fit!.best ? "★ fit" : "fit"}</div>
+                  <div className={`text-[8px] uppercase tracking-wide ${c.fit!.best ? "text-emerald-300" : "text-zinc-400"}`}>{c.fit!.best ? "★ fit" : "fit"}</div>
                 </div>
               )}
             </button>
           );
         })}
-        {list.length === 0 && <div className="py-8 text-center text-xs text-zinc-600">No players match.</div>}
+        {list.length === 0 && <div className="py-8 text-center text-xs text-zinc-500">No players match.</div>}
       </div>
     </div>
   );
@@ -578,7 +633,7 @@ function Mini({ v, k, className }: { v: number | null | undefined; k: string; cl
   return (
     <div className={`w-8 ${className ?? ""}`}>
       <div className="font-semibold text-zinc-300 tabular-nums">{v == null ? "–" : v.toFixed(1)}</div>
-      <div className="text-[8px] uppercase tracking-wide text-zinc-600">{k}</div>
+      <div className="text-[8px] uppercase tracking-wide text-zinc-500">{k}</div>
     </div>
   );
 }

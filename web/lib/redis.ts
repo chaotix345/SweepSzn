@@ -33,3 +33,24 @@ export async function readSortedRows<T extends { uid: string } = StoredRow>(
     .map((uid, i) => { const m = meta[uid]; return m ? { ...m, rank: start + i + 1 } : null; })
     .filter((x): x is T & { rank: number } => !!x);
 }
+
+// Best-effort fixed-window rate limit (per bucket key). Returns true if the call is allowed.
+// Self-disabling: when redis is null (local/dev without creds) it allows everything, and any
+// transport error fails open — the limiter must never take down a route. Buckets stop trivial
+// scripted floods (board stuffing, CPU/egress amplification) without affecting real play volume.
+export async function rateLimit(bucket: string, max: number, windowSec: number): Promise<boolean> {
+  if (!redis) return true;
+  try {
+    // INCR + EXPIRE in one pipeline so a key can't be orphaned without a TTL (which would wedge the
+    // bucket permanently). EXPIRE is idempotent, so refreshing the window each call is harmless.
+    const [n] = (await redis.pipeline().incr(bucket).expire(bucket, windowSec).exec()) as [number, number];
+    return Number(n) <= max;
+  } catch {
+    return true;
+  }
+}
+
+// Client IP from the proxy header (Vercel sets x-forwarded-for; leftmost entry is the client).
+export function ipOf(req: Request): string {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anon";
+}

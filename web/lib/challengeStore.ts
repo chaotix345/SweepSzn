@@ -1,56 +1,92 @@
 import "server-only";
 import { redis, isRedisEnabled, TTL, encScore, readSortedRows, type StoredRow } from "./redis";
+import { challengeSeed } from "./challenge";
 import type { ChallengeInfo, ChallengePublic, ChallengeBoard, ChallengeBoardRow, LineupResult, LeaderboardRow } from "./types";
 
 // Per-challenge persistence. Keys: chal:<id> (sorted set, ranking), chal:<id>:meta (hash,
-// per-uid row payload), chal:<id>:info (the creator's bar, write-once). 31-day TTL refreshed
-// on each write. Self-disabling via the shared redis module.
+// per-uid row payload), chal:<id>:info (the creator's bar + draft seed, write-once). 31-day TTL
+// refreshed on each write. Self-disabling via the shared redis module.
 
 const keyZ = (id: string) => `chal:${id}`;
 const keyH = (id: string) => `chal:${id}:meta`;
 const keyInfo = (id: string) => `chal:${id}:info`;
+const keyFitLock = (seed: string) => `chal:fitlock:${seed}`;
 
 export function isChallengeEnabled(): boolean { return isRedisEnabled(); }
 
-// strip lineup: the challenge board ranks records but never exposes anyone's five
-const strip = (r: LeaderboardRow): ChallengeBoardRow => ({ rank: r.rank, uid: r.uid, name: r.name, wins: r.wins, losses: r.losses, net: r.net });
+// /api/spin serves fit grades for a classic free-play seed. Once a classic game is CONVERTED to a
+// challenge its seed is exposed to responders (via getChallengePublic), so we mark it here and the
+// spin route refuses fit for a marked seed — closing the "read the seed, craft a fit:true /api/spin"
+// hole. Free-play classic seeds are random and never marked. Fails open when redis is unavailable.
+export async function isFitLockedSeed(seed: string): Promise<boolean> {
+  if (!redis) return false;
+  try { return (await redis.exists(keyFitLock(seed))) === 1; } catch { return false; }
+}
+
+// strip lineup AND uid: the challenge board ranks records but never exposes anyone's five, and
+// never leaks uids (which are the only identity token and would otherwise be harvestable from the
+// board JSON and replayed to impersonate another player on submit).
+const strip = (r: LeaderboardRow): ChallengeBoardRow => ({ rank: r.rank, name: r.name, wins: r.wins, losses: r.losses, net: r.net });
 
 async function board(id: string, uid?: string): Promise<ChallengeBoard> {
   if (!redis) return { total: 0, top: [] };
   const total = await redis.zcard(keyZ(id));
-  const top = (await readSortedRows(keyZ(id), keyH(id), 0, 99)).map(strip);
-  let you: ChallengeBoardRow | undefined = top.find((r) => r.uid === uid);
-  if (uid && !you) {
+  const raw = await readSortedRows(keyZ(id), keyH(id), 0, 99); // includes uid (server-side only)
+  const top = raw.map(strip);
+  // identify "you" from the raw rows (which still carry uid) BEFORE stripping
+  let you: ChallengeBoardRow | undefined;
+  const meIdx = uid ? raw.findIndex((r) => r.uid === uid) : -1;
+  if (meIdx >= 0) {
+    you = top[meIdx];
+  } else if (uid) {
     const rank = await redis.zrevrank(keyZ(id), uid);
     if (rank != null) {
       const meta = (await redis.hmget<Record<string, StoredRow>>(keyH(id), uid)) ?? {};
       const m = meta[uid];
-      if (m) you = { rank: rank + 1, uid: m.uid, name: m.name, wins: m.wins, losses: m.losses, net: m.net };
+      if (m) you = { rank: rank + 1, name: m.name, wins: m.wins, losses: m.losses, net: m.net };
     }
   }
   return { total, top, you };
 }
 
-// Redacted read for the public landing page — never exposes any lineup.
+// Redacted read for the public landing page / responder bootstrap — exposes the bar (record +
+// grade), the draft seed (so the responder replays the SAME spins), and whether the creator used
+// hints, but never any lineup or uid.
 export async function getChallengePublic(id: string): Promise<ChallengePublic | null> {
   if (!redis) return null;
   const info = await redis.get<ChallengeInfo>(keyInfo(id));
   if (!info) return null;
   const attempts = await redis.zcard(keyZ(id));
-  return { id, creatorName: info.name, wins: info.wins, losses: info.losses, net: info.net, grade: info.grade, attempts };
+  return {
+    id, creatorName: info.name, wins: info.wins, losses: info.losses, net: info.net, grade: info.grade,
+    responders: Math.max(0, attempts - 1), // the creator occupies one board slot; count only friends
+    seed: info.seed ?? challengeSeed(id),  // legacy challenges (no stored seed) used h2h-<id>
+    hinted: !!info.hinted,
+  };
+}
+
+// The stored draft seed for an existing challenge, or null if the challenge has no creator yet
+// (or predates seed storage). The submit route uses null to decide whether the first submitter may
+// supply the seed (converting a finished game) vs. falling back to the legacy h2h-<id>.
+export async function getChallengeSeed(id: string): Promise<string | null> {
+  if (!redis) return null;
+  const info = await redis.get<ChallengeInfo>(keyInfo(id));
+  return info?.seed ?? null;
 }
 
 // Submit a verified attempt. The first submitter claims the creator slot (write-once via set-nx);
-// everyone else is a responder. Always keep-best adds the row to the board. Returns the role, the
+// everyone else is a responder. `meta` (seed + hinted) is recorded only on the creator claim — it
+// describes the challenge itself. Always keep-best adds the row to the board. Returns the role, the
 // authoritative creator info (incl lineup, for the reveal/verdict), and the fresh board.
 export async function submitChallenge(
   id: string,
   row: StoredRow,
   result: LineupResult,
   grade: string,
+  meta: { seed: string; hinted: boolean },
 ): Promise<{ role: "creator" | "responder"; creator: ChallengeInfo; board: ChallengeBoard } | null> {
   if (!redis) return null;
-  const info: ChallengeInfo = { uid: row.uid, name: row.name, wins: row.wins, losses: row.losses, net: row.net, grade, lineup: row.lineup };
+  const info: ChallengeInfo = { uid: row.uid, name: row.name, wins: row.wins, losses: row.losses, net: row.net, grade, lineup: row.lineup, seed: meta.seed, hinted: meta.hinted };
   const claimed = await redis.set(keyInfo(id), info, { nx: true, ex: TTL });
   let role: "creator" | "responder";
   let creator: ChallengeInfo;
@@ -74,5 +110,7 @@ export async function submitChallenge(
     await redis.expire(keyH(id), TTL);
     await redis.expire(keyInfo(id), TTL);
   }
+  // a classic-originated challenge exposes its classic seed to responders — lock fit on it (see isFitLockedSeed)
+  if (meta.seed.startsWith("classic")) await redis.set(keyFitLock(meta.seed), "1", { ex: TTL });
   return { role, creator, board: await board(id, row.uid) };
 }

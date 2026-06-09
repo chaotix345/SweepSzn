@@ -4,14 +4,15 @@ import { evaluateLineup } from "@/lib/engine";
 import { verifyDaily, type VerifyDeps } from "@/lib/dailyVerify";
 import { isLeaderboardEnabled, submitScore, submitScoreAuthed, removeEntry } from "@/lib/leaderboard";
 import { getSession } from "@/lib/authServer";
-import { redis } from "@/lib/redis";
+import { encodeLineup } from "@/lib/share";
+import { cleanName } from "@/lib/clean";
+import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
 
 export const runtime = "nodejs";
 
 const todayUTC = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
-const cleanName = (s: unknown) => (typeof s === "string" ? s.trim().slice(0, 24) : "");
 
 const deps: VerifyDeps = {
   spinPool,
@@ -21,6 +22,9 @@ const deps: VerifyDeps = {
 
 export async function POST(req: Request) {
   if (!isLeaderboardEnabled()) return NextResponse.json({ error: "leaderboard not configured" }, { status: 503 });
+  if (!(await rateLimit(`rl:daily:${ipOf(req)}`, 20, 60))) {
+    return NextResponse.json({ error: "too many requests" }, { status: 429 });
+  }
   const body = (await req.json().catch(() => ({}))) ?? {};
   const { date, trace } = body;
   if (date !== todayUTC()) return NextResponse.json({ error: "stale date" }, { status: 400 });
@@ -47,7 +51,10 @@ export async function POST(req: Request) {
     await removeEntry(date, session.anon);
   }
 
-  const row = { uid, name, wins: v.result.wins, losses: v.result.losses, net: v.result.netRtg, lineup: v.lineup };
+  // Carry the hint stamp into the stored permalink so a leaderboard-row → /r/ link keeps the
+  // "HINTS used" badge (the in-game share already encodes it; this matches that path).
+  const lineup = encodeLineup(v.lineup.split(","), body.usedHints === true);
+  const row = { uid, name, wins: v.result.wins, losses: v.result.losses, net: v.result.netRtg, lineup };
   // signed-in: daily keep-best + credit wins to weekly/all-time. anon: daily only.
   const view = session
     ? await submitScoreAuthed(date, row, v.result)

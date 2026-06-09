@@ -206,13 +206,19 @@ function selectSpin(seed: string, round: number, opts: SpinOptions): { team: str
   return { team, decade, pool };
 }
 
-export function spin(seed: string, round: number, opts: SpinOptions = {}): SpinResult {
+// Fit grades are a Classic-only assist. They are attached ONLY when the caller asks for them
+// (wantFit) AND the seed is a Classic free-play seed. This keeps the per-candidate fit deltas off
+// the wire entirely for Daily, HoopIQ, and every Challenge (incl. a Classic-originated one, where
+// the carried seed still starts with "classic-" but the responder draft does NOT request fit) —
+// so the network response can't be read in devtools to draft optimally and skew a leaderboard.
+export function spin(seed: string, round: number, opts: SpinOptions = {}, wantFit = false): SpinResult {
   const { byId, coeff } = load();
   const { team, decade, pool } = selectSpin(seed, round, opts);
+  const showFit = wantFit && seed.startsWith("classic");
   const excludeIds = new Set(opts.exclude ?? []);
-  const drafted = excludeIds.size ? [...excludeIds].map((id) => byId.get(id)).filter((p): p is Player => !!p) : [];
-  const fits = computeFits(drafted, pool, coeff);
-  const candidates = pool.map((p) => toCandidate(p, fits.get(p.id)));
+  const drafted = showFit && excludeIds.size ? [...excludeIds].map((id) => byId.get(id)).filter((p): p is Player => !!p) : [];
+  const fits = showFit ? computeFits(drafted, pool, coeff) : null;
+  const candidates = pool.map((p) => toCandidate(p, fits?.get(p.id)));
   return { team, decade, candidates };
 }
 

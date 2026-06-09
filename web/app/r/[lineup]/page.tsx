@@ -13,6 +13,9 @@ type Props = { params: Promise<{ lineup: string }> };
 // cache() dedupes the lookup+evaluate across generateMetadata and the page render (same request).
 const loadLineup = cache((lineup: string) => {
   const { ids, hinted } = decodeShare(lineup);
+  // reject crafted URLs with the wrong count or duplicate ids (5 of the same player would otherwise
+  // pass the length check and render a nonsensical fabricated record) — mirrors verifyTrace's guard
+  if (ids.length !== 5 || new Set(ids).size !== 5) return null;
   const players = getPlayersByIds(ids);
   if (players.length !== 5) return null;
   return { players, result: evaluateLineup(players, getCoefficients()), hinted };
@@ -32,7 +35,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description,
     robots: { index: false },
-    openGraph: { title, description, type: "website" },
+    openGraph: { title, description, type: "website", url: `/r/${lineup}` },
     twitter: { card: "summary_large_image", title, description },
   };
 }
