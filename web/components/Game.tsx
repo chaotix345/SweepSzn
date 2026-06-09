@@ -28,6 +28,10 @@ function todaySeed() {
 }
 const rand = () => Math.floor(Math.random() * 1e9);
 
+// Hints are a limited resource: this many assisted picks per game (Classic only), so the engine's
+// fit grade can't be used to mindlessly auto-pick all five. Tune here (1 = strict, 3 = friendly).
+const HINT_BUDGET = 2;
+
 export default function Game() {
   const [mode, setMode] = useState<Mode | null>(null);
   const [seed, setSeed] = useState("");
@@ -39,7 +43,7 @@ export default function Game() {
   const [selPlayer, setSelPlayer] = useState<DraftCandidate | null>(null);
   const [selSlot, setSelSlot] = useState<Slot | null>(null);
   const [skips, setSkips] = useState({ team: false, era: false });
-  const [result, setResult] = useState<{ result: LineupResult; players: Player[]; trace: DraftStep[] } | null>(null);
+  const [result, setResult] = useState<{ result: LineupResult; players: Player[]; trace: DraftStep[]; usedHints: boolean } | null>(null);
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [challengeRole, setChallengeRole] = useState<"create" | "respond" | null>(null);
   const [loading, setLoading] = useState(false);
@@ -50,6 +54,8 @@ export default function Game() {
     if (typeof window === "undefined") return false;
     try { return localStorage.getItem("82-0:hints") === "1"; } catch { return false; }
   });
+  const [hintsUsed, setHintsUsed] = useState(0);   // assisted picks spent this game (UI mirror of the ref)
+  const hintsUsedRef = useRef(0);                  // synchronous count, read at simulate time
   const saltRef = useRef(0);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const traceRef = useRef<DraftStep[]>([]);            // ordered picks for leaderboard verification
@@ -82,6 +88,7 @@ export default function Game() {
     setSelPlayer(null); setSelSlot(null); setSkips({ team: false, era: false });
     setReel({ team: "ATL", era: "60's" }); setLockedReel(null); saltRef.current = 0;
     traceRef.current = []; roundRespinsRef.current = [];
+    hintsUsedRef.current = 0; setHintsUsed(0);
   }, []);
 
   useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
@@ -155,7 +162,7 @@ export default function Game() {
       });
       if (!res.ok) throw new Error("evaluate failed");
       const data = await res.json();
-      setResult({ result: data.result, players: data.players, trace: [...traceRef.current] });
+      setResult({ result: data.result, players: data.players, trace: [...traceRef.current], usedHints: hintsUsedRef.current > 0 });
       track("lineup_complete", { wins: data.result.wins, grade: data.result.grade });
     } catch {
       setError("Couldn't simulate the season — tap Simulate to retry.");
@@ -166,12 +173,16 @@ export default function Game() {
 
   const place = useCallback((slot: Slot) => {
     if (!selPlayer || roster[slot] || !selPlayer.eligible.includes(slot)) return;
+    // an assisted pick = Hints on with budget left (the fit grade was visible for this pick)
+    if (hints && mode === "classic" && hintsUsedRef.current < HINT_BUDGET) {
+      hintsUsedRef.current += 1; setHintsUsed(hintsUsedRef.current);
+    }
     traceRef.current.push({ slot, pickedId: selPlayer.id, respins: [...roundRespinsRef.current] });
     roundRespinsRef.current = [];
     const next = { ...roster, [slot]: selPlayer };
     setRoster(next); setSelPlayer(null); setCurrent(null); setLockedReel(null);
     if (SLOTS.every((s) => next[s])) simulate(next);
-  }, [selPlayer, roster, simulate]);
+  }, [selPlayer, roster, simulate, hints, mode]);
 
   const canSwap = useCallback((a: Slot, b: Slot) => {
     if (a === b) return false;
@@ -203,7 +214,7 @@ export default function Game() {
   if (!mode) return <ModeSelect onPick={start} />;
   if (result) return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
-      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={mode} onReset={() => start(mode)} />
+      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={mode} usedHints={result.usedHints} onReset={() => start(mode)} />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} />}
       {mode === "challenge" && challengeId && challengeRole && (
         <ChallengeResult id={challengeId} role={challengeRole} result={result.result} players={result.players}
@@ -255,7 +266,7 @@ export default function Game() {
         <div className="order-first">
           {current ? (
             <Browser key={`${current.team}|${current.decade}|${roundNum}`} spin={current} mode={mode} selId={selPlayer?.id ?? null}
-              hints={hints} onToggleHints={toggleHints}
+              hints={hints} onToggleHints={toggleHints} hintsLeft={Math.max(0, HINT_BUDGET - hintsUsed)}
               canPlace={(c) => openSlots.some((s) => c.eligible.includes(s))}
               onSelect={(c) => { setSelSlot(null); setSelPlayer((p) => (p?.id === c.id ? null : c)); }} />
           ) : (
@@ -440,13 +451,13 @@ function Court({ roster, selSlot, isTarget, onSlot, maskColors }: {
 }
 
 type SortKey = "fit" | "ppg" | "rpg" | "apg" | "az";
-function Browser({ spin, mode, selId, hints, onToggleHints, canPlace, onSelect }: {
-  spin: Spin; mode: Mode; selId: string | null; hints: boolean; onToggleHints: () => void;
+function Browser({ spin, mode, selId, hints, onToggleHints, hintsLeft, canPlace, onSelect }: {
+  spin: Spin; mode: Mode; selId: string | null; hints: boolean; onToggleHints: () => void; hintsLeft: number;
   canPlace: (c: DraftCandidate) => boolean; onSelect: (c: DraftCandidate) => void;
 }) {
   const hideStats = mode === "hoopiq"; // HoopIQ hides stats — draft on memory
   const canHint = mode === "classic";  // Classic only: Daily is a competition (fairness), HoopIQ is a memory test
-  const showFit = hints && canHint;    // the fit grade only appears when Hints is on (off by default)
+  const showFit = hints && canHint && hintsLeft > 0;  // fit grade shows only when Hints on AND budget remains
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<"All" | "G" | "F" | "C">("All");
   const [sort, setSort] = useState<SortKey>(showFit ? "fit" : hideStats ? "az" : "ppg");
@@ -487,13 +498,17 @@ function Browser({ spin, mode, selId, hints, onToggleHints, canPlace, onSelect }
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" aria-label="Search players"
           className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 sm:w-36" />
-        {canHint && (
-          <button onClick={onToggleHints} aria-pressed={hints} title="Show the engine's fit grade for each player"
+        {canHint && (hintsLeft > 0 ? (
+          <button onClick={onToggleHints} aria-pressed={hints} title={`Reveal the engine's fit grade — ${hintsLeft} hint${hintsLeft === 1 ? "" : "s"} left this game`}
             className={`rounded-md px-2 py-1.5 text-xs font-semibold transition ${
               hints ? "bg-emerald-500/20 text-emerald-300" : "border border-zinc-700 text-zinc-400 hover:text-zinc-200"}`}>
-            💡 Hints{hints ? " on" : ""}
+            💡 Hints{hints ? " on" : ""} · {hintsLeft} left
           </button>
-        )}
+        ) : (
+          <span title="You've used all your hints this game" className="rounded-md border border-zinc-800 px-2 py-1.5 text-xs font-semibold text-zinc-600">
+            💡 Hints used up
+          </span>
+        ))}
         {!hideStats && (
           <select value={effSort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort players"
             className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-300 outline-none">
