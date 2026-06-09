@@ -47,7 +47,7 @@ export default function SiteHeader() {
             aria-label="Toggle menu"
             aria-expanded={open}
             aria-controls="mobile-nav"
-            className="rounded-lg border border-zinc-700 px-2.5 py-1 text-zinc-300 hover:border-zinc-500 sm:hidden"
+            className="flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-700 text-lg text-zinc-300 hover:border-zinc-500 sm:hidden"
           >
             <span aria-hidden="true">{open ? "✕" : "☰"}</span>
           </button>
@@ -62,7 +62,7 @@ export default function SiteHeader() {
               href={n.href}
               onClick={() => setOpen(false)}
               aria-current={isActive(n.href) ? "page" : undefined}
-              className={`block rounded-lg px-2 py-2 text-sm font-semibold ${isActive(n.href) ? "text-orange-400" : "text-zinc-300 hover:text-zinc-100"}`}
+              className={`block rounded-lg px-2 py-3 text-sm font-semibold ${isActive(n.href) ? "text-orange-400" : "text-zinc-300 hover:text-zinc-100"}`}
             >
               {n.label}
             </Link>
@@ -70,7 +70,7 @@ export default function SiteHeader() {
           <Link
             href="/play"
             onClick={() => setOpen(false)}
-            className="mt-1 block rounded-lg bg-orange-500 px-2 py-2 text-center text-sm font-black text-black"
+            className="mt-1 block rounded-lg bg-orange-500 px-2 py-3 text-center text-sm font-black text-black"
           >
             Build your five →
           </Link>

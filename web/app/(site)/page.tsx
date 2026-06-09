@@ -56,7 +56,7 @@ export default function Home() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml }} />
       <LandingSection />
-      <section className="mx-auto max-w-2xl px-5 pb-16 text-sm leading-relaxed text-zinc-500">
+      <section className="mx-auto max-w-2xl px-5 pb-16 text-sm leading-relaxed text-zinc-400">
         {SEO_COPY}
       </section>
     </>

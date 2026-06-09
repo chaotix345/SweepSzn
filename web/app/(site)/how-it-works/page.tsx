@@ -38,7 +38,7 @@ export default function HowItWorks() {
         <h2 className="font-display text-2xl tracking-tight">Playing a round</h2>
         <ol className="mt-5 space-y-4">
           <Step n="1" title="Spin the reels">
-            A gold <strong className="text-zinc-200">team</strong> reel and a violet <strong className="text-zinc-200">era</strong> reel
+            An orange <strong className="text-zinc-200">team</strong> reel and a violet <strong className="text-zinc-200">era</strong> reel
             land on a franchise and a decade. Lock one and re-spin the other to chase the player you want. You get one re-spin of each.
           </Step>
           <Step n="2" title="Draft your five">
