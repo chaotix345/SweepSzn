@@ -6,4 +6,4 @@ export const baseUrl =
   : process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}`
   : "http://localhost:3000";
 
-export const SITE_NAME = "82-0";
+export const SITE_NAME = "SweepSzn";

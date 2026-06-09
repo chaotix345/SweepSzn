@@ -12,6 +12,18 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-anton);
+}
+
+@theme {
+  /* SweepSzn "Arena" brand. Punch the action orange (was #f97316) + add the
+     perfect-season gold (reserved for the elite/A+ tier). Overriding the orange
+     scale here retones every existing orange-* utility uniformly. */
+  --color-orange-400: #ff8a3a;
+  --color-orange-500: #ff6a00;
+  --color-action: #ff6a00;
+  --color-gold: #ffc53d;
+  --color-gold-soft: #ffd66b;
 }
 
 body {
