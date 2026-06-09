@@ -10,6 +10,6 @@ export const contentType = "image/png";
 export default async function Image({ params }: { params: Promise<{ card: string }> }) {
   const { card } = await params;
   const c = decodeRankCard(card);
-  if (!c) return new ImageResponse(brandOgElement("Climb the 82-0 leaderboard."), { ...OG_SIZE });
+  if (!c) return new ImageResponse(brandOgElement("Climb the SweepSzn leaderboard."), { ...OG_SIZE });
   return new ImageResponse(rankOgElement(c), { ...OG_SIZE });
 }

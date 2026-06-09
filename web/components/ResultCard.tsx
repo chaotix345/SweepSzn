@@ -10,7 +10,7 @@ import { encodeLineup } from "@/lib/share";
 import { factorViews, lineupRoles, headline } from "@/lib/explain";
 
 const GRADE_COLOR: Record<string, string> = {
-  S: "text-fuchsia-400", "A+": "text-green-400", A: "text-green-400",
+  S: "text-gold", "A+": "text-gold", A: "text-green-400",
   B: "text-blue-400", C: "text-amber-400", D: "text-slate-400", F: "text-red-400",
 };
 const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1));
@@ -123,7 +123,7 @@ export default function ResultCard({
 function ShareButton({ result, path, names }: { result: LineupResult; path: string; names: string[] }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const text = `My all-time five (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on 82-0 — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}. Can you build a better one?`;
+  const text = `My all-time five (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}. Can you build a better one?`;
   const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
 
@@ -131,7 +131,7 @@ function ShareButton({ result, path, names }: { result: LineupResult; path: stri
     try { await navigator.clipboard?.writeText(`${text} ${url}`); setCopied(true); track("share", { target: "copy" }); ev("share", { uid: getUid() }); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard unavailable */ }
   };
   const native = async () => {
-    try { await (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }).share?.({ title: "82-0", text, url }); track("share", { target: "native" }); ev("share", { uid: getUid() }); } catch { /* dismissed */ }
+    try { await (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }).share?.({ title: "SweepSzn", text, url }); track("share", { target: "native" }); ev("share", { uid: getUid() }); } catch { /* dismissed */ }
   };
   const links: [string, string][] = [
     ["X", `https://twitter.com/intent/tweet?text=${t}&url=${u}&hashtags=NBA,82and0`],

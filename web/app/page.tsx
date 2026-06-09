@@ -13,11 +13,11 @@ export const metadata: Metadata = {
 // Crawlable SEO body copy (server-rendered, visible). The rest of the page above the game is the
 // LandingSection; this paragraph adds keyword-dense basketball terminology below the game.
 const SEO_COPY =
-  "82-0 is a browser-based all-time NBA lineup simulator where you draft a five-player starting " +
+  "SweepSzn is a browser-based all-time NBA lineup simulator where you draft a five-player starting " +
   "five by spinning a franchise reel and a decade reel, then simulate a full 82-game NBA season. " +
   "The simulation engine is calibrated to 1,170 real NBA team-seasons (1985–2025) across 24,687 " +
   "player-seasons, with out-of-sample accuracy of 6.07 wins RMSE in year-grouped cross-validation. " +
-  "Unlike lineup tools that simply add up box-score averages, 82-0 models finite possessions and " +
+  "Unlike lineup tools that simply add up box-score averages, SweepSzn models finite possessions and " +
   "usage overload (too many ball-dominant stars costs wins), era normalization via per-season " +
   "z-scores (so Wilt Chamberlain's pace-inflated 1962 numbers are not compared directly to modern " +
   "stats), floor spacing, rim protection, and lineup fit and redundancy. Every result includes a " +
@@ -33,7 +33,7 @@ const SEO_COPY =
 const jsonLd = {
   "@context": "https://schema.org",
   "@type": "WebApplication",
-  name: "82-0",
+  name: "SweepSzn",
   url: baseUrl,
   description:
     "All-time NBA lineup simulator. Draft a starting five by spinning team and era reels. Engine calibrated to 1,170 real NBA team-seasons — and it tells you why your lineup wins or loses.",

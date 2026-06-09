@@ -10,8 +10,8 @@ const load = cache((id: string) => getChallengePublic(id));
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const info = await load(id);
-  if (!info) return { title: "82-0 — head-to-head challenge", robots: { index: false } };
-  const title = `Beat ${info.creatorName}'s ${info.wins}-${info.losses} — 82-0 challenge`;
+  if (!info) return { title: "SweepSzn — head-to-head challenge", robots: { index: false } };
+  const title = `Beat ${info.creatorName}'s ${info.wins}-${info.losses} — SweepSzn challenge`;
   const description = `${info.creatorName} went ${info.wins}-${info.losses} (${info.grade}). Same draft, your picks. Can you build a better all-time five?`;
   return {
     title, description,
@@ -29,7 +29,7 @@ export default async function ChallengePage({ params }: Props) {
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-xl px-4 py-10">
         <Link href="/" className="flex items-baseline text-2xl font-black tracking-tight">
-          <span>82</span><span className="text-orange-500">-0</span>
+          <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
           <span className="ml-3 text-sm font-semibold text-zinc-500">head-to-head challenge</span>
         </Link>
 

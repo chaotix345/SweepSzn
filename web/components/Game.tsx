@@ -334,7 +334,7 @@ function Shell({ children, roundNum, mode, onRestart, showRestart }: {
     <div className="mx-auto max-w-4xl px-4 py-6 pb-28 lg:pb-6">
       <header className="mb-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="text-2xl font-black tracking-tight">82<span className="text-orange-500">-</span>0</div>
+          <div className="font-display text-2xl tracking-tight">Sweep<span className="text-orange-500">Szn</span></div>
           <span className="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold capitalize text-zinc-300">{mode}</span>
           <span className="text-sm text-zinc-500">Round {roundNum}/5</span>
         </div>
@@ -356,7 +356,7 @@ function ModeSelect({ onPick }: { onPick: (m: Mode) => void }) {
   ];
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 text-center">
-      <div className="text-5xl font-black tracking-tight">82<span className="text-orange-500">-</span>0</div>
+      <div className="font-display text-5xl tracking-tight">Sweep<span className="text-orange-500">Szn</span></div>
       <p className="mt-2 text-lg text-zinc-400">Build an all-time NBA starting five. Can you go undefeated?</p>
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {modes.map((m) => (

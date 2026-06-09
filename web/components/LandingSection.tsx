@@ -11,10 +11,10 @@ export default function LandingSection() {
     <div className="bg-zinc-950 text-zinc-100">
       {/* ── Section 1: Hero ───────────────────────────────────────────── */}
       <section className="px-5 pt-12 pb-8 text-center sm:px-8 sm:pt-16">
-        <div className="text-2xl font-black tracking-tight sm:text-3xl">
-          82<span className="text-orange-500">-</span>0
+        <div className="font-display text-3xl tracking-tight sm:text-4xl">
+          Sweep<span className="text-orange-500">Szn</span>
         </div>
-        <h1 className="mx-auto mt-4 max-w-2xl text-4xl font-black tracking-tight sm:text-5xl">
+        <h1 className="mx-auto mt-4 max-w-2xl font-display text-4xl tracking-tight sm:text-5xl">
           Can you go 82-0?
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-base text-zinc-400">
@@ -54,7 +54,7 @@ export default function LandingSection() {
           </div>
           {/* our engine (live output for the hero five) */}
           <div className="flex-1 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 ring-1 ring-orange-500/20">
-            <div className="text-xs font-bold uppercase tracking-wide text-orange-400">82-0 engine</div>
+            <div className="text-xs font-bold uppercase tracking-wide text-orange-400">SweepSzn engine</div>
             <div className="mt-0.5 text-[11px] italic text-zinc-500">rewards a balanced two-way five</div>
             <div className="mt-3 flex items-baseline gap-2">
               <span className="text-5xl font-black tabular-nums text-green-400">78<span className="text-zinc-600">–</span>4</span>
