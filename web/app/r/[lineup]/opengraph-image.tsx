@@ -13,7 +13,7 @@ export default async function Image({ params }: { params: Promise<{ lineup: stri
   const { lineup } = await params;
   const { ids, hinted } = decodeShare(lineup);
   const players = getPlayersByIds(ids);
-  if (players.length !== 5) {
+  if (ids.length !== 5 || new Set(ids).size !== 5 || players.length !== 5) {
     return new ImageResponse(brandOgElement("Build an all-time NBA starting five."), { ...OG_SIZE });
   }
   const result = evaluateLineup(players, getCoefficients());

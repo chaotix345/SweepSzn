@@ -18,7 +18,11 @@ const hhmmss = (ms: number) => {
   return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
 };
 
-export default function Leaderboard({ date, trace, readOnly = false }: { date: string; trace: DraftStep[]; readOnly?: boolean }) {
+// the server's notion of "today" (UTC, same format as the daily seed/key) — used to detect a
+// game that straddled midnight so we can warn before the submit 400s with a cryptic "stale date".
+const serverDate = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
+
+export default function Leaderboard({ date, trace, usedHints = false, readOnly = false }: { date: string; trace: DraftStep[]; usedHints?: boolean; readOnly?: boolean }) {
   const { user, refresh, signOut } = useSession();
   const [tab, setTab] = useState<Tab>("daily");
   const [view, setView] = useState<LeaderboardView | null>(null);
@@ -34,25 +38,26 @@ export default function Leaderboard({ date, trace, readOnly = false }: { date: s
   const [reload, setReload] = useState(0);
 
   const effectiveUid = user?.uid ?? anonUid; // who "you" is on the board
-
-  const loadBoard = useCallback(async (uid: string) => {
-    try {
-      const r = await fetch(`/api/daily/leaderboard?date=${encodeURIComponent(date)}&uid=${encodeURIComponent(uid)}`);
-      if (r.status === 503) { setEnabled(false); return; }
-      if (r.ok) { const v = await r.json(); setView(v); setSubmitted(!!v?.you); }
-    } catch { /* offline — leave board hidden */ }
-  }, [date]);
+  const stale = !readOnly && date !== serverDate(); // this game's daily date rolled past UTC midnight
 
   useEffect(() => {
+    const ctl = new AbortController();
     (async () => {
       const id = getUid();
       setAnonUid(id);
       setNameState(getName());
-      // Don't record a daily or show a streak just for viewing the board.
-      if (!readOnly) { recordDailyDone(date); setStreak(getStreak()); }
-      await loadBoard(user?.uid ?? id);
+      // Show the EXISTING streak on mount, but don't credit today — that happens only on a successful
+      // submit (so quitting, going offline, or a stale-date 400 doesn't inflate the streak/history).
+      if (!readOnly) setStreak(getStreak());
+      try {
+        const uid = user?.uid ?? id;
+        const r = await fetch(`/api/daily/leaderboard?date=${encodeURIComponent(date)}&uid=${encodeURIComponent(uid)}`, { signal: ctl.signal });
+        if (r.status === 503) { setEnabled(false); return; }
+        if (r.ok) { const v = await r.json(); setView(v); setSubmitted(!!v?.you); }
+      } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline — leave board hidden */ }
     })();
-  }, [date, user?.uid, loadBoard, readOnly]);
+    return () => ctl.abort();
+  }, [date, user?.uid, readOnly]);
 
   // lazy-load the weekly / all-time board when its tab is active (and after a submit/sign-in)
   useEffect(() => {
@@ -75,37 +80,40 @@ export default function Leaderboard({ date, trace, readOnly = false }: { date: s
   }, []);
 
   const submit = useCallback(async () => {
+    if (date !== serverDate()) { setErr("Today's daily just reset — this game was for an earlier day. Start today's daily to post a score."); return; }
     setBusy(true); setErr(null);
     try {
       const r = await fetch("/api/daily/submit", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ date, uid: anonUid, name: name.trim(), trace }),
+        body: JSON.stringify({ date, uid: anonUid, name: name.trim(), trace, usedHints }),
       });
       if (r.status === 503) { setEnabled(false); return; }
       const v = await r.json();
-      if (!r.ok) { setErr(v?.error ?? "submit failed"); return; }
+      if (!r.ok) { setErr(v?.error === "stale date" ? "Today's daily just reset — start today's game to post a score." : v?.error ?? "submit failed"); return; }
       if (name.trim()) persistName(name.trim());
+      recordDailyDone(date); setStreak(getStreak()); // credit the streak only now that the score has landed
       setView(v); setSubmitted(true); setReload((n) => n + 1);
       track("daily_submit", { rank: v?.you?.rank ?? 0, authed: !!user });
     } catch { setErr("network error"); } finally { setBusy(false); }
-  }, [date, anonUid, name, trace, user]);
+  }, [date, anonUid, name, trace, user, usedHints]);
 
   // On sign-in: refresh session, then auto-claim today's result under the Google identity
   // (which also credits the weekly + all-time boards).
   const onSignIn = useCallback(async () => {
     await refresh();
     if (readOnly) { setReload((n) => n + 1); return; } // browsing the board: just highlight my rows, don't claim
+    if (date !== serverDate()) { setErr("Today's daily just reset — start today's game to post a score."); return; } // don't claim a rolled-over game
     setBusy(true); setErr(null);
     try {
       const r = await fetch("/api/daily/submit", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ date, name: name.trim(), trace }),
+        body: JSON.stringify({ date, name: name.trim(), trace, usedHints }),
       });
       if (r.status === 503) { setEnabled(false); return; }
       const v = await r.json();
-      if (r.ok) { setView(v); setSubmitted(true); setReload((n) => n + 1); track("daily_claim", { rank: v?.you?.rank ?? 0 }); }
+      if (r.ok) { recordDailyDone(date); setStreak(getStreak()); setView(v); setSubmitted(true); setReload((n) => n + 1); track("daily_claim", { rank: v?.you?.rank ?? 0 }); }
     } catch { /* ignore */ } finally { setBusy(false); }
-  }, [refresh, date, name, trace, readOnly]);
+  }, [refresh, date, name, trace, readOnly, usedHints]);
 
   // the sharer's current standing on the active tab (if they're on the board)
   const youCard: RankCard | null = (() => {
@@ -137,7 +145,13 @@ export default function Leaderboard({ date, trace, readOnly = false }: { date: s
             ))}
           </div>
 
-          {tab === "daily" && !submitted && !readOnly && (
+          {tab === "daily" && stale && !submitted && (
+            <div className="mt-3 rounded-lg border border-amber-600/40 bg-amber-500/10 p-3 text-xs text-amber-300">
+              Today&apos;s daily just reset — this game was for an earlier day, so it can&apos;t be posted.{" "}
+              <a href="/play" className="font-bold underline hover:text-amber-200">Play today&apos;s daily →</a>
+            </div>
+          )}
+          {tab === "daily" && !submitted && !readOnly && !stale && (
             <div className="mt-3 flex gap-2">
               <input value={name} onChange={(e) => setNameState(e.target.value)} maxLength={24} placeholder={user ? user.name : "Your name"}
                 className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-orange-500" />

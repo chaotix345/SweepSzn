@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title, description,
     robots: { index: false },
-    openGraph: { title, description, type: "website" },
+    openGraph: { title, description, type: "website", url: `/c/${id}` },
     twitter: { card: "summary_large_image", title, description },
   };
 }
@@ -51,8 +51,8 @@ export default async function ChallengePage({ params }: Props) {
               className="mt-6 inline-block rounded-xl bg-orange-500 px-8 py-3 text-base font-black text-black hover:bg-orange-400">
               ⚔️ Accept Challenge
             </Link>
-            {info.attempts > 1 && (
-              <div className="mt-4 text-xs text-zinc-500">{info.attempts} players have taken this challenge</div>
+            {info.responders > 0 && (
+              <div className="mt-4 text-xs text-zinc-500">{info.responders} {info.responders === 1 ? "player has" : "players have"} taken this challenge</div>
             )}
           </div>
         ) : (

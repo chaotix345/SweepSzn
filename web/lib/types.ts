@@ -95,17 +95,23 @@ export interface AggBoardView { scope: "week" | "alltime"; key: string; total: n
 // H2H Challenge: a shared draft seed (h2h-<id>) + the creator's verified result as the bar.
 // The board reuses the leaderboard row/store shape; lineups are only ever sent to a uid that
 // has itself submitted (public reads are redacted).
-export interface ChallengeInfo { uid: string; name: string; wins: number; losses: number; net: number; grade: string; lineup: string }
+// `seed` is the draft seed responders replay. For a challenge built fresh in "Challenge a Friend"
+// mode it is "h2h-<id>"; for one converted from a finished Daily/Classic/HoopIQ game it is that
+// game's original seed, so the friend drafts the SAME teams and eras and tries to beat THIS five.
+export interface ChallengeInfo { uid: string; name: string; wins: number; losses: number; net: number; grade: string; lineup: string; seed?: string; hinted?: boolean }
 export interface ChallengeMiniPlayer { id: string; name: string; team: string; decade: string; slot: Slot }
 export interface ChallengeVerdict { outcome: "win" | "loss" | "tie"; winsMargin: number; netMargin: number }
-export interface ChallengeBoardRow { rank: number; uid: string; name: string; wins: number; losses: number; net: number } // no lineup: challenge board never exposes others' fives
+// no uid: the challenge board never exposes others' uids (so they can't be harvested + impersonated)
+// and never exposes anyone's five. "you" is identified server-side and returned as board.you.
+export interface ChallengeBoardRow { rank: number; name: string; wins: number; losses: number; net: number }
 export interface ChallengeBoard { total: number; top: ChallengeBoardRow[]; you?: ChallengeBoardRow }
-export interface ChallengePublic { id: string; creatorName: string; wins: number; losses: number; net: number; grade: string; attempts: number }
+export interface ChallengePublic { id: string; creatorName: string; wins: number; losses: number; net: number; grade: string; responders: number; seed: string; hinted: boolean }
 export type ChallengeSubmitResponse =
   | { role: "creator"; id: string; board: ChallengeBoard }
   | {
       role: "responder"; id: string;
-      creator: { name: string; wins: number; losses: number; net: number; grade: string; lineup: string; players: ChallengeMiniPlayer[] };
+      // creatorResultUrl is an opaque permalink; the raw lineup string is never sent to the client.
+      creator: { name: string; wins: number; losses: number; net: number; grade: string; hinted: boolean; creatorResultUrl: string; players: ChallengeMiniPlayer[] };
       verdict: ChallengeVerdict;
       board: ChallengeBoard;
     };

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
@@ -104,7 +104,7 @@ export default function ResultCard({
         </div>
         {/* totals */}
         <div className="mt-2 flex items-center justify-between gap-2 px-2.5 sm:justify-end sm:gap-2.5">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-600 sm:mr-auto">Team totals</span>
+          <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 sm:mr-auto">Team totals</span>
           <div className="flex gap-2 sm:gap-2.5">
             <Stat v={totals.pts} k="PPG" strong /><Stat v={totals.trb} k="RPG" strong /><Stat v={totals.ast} k="APG" strong />
             <Stat v={totals.stl} k="SPG" strong /><Stat v={totals.blk} k="BPG" strong />
@@ -124,15 +124,34 @@ export default function ResultCard({
   );
 }
 
+// hydration-safe Web Share capability (false on server + first client render, then the real value)
+const subscribeNoop = () => () => {};
+const getCanNative = () => typeof navigator !== "undefined" && "share" in navigator;
+const getServerCanNative = () => false;
+
 function ShareButton({ result, path, names, usedHints }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyErr, setCopyErr] = useState(false);
+  const canNative = useSyncExternalStore(subscribeNoop, getCanNative, getServerCanNative);
   const text = `My all-time five (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""} — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}. Can you build a better one?`;
   const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
 
+  // close the popover on outside-click or Escape (keyboard + mouse dismissal)
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+
   const copy = async () => {
-    try { await navigator.clipboard?.writeText(`${text} ${url}`); setCopied(true); track("share", { target: "copy" }); ev("share", { uid: getUid() }); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard unavailable */ }
+    try { await navigator.clipboard?.writeText(`${text} ${url}`); setCopied(true); track("share", { target: "copy" }); ev("share", { uid: getUid() }); setOpen(false); setTimeout(() => setCopied(false), 1500); }
+    catch { setCopyErr(true); setTimeout(() => setCopyErr(false), 2500); }
   };
   const native = async () => {
     try { await (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }).share?.({ title: "SweepSzn", text, url }); track("share", { target: "native" }); ev("share", { uid: getUid() }); } catch { /* dismissed */ }
@@ -145,22 +164,21 @@ function ShareButton({ result, path, names, usedHints }: { result: LineupResult;
     ["Telegram", `https://t.me/share/url?url=${u}&text=${t}`],
     ["Facebook", `https://www.facebook.com/sharer/sharer.php?u=${u}`],
   ];
-  const canNative = typeof navigator !== "undefined" && "share" in navigator;
 
   return (
-    <div className="relative flex-1">
-      <button onClick={() => (canNative ? native() : setOpen((o) => !o))} aria-haspopup={!canNative}
+    <div className="relative flex-1" ref={ref}>
+      <button onClick={() => (canNative ? native() : setOpen((o) => !o))} aria-haspopup={!canNative} aria-expanded={!canNative ? open : undefined} aria-controls={!canNative ? "result-share-panel" : undefined}
         className="w-full rounded-xl border border-zinc-700 py-2.5 text-sm font-semibold hover:border-zinc-500">
-        {copied ? "Copied!" : "Share"}
+        {copied ? "Copied!" : copyErr ? "Copy failed" : "Share"}
       </button>
       {open && !canNative && (
-        <div className="absolute bottom-full left-0 z-10 mb-2 w-full rounded-xl border border-zinc-700 bg-zinc-900 p-2 shadow-xl">
-          <button onClick={copy} className="mb-1 w-full rounded-lg bg-zinc-800 py-2 text-xs font-semibold hover:bg-zinc-700">
-            {copied ? "Copied to clipboard!" : "Copy result"}
+        <div id="result-share-panel" role="menu" className="absolute bottom-full left-0 z-10 mb-2 w-full rounded-xl border border-zinc-700 bg-zinc-900 p-2 shadow-xl">
+          <button onClick={copy} role="menuitem" className="mb-1 w-full rounded-lg bg-zinc-800 py-2 text-xs font-semibold hover:bg-zinc-700">
+            {copied ? "Copied to clipboard!" : copyErr ? "Copy failed — use a link below" : "Copy result"}
           </button>
           <div className="grid grid-cols-3 gap-1">
             {links.map(([name, href]) => (
-              <a key={name} href={href} target="_blank" rel="noreferrer" onClick={() => { track("share", { target: name }); ev("share", { uid: getUid() }); }}
+              <a key={name} href={href} target="_blank" rel="noreferrer" role="menuitem" onClick={() => { track("share", { target: name }); ev("share", { uid: getUid() }); setOpen(false); }}
                 className="rounded-lg bg-zinc-800 py-1.5 text-center text-[11px] font-semibold text-zinc-300 hover:bg-zinc-700 hover:text-white">{name}</a>
             ))}
           </div>
@@ -214,7 +232,7 @@ function Stat({ v, k, strong }: { v: number | null | undefined; k: string; stron
   return (
     <div className="w-9">
       <div className={`tabular-nums ${strong ? "font-bold text-zinc-200" : "font-semibold text-zinc-300"}`}>{fmt(v)}</div>
-      <div className="text-[8px] uppercase tracking-wide text-zinc-600">{k}</div>
+      <div className="text-[8px] uppercase tracking-wide text-zinc-500">{k}</div>
     </div>
   );
 }

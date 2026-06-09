@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Anton } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { baseUrl, SITE_NAME } from "@/lib/site";
@@ -22,6 +22,14 @@ const anton = Anton({
 
 const title = "SweepSzn — Can you build an undefeated all-time NBA five?";
 const description = "Draft a five-player all-time NBA lineup and find out if it can go undefeated. Engine calibrated to 1,170 real team-seasons — and it tells you why.";
+
+// viewport-fit=cover lets the layout extend under the iOS home indicator so our env(safe-area-inset)
+// padding on the mobile position sheet + game shell actually takes effect.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(baseUrl),
