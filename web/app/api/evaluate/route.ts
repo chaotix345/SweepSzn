@@ -1,12 +1,17 @@
 import { NextResponse, after } from "next/server";
 import { getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
-import { redis } from "@/lib/redis";
+import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  // the one unauthenticated CPU-doing route that had no limiter — evaluateLineup runs the full
+  // model, so an unthrottled burst from one IP spikes the serverless function (audit finding)
+  if (!(await rateLimit(`rl:evaluate:${ipOf(req)}`, 60, 60))) {
+    return NextResponse.json({ error: "too many requests" }, { status: 429 });
+  }
   const body = await req.json().catch(() => ({}));
   // Gate id shape before the Map lookup so an oversized/garbage string can't force megabyte-scale
   // string hashing on this unauthenticated endpoint (real ids are [a-z0-9_]).

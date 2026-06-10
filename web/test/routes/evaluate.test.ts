@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { enableRedisEnv, freshFake, ctx, req, readJson, flushAfter } from "@/test/routeHarness";
+import { enableRedisEnv, freshFake, ctx, req, readJson, flushAfter, exhaustRateLimit } from "@/test/routeHarness";
 import { dayUTC } from "@/lib/day";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
@@ -104,5 +104,15 @@ describe("POST /api/evaluate — after() ev:complete counter", () => {
 });
 
 describe("POST /api/evaluate — rate limit", () => {
-  it.todo("should 429 when the rate limit bucket is exhausted — rate limiter is NOT present in the current route source (evaluate/route.ts has no rateLimit() call); this test documents that the advertised rate limit is missing");
+  it("429s when the bucket is exhausted", async () => {
+    exhaustRateLimit("rl:evaluate:1.2.3.4", 60);
+    const { status } = await readJson(await POST(req("/api/evaluate", { body: { ids: FIVE_IDS }, ip: "1.2.3.4" })));
+    expect(status).toBe(429);
+  });
+
+  it("allows requests from a different IP when one IP is exhausted", async () => {
+    exhaustRateLimit("rl:evaluate:1.2.3.4", 60);
+    const { status } = await readJson(await POST(req("/api/evaluate", { body: { ids: FIVE_IDS }, ip: "5.6.7.8" })));
+    expect(status).toBe(200);
+  });
 });
