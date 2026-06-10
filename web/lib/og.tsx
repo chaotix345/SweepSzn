@@ -71,7 +71,10 @@ function pickemStrip(result: LineupResult, pickem: PickemView) {
   );
 }
 
-export function resultOgElement(result: LineupResult, players: Player[], hinted = false, pickem?: PickemView, prime = false) {
+// Blueprint badge data for the OG card: the committed objective + its execution grade.
+export type OgBlueprint = { label: string; grade: string };
+
+export function resultOgElement(result: LineupResult, players: Player[], hinted = false, pickem?: PickemView, prime = false, blueprint?: OgBlueprint) {
   const grade = GRADE_HEX[result.grade] ?? "#e4e4e7";
   const net = `${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`;
   // Render the strip first so the record size and the strip can never disagree (a truthy pickem
@@ -84,6 +87,11 @@ export function resultOgElement(result: LineupResult, players: Player[], hinted 
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <Wordmark />
           <span style={{ marginLeft: 16, fontSize: 22, color: "#a1a1aa", fontWeight: 600 }}>all-time starting five</span>
+          {blueprint && (
+            <span style={{ display: "flex", alignSelf: "center", marginLeft: 16, padding: "5px 14px", borderRadius: 999, background: "rgba(34,211,238,0.14)", color: "#22d3ee", fontSize: 18, fontWeight: 800, letterSpacing: 1 }}>
+              📐 {blueprint.label} · {blueprint.grade}
+            </span>
+          )}
           {prime && (
             <span style={{ display: "flex", alignSelf: "center", marginLeft: 16, padding: "5px 14px", borderRadius: 999, background: "rgba(139,92,246,0.18)", color: "#a78bfa", fontSize: 18, fontWeight: 800, letterSpacing: 1 }}>PRIME</span>
           )}
@@ -91,7 +99,7 @@ export function resultOgElement(result: LineupResult, players: Player[], hinted 
             <span style={{ display: "flex", alignSelf: "center", marginLeft: 16, padding: "5px 14px", borderRadius: 999, background: "rgba(74,222,128,0.14)", color: "#4ade80", fontSize: 18, fontWeight: 700 }}>HINTS USED</span>
           )}
         </div>
-        <span style={{ display: "flex", fontSize: 22, color: "#71717a" }}>{prime ? "fantasy simulation · peak eras" : "projected 82-game record"}</span>
+        <span style={{ display: "flex", fontSize: 22, color: "#71717a" }}>{blueprint ? "committed before the spin" : prime ? "fantasy simulation · peak eras" : "projected 82-game record"}</span>
       </div>
 
       {/* record + grade (record shrinks a notch when the Pick'Em strip needs the vertical room) */}
