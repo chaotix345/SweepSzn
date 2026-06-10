@@ -363,9 +363,12 @@ export default function Game() {
 
   // Once the record is in, pull the crowd split (and your stored vote — e.g. a Daily replay
   // from another device) for the crowd-vs-you strip. Best-effort: a 503 (Redis absent) or a
-  // network error just leaves the strip off / local-vote-only.
+  // network error just leaves the strip off / local-vote-only. Synthetic cold-restore seeds
+  // ("classic-restored" / "hoopiq-restored") pass pickemSeedOk but never carry votes — skip
+  // them so every cold restore doesn't burn a Redis read. (Real free-play seeds end in digits,
+  // so the suffix check can't collide.)
   useEffect(() => {
-    if (!result || mode === "challenge" || !pickemSeedOk(seed)) return;
+    if (!result || mode === "challenge" || !pickemSeedOk(seed) || seed.endsWith("-restored")) return;
     let cancelled = false;
     (async () => {
       try {
