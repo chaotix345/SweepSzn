@@ -16,6 +16,10 @@ vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upst
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
 vi.mock("next/server", async (orig) => (await import("@/test/routeHarness")).nextServerMockModule(await orig()));
 
+// Freeze Date (only — timers stay real) mid-day UTC so a CI run straddling UTC midnight can't
+// flake the date checks: DATE here and the route's request-time check see the same day.
+vi.useFakeTimers({ now: new Date("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+
 // ---------- fixture world ----------
 const mkP = (id: string, pos: "PG" | "SG" | "SF" | "PF" | "C", obpm: number, dbpm: number): Player => ({
   id,

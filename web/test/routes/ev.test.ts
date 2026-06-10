@@ -6,6 +6,11 @@ vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHe
 vi.mock("next/server", async (orig) => (await import("@/test/routeHarness")).nextServerMockModule(await orig()));
 
 enableRedisEnv();
+
+// Freeze Date (only — timers stay real) mid-day UTC so a CI run straddling UTC midnight can't
+// flake the day-key assertions: dayUTC() here and in the route see the same day.
+vi.useFakeTimers({ now: new Date("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+
 const { POST } = await import("@/app/api/ev/route");
 const { EV_TTL } = await import("@/lib/evServer");
 
