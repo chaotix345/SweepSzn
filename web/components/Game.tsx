@@ -16,6 +16,7 @@ import { saveResult, writeLastResult, readLastResult } from "@/lib/resultHistory
 import { pickemSeedOk, getPickemSkip, setPickemSkip, getLocalVote, setLocalVote, type PickemVote } from "@/lib/pickem";
 import { buildFhChoices } from "@/lib/factorHunt";
 import FhLeaderboard from "@/components/FhLeaderboard";
+import { applySwapToTrace } from "@/lib/dailyVerify";
 
 type Mode = "daily" | "classic" | "hoopiq" | "challenge" | "factorhunt";
 type Roster = Record<Slot, DraftCandidate | null>;
@@ -390,7 +391,12 @@ export default function Game() {
       return;
     }
     if (selSlot) {
-      if (canSwap(selSlot, slot)) setRoster((r) => ({ ...r, [slot]: r[selSlot], [selSlot]: r[slot] }));
+      if (canSwap(selSlot, slot)) {
+        // re-stamp the moved players' trace entries with their FINAL slots, or the server replay
+        // sees a later pick into the vacated slot as "slot reused" and rejects the submit
+        applySwapToTrace(traceRef.current, roster[selSlot]?.id, roster[slot]?.id, selSlot, slot);
+        setRoster((r) => ({ ...r, [slot]: r[selSlot], [selSlot]: r[slot] }));
+      }
       setSelSlot(null);
       return;
     }
@@ -427,9 +433,12 @@ export default function Game() {
 
   // Once the record is in, pull the crowd split (and your stored vote — e.g. a Daily replay
   // from another device) for the crowd-vs-you strip. Best-effort: a 503 (Redis absent) or a
-  // network error just leaves the strip off / local-vote-only.
+  // network error just leaves the strip off / local-vote-only. Synthetic cold-restore seeds
+  // ("classic-restored" / "hoopiq-restored") pass pickemSeedOk but never carry votes — skip
+  // them so every cold restore doesn't burn a Redis read. (Real free-play seeds end in digits,
+  // so the suffix check can't collide.)
   useEffect(() => {
-    if (!result || mode === "challenge" || !pickemSeedOk(seed)) return;
+    if (!result || mode === "challenge" || !pickemSeedOk(seed) || seed.endsWith("-restored")) return;
     let cancelled = false;
     (async () => {
       try {

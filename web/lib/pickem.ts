@@ -55,6 +55,28 @@ export function pickemShareLine(wins: number, losses: number, v: PickemView, sub
     : `I called the flop — ${wins}-${losses} on ${where} when ${d.pct}% said 60+ wins was a lock.`;
 }
 
+// Atomic vote: claim the per-voter slot, bump the matching counter, read back the stored pick
+// and both counts — one script so a transient failure can never claim the voter without counting
+// the vote (SET NX + separate INCR had that gap). KEYS: 1=voter 2=yes-counter 3=no-counter.
+// ARGV: 1=vote ("y"|"n") 2=ttl seconds. Returns {claimed, storedVote, y, n}. (Pure string — lives
+// here, not in the route, so a dev harness can EVAL the exact script against real Redis.)
+export const PICKEM_VOTE_LUA = `
+local stored = redis.call('GET', KEYS[1])
+local claimed = 0
+if not stored then
+  redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+  local ckey = KEYS[3]
+  if ARGV[1] == 'y' then ckey = KEYS[2] end
+  redis.call('INCR', ckey)
+  redis.call('EXPIRE', ckey, ARGV[2])
+  stored = ARGV[1]
+  claimed = 1
+end
+local y = redis.call('GET', KEYS[2])
+local n = redis.call('GET', KEYS[3])
+return {claimed, stored, y or '0', n or '0'}
+`;
+
 // --- /pe/<card> share segment: "<y>.<n>.<v|x>.<lineupSegment>" ---
 // The lineup segment is encodeLineup() output ([a-z0-9_,] plus an optional "h~" prefix — no
 // dots), so dot-delimiting is collision-free, mirroring rankShare's card encoding.
