@@ -193,6 +193,32 @@ describe("command surface semantics", () => {
     expect(await fake.scard("s")).toBe(0);
   });
 
+  it("a pipeline counts as ONE round trip regardless of op count (trips budget metric)", async () => {
+    const fake = createRedisFake();
+    await fake.incr("a");                      // 1 trip
+    const before = fake.trips;
+    await fake.pipeline().incr("b").expire("b", 60).hset("h", { f: 1 }).zrem("z", "m").exec();
+    expect(fake.trips).toBe(before + 1);       // 4 ops, 1 trip
+    expect(fake.strings.get("b")).toBe("1");   // ops still executed
+  });
+
+  it("eval TRIM_BOARD_LUA evicts the lowest scorers from zset AND meta together", async () => {
+    const fake = createRedisFake();
+    for (let i = 1; i <= 5; i++) {
+      await fake.zadd("bz", { score: i * 100, member: `u${i}` });
+      await fake.hset("bh", { [`u${i}`]: { uid: `u${i}`, name: `P${i}` } });
+    }
+    const { TRIM_BOARD_LUA } = await import("@/lib/score");
+    // cap 3 → u1,u2 (lowest) evicted from both structures
+    expect(await fake.eval(TRIM_BOARD_LUA, ["bz", "bh"], [3])).toBe(2);
+    expect(fake.zsets.get("bz")?.has("u1")).toBe(false);
+    expect(fake.hashes.get("bh")?.has("u2")).toBe(false);
+    expect(fake.zsets.get("bz")?.size).toBe(3);
+    expect(fake.hashes.get("bh")?.size).toBe(3);
+    // under the cap: O(1) no-op
+    expect(await fake.eval(TRIM_BOARD_LUA, ["bz", "bh"], [3])).toBe(0);
+  });
+
   it("expire NX sets a TTL only when the key has none (the rate-limit fixed window)", async () => {
     const fake = createRedisFake();
     await fake.incr("rl:x");

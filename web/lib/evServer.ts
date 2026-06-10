@@ -33,16 +33,17 @@ export async function bump(
   if (!redis) return;
   const day = opts.day ?? dayUTC();
   try {
+    // one pipeline for the unconditional counters (each await here is an HTTP round trip)
     const counterKey = `ev:${stage}:${day}`;
-    await redis.incr(counterKey);
-    await redis.expire(counterKey, EV_TTL);
-    await redis.hincrby("ev:totals", stage, 1); // persistent: never expired
-
+    const p = redis.pipeline()
+      .incr(counterKey)
+      .expire(counterKey, EV_TTL)
+      .hincrby("ev:totals", stage, 1); // persistent: never expired; `stage` is enum-typed + beacon-validated
     if (stage === "play" && opts.mode && MODES.has(opts.mode)) {
       const modeKey = `ev:mode:${day}`;
-      await redis.hincrby(modeKey, opts.mode, 1);
-      await redis.expire(modeKey, EV_TTL);
+      p.hincrby(modeKey, opts.mode, 1).expire(modeKey, EV_TTL);
     }
+    await p.exec();
     // play/share/signin/submit carry a uid → contribute to the day's distinct-active set.
     // Cap distinct-member growth: the beacon is unauthenticated, so without a bound a flood of
     // unique uids could exhaust shared Redis memory (the set lives EV_TTL and is materialised by
@@ -50,8 +51,7 @@ export async function bump(
     if (opts.uid && stage !== "complete") {
       const activeKey = `ev:active:${day}`;
       if ((await redis.scard(activeKey)) < EV_ACTIVE_CAP) {
-        await redis.sadd(activeKey, opts.uid);
-        await redis.expire(activeKey, EV_TTL);
+        await redis.pipeline().sadd(activeKey, opts.uid).expire(activeKey, EV_TTL).exec();
       }
     }
   } catch {

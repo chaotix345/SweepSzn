@@ -5,13 +5,14 @@ import { track } from "@vercel/analytics";
 import type { DraftStep } from "@/lib/types";
 import { BLUEPRINTS, blueprintDef, type BlueprintKey, type BpBoardView, type BpBoardRow } from "@/lib/blueprint";
 import { getUid, getName, setName as persistName } from "@/lib/streak";
+import { dayUTC } from "@/lib/day";
 
 // Blueprint daily board — FhLeaderboard's slim shape (no streak, no weekly/all-time, no sign-in
 // claim: bp scores carry a cosmetic execution multiplier and stay out of the aggregates). The
 // COMBINED board is the primary tab (five stratified boards would feel empty at current player
 // counts — the spec's own flagged risk); per-blueprint chips filter down to one objective.
 
-const serverDate = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
+const serverDate = dayUTC;
 type BoardTab = BlueprintKey | "all";
 // grade colors: DESIGN.md single-source rule (mirrors ResultCard/ResultsHistory/og GRADE maps)
 const gradeText = (g: string) =>

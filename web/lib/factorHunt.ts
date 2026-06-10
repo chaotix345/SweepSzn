@@ -6,6 +6,7 @@
 // verdict chip all share these helpers, so they can never disagree.
 
 import type { LineupResult } from "./types";
+import { mulberry32, strSeed } from "./rng";
 
 export const FH_BONUS = 1.05; // cosmetic display multiplier on the FH board — never touches the engine
 
@@ -32,21 +33,6 @@ export function fhSeedOk(seed: unknown): seed is string {
   return typeof seed === "string" && FH_SEED_RE.test(seed);
 }
 
-// Deterministic PRNG (mulberry32 + FNV hash — mirrors lib/data.ts) so the choices route and the
-// submit verifier shuffle identically from the shared seed.
-function strSeed(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return h >>> 0;
-}
-function mulberry32(seed: number) {
-  return function () {
-    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 function shuffle<T>(arr: T[], rng: () => number): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {

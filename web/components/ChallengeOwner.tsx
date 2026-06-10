@@ -52,7 +52,11 @@ export default function ChallengeOwner({ id, created }: { id: string; created?: 
     let alive = true;
     const tick = async () => {
       try {
-        const r = await fetch(`/api/challenge/${id}/results?uid=${encodeURIComponent(getUid())}`);
+        const r = await fetch(`/api/challenge/${id}/results`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ uid: getUid() }),
+        });
         if (!alive) return;
         if (r.status === 503) { setState("disabled"); return; }
         if (r.status === 403) { setState("forbidden"); return; }

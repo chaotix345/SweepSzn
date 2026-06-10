@@ -162,3 +162,15 @@ describe("GET /api/daily/leaderboard — different dates are independent", () =>
     expect((body10.top as Array<{ uid: string }>)[0].uid).toBe("uid-today-12345678");
   });
 });
+
+describe("GET /api/daily/leaderboard — Redis trip budget", () => {
+  // Upstash is HTTP: every trip is a network round trip. readBoardView parallelizes zcard with
+  // the top read; an in-window uid costs nothing extra. Budget: zcard + zrange + hmget = 3.
+  it("an in-window read costs at most 3 round trips", async () => {
+    seedBoard(DATE, [{ uid: "uid-aaa-12345678", name: "Alice", wins: 55, net: 7 }]);
+    const before = ctx.redis!.trips;
+    const { status } = await readJson(await get(`date=${DATE}&uid=uid-aaa-12345678`));
+    expect(status).toBe(200);
+    expect(ctx.redis!.trips - before).toBeLessThanOrEqual(3);
+  });
+});

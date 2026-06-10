@@ -33,7 +33,7 @@ vi.mock("@/lib/data", () => ({
 
 enableRedisEnv();
 authEnv();
-const { GET } = await import("@/app/api/challenge/[id]/results/route");
+const { POST } = await import("@/app/api/challenge/[id]/results/route");
 
 const VALID_ID = "abc12345";
 const CREATOR_UID = "creator-uid-results";
@@ -71,8 +71,8 @@ function seedChallenge() {
   ctx.redis!.hashes.set(`chal:${VALID_ID}:meta`, metaHash);
 }
 
-const get = (id: string, qs = "", ip = "9.9.9.9") =>
-  GET(req(`/api/challenge/${id}/results${qs ? `?${qs}` : ""}`, { ip }), {
+const post = (id: string, uid?: string, ip = "9.9.9.9") =>
+  POST(req(`/api/challenge/${id}/results`, { body: uid !== undefined ? { uid } : undefined, ip }), {
     params: Promise.resolve({ id }),
   });
 
@@ -80,72 +80,72 @@ beforeEach(() => {
   freshFake();
 });
 
-describe("GET /api/challenge/[id]/results — disabled", () => {
+describe("POST /api/challenge/[id]/results — disabled", () => {
   it.todo(
     "503 when Redis is unavailable — cannot test: isChallengeEnabled() reads the module-level redis " +
     "const fixed at import time; requires a separate worker with env stripped before import",
   );
 });
 
-describe("GET /api/challenge/[id]/results — id validation", () => {
+describe("POST /api/challenge/[id]/results — id validation", () => {
   it("400 on too-short id", async () => {
-    const { status, body } = await readJson(await get("ab", `uid=${CREATOR_UID}`));
+    const { status, body } = await readJson(await post("ab", CREATOR_UID));
     expect(status).toBe(400);
     expect(body.error).toMatch(/bad id/i);
   });
 
   it("400 on id with illegal chars", async () => {
-    const { status, body } = await readJson(await get("BADID!", `uid=${CREATOR_UID}`));
+    const { status, body } = await readJson(await post("BADID!", CREATOR_UID));
     expect(status).toBe(400);
     expect(body.error).toMatch(/bad id/i);
   });
 });
 
-describe("GET /api/challenge/[id]/results — uid validation (anon path)", () => {
-  it("400 when no uid query param and no session", async () => {
-    const { status, body } = await readJson(await get(VALID_ID));
+describe("POST /api/challenge/[id]/results — uid validation (anon path)", () => {
+  it("400 when no uid in body and no session", async () => {
+    const { status, body } = await readJson(await post(VALID_ID));
     expect(status).toBe(400);
     expect(body.error).toMatch(/bad uid/i);
   });
 
   it("400 when uid fails the pattern (too short)", async () => {
-    const { status, body } = await readJson(await get(VALID_ID, "uid=short"));
+    const { status, body } = await readJson(await post(VALID_ID, "short"));
     expect(status).toBe(400);
     expect(body.error).toMatch(/bad uid/i);
   });
 
   it("400 when uid has illegal chars", async () => {
-    const { status } = await readJson(await get(VALID_ID, "uid=uid!invalid@here"));
+    const { status } = await readJson(await post(VALID_ID, "uid!invalid@here"));
     expect(status).toBe(400);
   });
 });
 
-describe("GET /api/challenge/[id]/results — not found / forbidden", () => {
+describe("POST /api/challenge/[id]/results — not found / forbidden", () => {
   it("404 when challenge does not exist", async () => {
-    const { status, body } = await readJson(await get(VALID_ID, `uid=${CREATOR_UID}`));
+    const { status, body } = await readJson(await post(VALID_ID, CREATOR_UID));
     expect(status).toBe(404);
     expect(body.error).toMatch(/not found/i);
   });
 
   it("403 when uid does not match the creator", async () => {
     seedChallenge();
-    const { status, body } = await readJson(await get(VALID_ID, `uid=${ANON_UID}`));
+    const { status, body } = await readJson(await post(VALID_ID, ANON_UID));
     expect(status).toBe(403);
     expect(body.error).toMatch(/not your challenge/i);
   });
 
   it("403 when responder uid is supplied (only creator gets the dashboard)", async () => {
     seedChallenge();
-    const { status, body } = await readJson(await get(VALID_ID, `uid=${RESPONDER_UID}`));
+    const { status, body } = await readJson(await post(VALID_ID, RESPONDER_UID));
     expect(status).toBe(403);
     expect(body.error).toMatch(/not your challenge/i);
   });
 });
 
-describe("GET /api/challenge/[id]/results — creator dashboard (anon uid path)", () => {
+describe("POST /api/challenge/[id]/results — creator dashboard (anon uid path)", () => {
   it("200 with creator view for the matching uid", async () => {
     seedChallenge();
-    const { status, body } = await readJson(await get(VALID_ID, `uid=${CREATOR_UID}`));
+    const { status, body } = await readJson(await post(VALID_ID, CREATOR_UID));
     expect(status).toBe(200);
     expect(body.id).toBe(VALID_ID);
     const b = body as Record<string, unknown>;
@@ -156,7 +156,7 @@ describe("GET /api/challenge/[id]/results — creator dashboard (anon uid path)"
 
   it("view includes total and responders array", async () => {
     seedChallenge();
-    const { body } = await readJson(await get(VALID_ID, `uid=${CREATOR_UID}`));
+    const { body } = await readJson(await post(VALID_ID, CREATOR_UID));
     const b = body as Record<string, unknown>;
     expect(b.total).toBe(2);
     expect(Array.isArray(b.responders)).toBe(true);
@@ -165,7 +165,7 @@ describe("GET /api/challenge/[id]/results — creator dashboard (anon uid path)"
 
   it("responder entry has outcome, winsMargin, and netMargin", async () => {
     seedChallenge();
-    const { body } = await readJson(await get(VALID_ID, `uid=${CREATOR_UID}`));
+    const { body } = await readJson(await post(VALID_ID, CREATOR_UID));
     const responders = (body as Record<string, unknown>).responders as Record<string, unknown>[];
     const first = responders[0];
     expect(first.outcome).toBeDefined();
@@ -175,49 +175,49 @@ describe("GET /api/challenge/[id]/results — creator dashboard (anon uid path)"
 
   it("creator row does NOT appear in the responders array", async () => {
     seedChallenge();
-    const { body } = await readJson(await get(VALID_ID, `uid=${CREATOR_UID}`));
+    const { body } = await readJson(await post(VALID_ID, CREATOR_UID));
     const responders = (body as Record<string, unknown>).responders as Record<string, unknown>[];
     const names = responders.map((r) => r.name);
     expect(names).not.toContain("Alice");
   });
 });
 
-describe("GET /api/challenge/[id]/results — authed session identity", () => {
-  it("session uid takes precedence over the uid query param", async () => {
+describe("POST /api/challenge/[id]/results — authed session identity", () => {
+  it("session uid takes precedence over the uid in the body", async () => {
     seedChallenge();
     await signIn({ uid: CREATOR_UID, name: "Alice" });
-    // Supplying a bad uid in query should be irrelevant — session wins
-    const { status, body } = await readJson(await get(VALID_ID, `uid=${ANON_UID}`));
+    // Supplying a bad uid in body should be irrelevant — session wins
+    const { status, body } = await readJson(await post(VALID_ID, ANON_UID));
     expect(status).toBe(200);
     expect((body as Record<string, unknown>).id).toBe(VALID_ID);
   });
 
-  it("signed-in non-creator gets 403 even with a valid uid in query", async () => {
+  it("signed-in non-creator gets 403 even with a valid uid in body", async () => {
     seedChallenge();
     await signIn({ uid: "some-other-user-xyz", name: "Nobody" });
-    const { status } = await readJson(await get(VALID_ID, `uid=${CREATOR_UID}`));
+    const { status } = await readJson(await post(VALID_ID, CREATOR_UID));
     // Session uid = some-other-user-xyz !== CREATOR_UID => 403
     expect(status).toBe(403);
   });
 });
 
-describe("GET /api/challenge/[id]/results — rate limit", () => {
+describe("POST /api/challenge/[id]/results — rate limit", () => {
   it("429 when bucket is exhausted", async () => {
     exhaustRateLimit(`rl:chalown:9.9.9.9`, 120);
     seedChallenge();
-    const { status } = await readJson(await get(VALID_ID, `uid=${CREATOR_UID}`, "9.9.9.9"));
+    const { status } = await readJson(await post(VALID_ID, CREATOR_UID, "9.9.9.9"));
     expect(status).toBe(429);
   });
 
   it("different IPs are bucketed independently", async () => {
     exhaustRateLimit(`rl:chalown:1.2.3.4`, 120);
     seedChallenge();
-    const { status } = await readJson(await get(VALID_ID, `uid=${CREATOR_UID}`, "5.6.7.8"));
+    const { status } = await readJson(await post(VALID_ID, CREATOR_UID, "5.6.7.8"));
     expect(status).toBe(200);
   });
 });
 
-describe("GET /api/challenge/[id]/results — board with zero responders", () => {
+describe("POST /api/challenge/[id]/results — board with zero responders", () => {
   it("responders array is empty when only the creator submitted", async () => {
     const info = {
       uid: CREATOR_UID,
@@ -235,7 +235,7 @@ describe("GET /api/challenge/[id]/results — board with zero responders", () =>
     ctx.redis!.zsets.set(`chal:${VALID_ID}`, new Map([[CREATOR_UID, 55000 + 175]]));
     ctx.redis!.hashes.set(`chal:${VALID_ID}:meta`, new Map([[CREATOR_UID, JSON.stringify(creatorRow)]]));
 
-    const { body } = await readJson(await get(VALID_ID, `uid=${CREATOR_UID}`));
+    const { body } = await readJson(await post(VALID_ID, CREATOR_UID));
     const b = body as Record<string, unknown>;
     expect(b.total).toBe(1);
     expect((b.responders as unknown[]).length).toBe(0);

@@ -50,8 +50,7 @@ export async function saveSubscription(uid: string, sub: PushSub): Promise<boole
     const f = field(sub.endpoint);
     const already = await redis.hexists(keyPush(uid), f);
     if (!already && (await redis.hlen(keyPush(uid))) >= PUSH_SUB_CAP) return false;
-    await redis.hset(keyPush(uid), { [f]: sub });
-    await redis.expire(keyPush(uid), TTL);
+    await redis.pipeline().hset(keyPush(uid), { [f]: sub }).expire(keyPush(uid), TTL).exec();
     return true;
   } catch { return false; }
 }

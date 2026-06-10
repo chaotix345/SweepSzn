@@ -61,3 +61,19 @@ redis.call('EXPIRE', KEYS[1], ARGV[4])
 redis.call('EXPIRE', KEYS[2], ARGV[4])
 return 1
 `;
+
+// Cap a (zset, meta hash) board pair to the top ARGV[1] members, atomically removing the lowest
+// scorers from BOTH structures (a zset-only trim would strand meta rows forever — the all-time
+// board has no TTL, so orphans would accumulate unboundedly). O(1) ZCARD early-out makes calling
+// this on every submit free until the cap is actually reached. Returns how many were evicted.
+export const TRIM_BOARD_LUA = `
+local n = redis.call('ZCARD', KEYS[1])
+local cap = tonumber(ARGV[1])
+if n <= cap then return 0 end
+local doomed = redis.call('ZRANGE', KEYS[1], 0, n - cap - 1)
+for i = 1, #doomed do
+  redis.call('ZREM', KEYS[1], doomed[i])
+  redis.call('HDEL', KEYS[2], doomed[i])
+end
+return #doomed
+`;

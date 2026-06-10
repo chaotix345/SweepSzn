@@ -5,12 +5,13 @@ import { track } from "@vercel/analytics";
 import type { DraftStep } from "@/lib/types";
 import type { FhBoardView, FhBoardRow } from "@/lib/factorHunt";
 import { getUid, getName, setName as persistName } from "@/lib/streak";
+import { dayUTC } from "@/lib/day";
 
 // Factor Hunt daily board — deliberately slimmer than the Daily Leaderboard: no streak, no
 // weekly/all-time tabs, no sign-in claim (FH scores carry a cosmetic ×1.05 and stay out of the
 // aggregate boards). Rank = wins × bonus; a 🔮 marks a correct prediction.
 
-const serverDate = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
+const serverDate = dayUTC;
 
 export default function FhLeaderboard({ date, trace, prediction, readOnly = false }: {
   date: string; trace: DraftStep[]; prediction: string | null; readOnly?: boolean;

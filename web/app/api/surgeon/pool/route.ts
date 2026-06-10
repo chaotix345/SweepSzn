@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { spinPool, getPlayersByIds, getCoefficients } from "@/lib/data";
-import { evaluateLineup } from "@/lib/engine";
-import { verifyTrace, type VerifyDeps } from "@/lib/dailyVerify";
+import { getPlayersByIds } from "@/lib/data";
+import { verifyTrace } from "@/lib/dailyVerify";
 import { surgeonSeedOk, surgeonDiagnosis, needOf, buildSurgeonPool } from "@/lib/surgeon";
 import { rateLimit, ipOf } from "@/lib/redis";
+import { dayUTC } from "@/lib/day";
+import { engineDeps } from "@/lib/verifyDeps";
 
 export const runtime = "nodejs";
 
@@ -29,23 +30,14 @@ export async function POST(req: Request) {
   // today only: the deal (diagnosis + targeted pool) is the day's puzzle — no pre-fetching
   // tomorrow's case; a midnight-straddling game fails here with the same error the submit
   // would have given it anyway
-  const d = new Date();
-  if (body.seed !== `surgeon-${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`) {
+  if (body.seed !== `surgeon-${dayUTC()}`) {
     return NextResponse.json({ error: "stale date" }, { status: 400 });
   }
 
   // collect each round's FINAL pool (post-respins) through the injected deps — the exact
   // rosters the player drafted from, reproduced identically at submit time
   const pools: string[][] = [];
-  const deps: VerifyDeps = {
-    spinPool: (seed, round, opts) => {
-      const r = spinPool(seed, round, opts);
-      pools[round] = r.ids;
-      return r;
-    },
-    getPlayer: (id) => getPlayersByIds([id])[0],
-    evaluate: (players) => evaluateLineup(players, getCoefficients()),
-  };
+  const deps = engineDeps((round, ids) => { pools[round] = ids; });
   const v = verifyTrace(body.seed, body.trace, deps);
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
 

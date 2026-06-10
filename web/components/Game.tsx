@@ -21,7 +21,8 @@ import BpLeaderboard from "@/components/BpLeaderboard";
 import type { SurgeonCandidate, SurgeonDiagnosis, SurgeonBoardView } from "@/lib/surgeon";
 import SurgeonResult from "@/components/SurgeonResult";
 import SgLeaderboard from "@/components/SgLeaderboard";
-import { applySwapToTrace } from "@/lib/dailyVerify";
+import { applySwapToTrace } from "@/lib/trace";
+import { dayUTC } from "@/lib/day";
 
 type Mode = "daily" | "classic" | "hoopiq" | "challenge" | "factorhunt" | "prime" | "blueprint" | "surgeon";
 const MODE_LABEL: Record<Mode, string> = { daily: "daily", classic: "classic", hoopiq: "hoopiq", challenge: "challenge", factorhunt: "Factor Hunt", prime: "Prime Draft", blueprint: "Blueprint", surgeon: "Surgeon" };
@@ -50,8 +51,7 @@ const COURT: Record<Slot, { left: number; top: number }> = {
 };
 
 function todaySeed() {
-  const d = new Date();
-  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+  return dayUTC();
 }
 const rand = () => Math.floor(Math.random() * 1e9);
 

@@ -1,8 +1,8 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { redis, isRedisEnabled, TTL, readSortedRows } from "./redis";
+import { redis, isRedisEnabled, TTL, readBoardView } from "./redis";
 import { KEEP_BEST_ROW_LUA } from "./score";
-import type { SurgeonRow, SurgeonBoardRow, SurgeonBoardView } from "./surgeon";
+import type { SurgeonRow, SurgeonBoardView } from "./surgeon";
 
 // Surgeon daily board (Upstash sorted set + meta hash, lb:surgeon:* — new keys only).
 // Daily-only: the delta score is a different unit from wins and must never bleed into the
@@ -16,21 +16,7 @@ export function isSurgeonBoardEnabled(): boolean { return isRedisEnabled(); }
 
 export async function getSurgeonLeaderboard(date: string, uid?: string): Promise<SurgeonBoardView | null> {
   if (!redis) return null;
-  const total = await redis.zcard(keyZ(date));
-  const top = await readSortedRows<SurgeonRow>(keyZ(date), keyH(date), 0, 99);
-  let you: SurgeonBoardRow | undefined;
-  if (uid) {
-    const rank = await redis.zrevrank(keyZ(date), uid);
-    if (rank != null) {
-      const inTop = top.find((r) => r.uid === uid);
-      if (inTop) you = inTop;
-      else {
-        const meta = (await redis.hmget<Record<string, SurgeonRow>>(keyH(date), uid)) ?? {};
-        const m = meta[uid];
-        if (m) you = { ...m, rank: rank + 1 };
-      }
-    }
-  }
+  const { total, top, you } = await readBoardView<SurgeonRow>(keyZ(date), keyH(date), uid);
   return { date, total, top, you };
 }
 

@@ -1,5 +1,5 @@
 import "server-only";
-import { redis, isRedisEnabled, TTL, encScore, readSortedRows, type StoredRow } from "./redis";
+import { redis, isRedisEnabled, TTL, encScore, readBoardView, readSortedRows, type StoredRow } from "./redis";
 import { KEEP_BEST_ROW_LUA } from "./score";
 import { challengeSeed, buildOwnerView } from "./challenge";
 import { getPlayersByIds } from "./data";
@@ -32,22 +32,10 @@ const strip = (r: LeaderboardRow): ChallengeBoardRow => ({ rank: r.rank, name: r
 
 async function board(id: string, uid?: string): Promise<ChallengeBoard> {
   if (!redis) return { total: 0, top: [] };
-  const total = await redis.zcard(keyZ(id));
-  const raw = await readSortedRows(keyZ(id), keyH(id), 0, 99); // includes uid (server-side only)
+  // raw rows still carry uid (server-side only); "you" is resolved before stripping
+  const { total, top: raw, you: rawYou } = await readBoardView<StoredRow>(keyZ(id), keyH(id), uid);
   const top = raw.map(strip);
-  // identify "you" from the raw rows (which still carry uid) BEFORE stripping
-  let you: ChallengeBoardRow | undefined;
-  const meIdx = uid ? raw.findIndex((r) => r.uid === uid) : -1;
-  if (meIdx >= 0) {
-    you = top[meIdx];
-  } else if (uid) {
-    const rank = await redis.zrevrank(keyZ(id), uid);
-    if (rank != null) {
-      const meta = (await redis.hmget<Record<string, StoredRow>>(keyH(id), uid)) ?? {};
-      const m = meta[uid];
-      if (m) you = { rank: rank + 1, name: m.name, wins: m.wins, losses: m.losses, net: m.net };
-    }
-  }
+  const you: ChallengeBoardRow | undefined = rawYou ? strip(rawYou) : undefined;
   return { total, top, you };
 }
 

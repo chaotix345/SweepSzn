@@ -1,7 +1,5 @@
 import { NextResponse, after } from "next/server";
-import { spinPool, getPlayersByIds, getCoefficients } from "@/lib/data";
-import { evaluateLineup } from "@/lib/engine";
-import { verifyTrace, type VerifyDeps } from "@/lib/dailyVerify";
+import { verifyTrace } from "@/lib/dailyVerify";
 import { bpKeyOk, bpCode, gradeBlueprint, encBpScore, type BpRow } from "@/lib/blueprint";
 import { isBpBoardEnabled, submitBpScore, removeBpEntry } from "@/lib/blueprintBoard";
 import { getSession } from "@/lib/authServer";
@@ -9,6 +7,8 @@ import { cleanName } from "@/lib/clean";
 import { encodeLineup } from "@/lib/share";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
+import { dayUTC } from "@/lib/day";
+import { engineDeps } from "@/lib/verifyDeps";
 
 export const runtime = "nodejs";
 
@@ -19,14 +19,9 @@ export const runtime = "nodejs";
 // replay all five blueprints on one seed" — the modal commitment is gameplay psychology, not a
 // server invariant. The engine result is never modified; the multiplier lives in the board score.
 
-const todayUTC = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
 
-const deps: VerifyDeps = {
-  spinPool,
-  getPlayer: (id) => getPlayersByIds([id])[0],
-  evaluate: (players) => evaluateLineup(players, getCoefficients()),
-};
+const deps = engineDeps();
 
 export async function POST(req: Request) {
   if (!isBpBoardEnabled()) return NextResponse.json({ error: "leaderboard not configured" }, { status: 503 });
@@ -35,7 +30,7 @@ export async function POST(req: Request) {
   }
   const body = (await req.json().catch(() => ({}))) ?? {};
   const { date, trace, blueprint } = body;
-  if (date !== todayUTC()) return NextResponse.json({ error: "stale date" }, { status: 400 });
+  if (date !== dayUTC()) return NextResponse.json({ error: "stale date" }, { status: 400 });
   if (!bpKeyOk(blueprint)) return NextResponse.json({ error: "bad blueprint" }, { status: 400 });
 
   const session = await getSession();
