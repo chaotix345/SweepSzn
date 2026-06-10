@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Player, Coefficients, DraftCandidate, CandidateFit, Slot } from "./types";
 import { DEFAULT_COEFFICIENTS, quickScore, playerFeatures } from "./engine";
+import { buildPrimePools, type PrimePools } from "./prime";
 
 const DATA_DIR = path.join(process.cwd(), "public", "data");
 
@@ -227,6 +228,55 @@ export function spin(seed: string, round: number, opts: SpinOptions = {}, wantFi
 export function spinPool(seed: string, round: number, opts: SpinOptions = {}): { team: string; decade: string; ids: string[] } {
   const { team, decade, pool } = selectSpin(seed, round, opts);
   return { team, decade, ids: pool.map((p) => p.id) };
+}
+
+// --- Prime Draft: team-only spins over all-time peak-variant pools ---
+// The per-person_id rule inverts here: instead of EXCLUDING a drafted player's other era
+// variants, the pool is pre-collapsed to each person's single best variant (lib/prime.ts).
+
+let _prime: PrimePools | null = null;
+function loadPrime(): PrimePools {
+  if (_prime) return _prime;
+  const { players } = load();
+  // mirror the draft-index filter: current franchises, canonical decades only
+  _prime = buildPrimePools(players.filter((p) => CURRENT.has(p.team) && DECADES.has(p.decade)));
+  return _prime;
+}
+
+function selectPrimeSpin(seed: string, round: number, opts: SpinOptions): { team: string; pool: Player[] } {
+  const { byId } = load();
+  const { teams, byTeam } = loadPrime();
+  const excludeIds = new Set(opts.exclude ?? []);
+  const excludePeople = new Set([...excludeIds].map((id) => byId.get(id)?.person_id ?? id));
+  const rng = mulberry32(strSeed(seed) ^ (round * 2654435761) ^ ((opts.salt ?? 0) * 40503));
+  const available = (p: Player) => !excludeIds.has(p.id) && !excludePeople.has(p.person_id ?? p.id);
+  const undrafted = (t: string) => (byTeam.get(t) ?? []).some(available);
+  const pick = <T,>(arr: T[]) => arr[Math.floor(rng() * arr.length)];
+
+  // one-time team re-spin: excludeTeam mirrors selectSpin's fallback ladder
+  let usable = teams.filter((t) => t !== opts.excludeTeam && undrafted(t));
+  if (!usable.length) usable = teams.filter((t) => t !== opts.excludeTeam);
+  if (!usable.length) usable = teams;
+  const team = pick(usable);
+  return { team, pool: (byTeam.get(team) ?? []).filter(available) }; // pool pre-sorted by peak_score
+}
+
+// Prime spin: ERA is locked to "PRIME"; candidates carry their own peak decade for display.
+// Fit grades are the same Classic-only assist — granted for free-play prime-* seeds, but never
+// for a future shared-seed prime-daily-* competition (mirrors the daily-fairness rule).
+export function primeSpin(seed: string, round: number, opts: SpinOptions = {}, wantFit = false): SpinResult {
+  const { byId, coeff } = load();
+  const { team, pool } = selectPrimeSpin(seed, round, opts);
+  const showFit = wantFit && seed.startsWith("prime-") && !seed.startsWith("prime-daily-");
+  const excludeIds = new Set(opts.exclude ?? []);
+  const drafted = showFit && excludeIds.size ? [...excludeIds].map((id) => byId.get(id)).filter((p): p is Player => !!p) : [];
+  const fits = showFit ? computeFits(drafted, pool, coeff) : null;
+  return { team, decade: "PRIME", candidates: pool.map((p) => toCandidate(p, fits?.get(p.id))) };
+}
+
+export function primeStats() {
+  const { teams, byTeam } = loadPrime();
+  return { teams: teams.length, pools: teams.map((t) => ({ team: t, people: byTeam.get(t)!.length })) };
 }
 
 export function poolStats() {

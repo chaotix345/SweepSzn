@@ -9,7 +9,7 @@ export const EV_TTL = 60 * 60 * 24 * 45; // ~45 days, enough for a 14-day window
 export const EV_ACTIVE_CAP = 50_000;     // max distinct uids tracked per day (far above realistic DAU)
 
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
-const MODES = new Set(["daily", "classic", "hoopiq", "challenge", "factorhunt"]);
+const MODES = new Set(["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime"]);
 
 export interface BeaconBody { ev: "play" | "share"; uid?: string; mode?: string }
 

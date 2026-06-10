@@ -11,11 +11,11 @@ export const contentType = "image/png";
 
 export default async function Image({ params }: { params: Promise<{ lineup: string }> }) {
   const { lineup } = await params;
-  const { ids, hinted } = decodeShare(lineup);
+  const { ids, hinted, prime } = decodeShare(lineup);
   const players = getPlayersByIds(ids);
   if (ids.length !== 5 || new Set(ids).size !== 5 || players.length !== 5) {
     return new ImageResponse(brandOgElement("Build an all-time NBA starting five."), { ...OG_SIZE });
   }
   const result = evaluateLineup(players, getCoefficients());
-  return new ImageResponse(resultOgElement(result, players, hinted), { ...OG_SIZE });
+  return new ImageResponse(resultOgElement(result, players, hinted, undefined, prime), { ...OG_SIZE });
 }
