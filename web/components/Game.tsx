@@ -83,6 +83,7 @@ export default function Game() {
   const [fhPick, setFhPick] = useState<string | null>(null);            // highlighted choice (not yet locked)
   const [fhPrediction, setFhPrediction] = useState<string | null>(null); // locked choice (null = skipped)
   const fhFetchingRef = useRef(false);                                  // de-dupes the choices fetch
+  const fhAbortRef = useRef<AbortController | null>(null);              // cancels an in-flight choices fetch on restart
   const fhRef = useRef<HTMLDivElement>(null);                           // prediction dialog
 
   // Spend a hint to reveal fit grades for the current pick. Charges on reveal (not on placement), so
@@ -102,6 +103,7 @@ export default function Game() {
     track("mode_start", { mode: m });
     ev("play", { uid: getUid(), mode: m });
     abortSimRef.current?.abort(); abortSimRef.current = null; // cancel any in-flight simulate
+    fhAbortRef.current?.abort(); fhAbortRef.current = null;   // and any in-flight FH choices fetch
     setMode(m);
     let cid: string | null = null;
     let crole: "create" | "respond" | null = null;
@@ -325,20 +327,28 @@ export default function Game() {
   const beginFhPrediction = useCallback(async (r: Roster) => {
     if (fhFetchingRef.current) return;
     fhFetchingRef.current = true; setError(null);
+    // abortable: a Restart mid-fetch must not resurrect the old game's prediction dialog (success
+    // path) or fall through to a stale simulate() carrying the old mode/seed (failure path)
+    fhAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    fhAbortRef.current = ctrl;
     try {
       const ids = SLOTS.map((s) => r[s]?.id);
       const res = await fetch("/api/factorhunt/choices", {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids, seed }),
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids, seed }), signal: ctrl.signal,
       });
       if (!res.ok) throw new Error("choices failed");
       const d = await res.json();
+      if (ctrl.signal.aborted) return; // restarted while the body was parsing — drop everything
       if ((d?.ask === "worst" || d?.ask === "best") && Array.isArray(d?.choices)
         && d.choices.length >= 2 && d.choices.every((x: unknown) => typeof x === "string")) {
         setFhPick(null); setFhStep({ roster: r, ask: d.ask, choices: d.choices });
         return;
       }
       throw new Error("bad choices");
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return; // restarted — not a failure
+      if (ctrl.signal.aborted) return;
       simulate(r, null); // graceful: reveal without a prediction, no bonus
     } finally { fhFetchingRef.current = false; }
   }, [seed, simulate]);
@@ -614,7 +624,8 @@ export default function Game() {
               const f = fhRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
               if (!f || f.length === 0) return;
               const first = f[0], last = f[f.length - 1];
-              if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+              // the container holds initial focus — treat it as "first" so Shift+Tab can't escape
+              if (e.shiftKey && (document.activeElement === first || document.activeElement === fhRef.current)) { e.preventDefault(); last.focus(); }
               else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
             }
           }}
