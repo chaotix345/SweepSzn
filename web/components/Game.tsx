@@ -4,7 +4,7 @@ import type { CandidateFit, DraftCandidate, DraftStep, LineupResult, Player, Slo
 import { SLOTS, FRANCHISES, DECADES, teamColors, teamName, initials, displayName, eraLabel } from "@/lib/teams";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
-import { getUid } from "@/lib/streak";
+import { getUid, getName, setName as persistName } from "@/lib/streak";
 import ResultCard from "@/components/ResultCard";
 import Leaderboard from "@/components/Leaderboard";
 import ChallengeResult from "@/components/ChallengeResult";
@@ -18,10 +18,22 @@ import { buildFhChoices } from "@/lib/factorHunt";
 import FhLeaderboard from "@/components/FhLeaderboard";
 import { BLUEPRINTS, bpCode, bpFromCode, gradeBlueprint, type BlueprintKey } from "@/lib/blueprint";
 import BpLeaderboard from "@/components/BpLeaderboard";
+import type { SurgeonCandidate, SurgeonDiagnosis, SurgeonBoardView } from "@/lib/surgeon";
+import SurgeonResult from "@/components/SurgeonResult";
+import SgLeaderboard from "@/components/SgLeaderboard";
 import { applySwapToTrace } from "@/lib/dailyVerify";
 
-type Mode = "daily" | "classic" | "hoopiq" | "challenge" | "factorhunt" | "prime" | "blueprint";
-const MODE_LABEL: Record<Mode, string> = { daily: "daily", classic: "classic", hoopiq: "hoopiq", challenge: "challenge", factorhunt: "Factor Hunt", prime: "Prime Draft", blueprint: "Blueprint" };
+type Mode = "daily" | "classic" | "hoopiq" | "challenge" | "factorhunt" | "prime" | "blueprint" | "surgeon";
+const MODE_LABEL: Record<Mode, string> = { daily: "daily", classic: "classic", hoopiq: "hoopiq", challenge: "challenge", factorhunt: "Factor Hunt", prime: "Prime Draft", blueprint: "Blueprint", surgeon: "Surgeon" };
+// Surgeon phase-2 state: the dealt pool + diagnosis (after the five lock), and the final
+// before/after the submit returns (the reveal IS the submit — see /api/surgeon/submit).
+// roster carries each drafted player's ASSIGNED slot — a candidate may only replace a player whose
+// slot the candidate is eligible for (the server checks the exact slot, not shared eligibility).
+type SgPool = { diagnosis: SurgeonDiagnosis; before: { wins: number; losses: number; net: number; grade: string }; candidates: SurgeonCandidate[]; roster: { slot: Slot; player: DraftCandidate }[] };
+type SgResult = {
+  view: SurgeonBoardView | null; delta: number; card: string; diagnosis: SurgeonDiagnosis;
+  before: LineupResult; beforePlayers: Player[]; after: LineupResult; afterPlayers: Player[]; outIdx: number;
+};
 type Roster = Record<Slot, DraftCandidate | null>;
 const EMPTY: Roster = { PG: null, SG: null, SF: null, PF: null, C: null };
 interface Spin { team: string; decade: string; candidates: DraftCandidate[] }
@@ -29,7 +41,7 @@ type SpinOpts = { lockedTeam?: string; lockedDecade?: string; excludeTeam?: stri
 // The full current result kept in localStorage for a same-session refresh (carries the draft trace
 // plus, for Factor Hunt, the locked prediction so the verdict chip survives a refresh — and, for
 // Blueprint, the committed objective so the execution strip and board submit survive one too).
-type LastResult = { mode: Mode; seed: string; result: { result: LineupResult; players: Player[]; trace: DraftStep[]; usedHints: boolean }; fh?: string | null; bp?: BlueprintKey | null };
+type LastResult = { mode: Mode; seed: string; result?: { result: LineupResult; players: Player[]; trace: DraftStep[]; usedHints: boolean }; fh?: string | null; bp?: BlueprintKey | null; sg?: SgResult };
 
 // court slot positions (% of the half-court panel; basket at top)
 const COURT: Record<Slot, { left: number; top: number }> = {
@@ -95,6 +107,15 @@ export default function Game() {
   const [blueprint, setBlueprint] = useState<BlueprintKey | null>(null);
   const [bpPick, setBpPick] = useState<BlueprintKey | null>(null);      // highlighted option (not yet committed)
   const bpRef = useRef<HTMLDivElement>(null);                           // commit dialog
+  // Surgeon: phase-2 replacement-pool step between "five locked" and the delta reveal.
+  const [sgPool, setSgPool] = useState<SgPool | null>(null);            // dealt pool + diagnosis (dialog open)
+  const [sgInId, setSgInId] = useState<string | null>(null);            // chosen replacement candidate
+  const [sgOutId, setSgOutId] = useState<string | null>(null);          // chosen drafted player to drop
+  const [sgResult, setSgResult] = useState<SgResult | null>(null);      // submit response (the reveal)
+  const [sgName, setSgName] = useState("");                             // board name, captured at swap-confirm
+  const sgFetchingRef = useRef(false);                                  // de-dupes the pool fetch
+  const sgAbortRef = useRef<AbortController | null>(null);              // cancels in-flight pool/submit on restart
+  const sgRef = useRef<HTMLDivElement>(null);                           // swap dialog
 
   // Spend a hint to reveal fit grades for the current pick. Charges on reveal (not on placement), so
   // there is no way to peek and then dodge the cost. No-op once the per-game budget is spent.
@@ -125,8 +146,8 @@ export default function Game() {
       crole = challenge?.role ?? "create";
       s = challenge?.seed ?? challengeSeed(cid); // a converted/legacy challenge replays its own carried seed
     } else {
-      // daily + factorhunt + blueprint share one deterministic seed per UTC day; free-play modes roll fresh
-      s = m === "daily" ? `daily-${todaySeed()}` : m === "factorhunt" ? `fh-${todaySeed()}` : m === "blueprint" ? `bp-${todaySeed()}` : `${m}-${rand()}`;
+      // daily/factorhunt/blueprint/surgeon share one deterministic seed per UTC day; free-play modes roll fresh
+      s = m === "daily" ? `daily-${todaySeed()}` : m === "factorhunt" ? `fh-${todaySeed()}` : m === "blueprint" ? `bp-${todaySeed()}` : m === "surgeon" ? `surgeon-${todaySeed()}` : `${m}-${rand()}`;
     }
     setChallengeId(cid); setChallengeRole(crole); setSeed(s);
     setRoster(EMPTY); setCurrent(null); setResult(null); setError(null); setLoading(false);
@@ -137,6 +158,8 @@ export default function Game() {
     setPickemVote(null); setPickemDismissed(false); setPickemCrowd(null); setPickemSubject(null);
     setFhStep(null); setFhPick(null); setFhPrediction(null); fhFetchingRef.current = false;
     setBlueprint(null); setBpPick(null); // blueprint re-commits every game (the modal gates the first spin)
+    setSgPool(null); setSgInId(null); setSgOutId(null); setSgResult(null); sgFetchingRef.current = false;
+    sgAbortRef.current?.abort(); sgAbortRef.current = null;
     setOwnerId(null);
     // a new game owns the URL — drop any restore params so a later refresh won't resurrect an old screen
     try {
@@ -189,6 +212,19 @@ export default function Game() {
         const own = params.get("own");
         if (own && idRe.test(own)) { if (!cancelled) setOwnerId(own); return; }
 
+        // Surgeon same-session restore: the full before/after lives in lastResult (the result is a
+        // two-lineup delta, not a single encoded five). Cold restore (other device) falls through
+        // to the picker — the /sg/<card> permalink is the shareable artifact and the board persists.
+        const sgCard = params.get("sg");
+        if (sgCard && params.get("m") === "surgeon") {
+          const last = readLastResult<LastResult>();
+          if (last?.mode === "surgeon" && last.sg && last.sg.card === sgCard) {
+            if (cancelled) return;
+            setMode("surgeon"); setSeed(last.seed); setSgResult(last.sg);
+          }
+          return;
+        }
+
         const enc = params.get("r");
         const m = params.get("m") as Mode | null;
         if (enc && (m === "daily" || m === "classic" || m === "hoopiq" || m === "factorhunt" || m === "prime" || m === "blueprint")) {
@@ -225,6 +261,17 @@ export default function Game() {
 
   // Hold-your-place: while a finished result is on screen, mirror it into the URL (?r=&m=) so a refresh
   // restores it. Challenge mode owns the URL via ?own=<id> (set by ChallengeOwner), so it's skipped here.
+  // Surgeon hold-your-place: mirror the /sg/ card so a same-session refresh restores the delta.
+  useEffect(() => {
+    if (mode !== "surgeon" || !sgResult) return;
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("sg", sgResult.card); u.searchParams.set("m", "surgeon");
+      u.searchParams.delete("r"); u.searchParams.delete("d"); u.searchParams.delete("c"); u.searchParams.delete("own");
+      window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+    } catch { /* no history API */ }
+  }, [mode, sgResult]);
+
   useEffect(() => {
     if (!result || !mode || mode === "challenge") return;
     try {
@@ -384,12 +431,72 @@ export default function Game() {
     simulate(r, choice);
   }, [fhStep, simulate]);
 
-  // Mode fork at "five locked": Factor Hunt detours through the prediction step; everyone else
-  // simulates immediately (the pre-FH behavior, byte-for-byte).
+  // Surgeon phase 2: post the trace to /api/surgeon/pool — the server replays it, diagnoses the
+  // worst factor, and deals 3 targeted candidates with WHY each (never an after-value). Any failure
+  // surfaces as an error with a retry; no offline fallback (the pool is a server computation).
+  const beginSurgeon = useCallback(async (r: Roster) => {
+    if (sgFetchingRef.current) return;
+    sgFetchingRef.current = true; setLoading(true); setError(null);
+    sgAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    sgAbortRef.current = ctrl;
+    try {
+      const res = await fetch("/api/surgeon/pool", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ seed, trace: traceRef.current }), signal: ctrl.signal,
+      });
+      if (!res.ok) throw new Error("pool failed");
+      const d = await res.json();
+      if (ctrl.signal.aborted) return;
+      if (!d?.diagnosis || !Array.isArray(d?.candidates) || d.candidates.length === 0) throw new Error("bad pool");
+      const drafted = SLOTS.map((s) => (r[s] ? { slot: s, player: r[s]! } : null)).filter(Boolean) as { slot: Slot; player: DraftCandidate }[];
+      setSgName(getName()); setSgInId(null); setSgOutId(null);
+      setSgPool({ diagnosis: d.diagnosis, before: d.before, candidates: d.candidates, roster: drafted });
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      if (ctrl.signal.aborted) return;
+      setError("Couldn't read the diagnosis — tap Diagnose to retry.");
+    } finally { sgFetchingRef.current = false; if (!ctrl.signal.aborted) setLoading(false); }
+  }, [seed]);
+
+  // Surgeon submit = the reveal. The server recomputes the pool, rejects an off-pool swap,
+  // write-once locks the swap, and recomputes the delta itself — client values are never trusted.
+  const confirmSurgeon = useCallback(async () => {
+    if (!sgPool || !sgInId || !sgOutId) return;
+    setLoading(true); setError(null);
+    sgAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    sgAbortRef.current = ctrl;
+    try {
+      const res = await fetch("/api/surgeon/submit", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ date: seed.replace("surgeon-", ""), trace: traceRef.current, uid: getUid(), name: sgName.trim(), outId: sgOutId, inId: sgInId }),
+        signal: ctrl.signal,
+      });
+      const d = await res.json();
+      if (ctrl.signal.aborted) return;
+      if (!res.ok) { setError(d?.error === "stale date" ? "Today's case just reset — start today's Surgeon to post." : d?.error ?? "submit failed"); return; }
+      if (sgName.trim()) persistName(sgName.trim());
+      const outIdx = (d.beforePlayers as Player[]).findIndex((p) => p.id === d.swap.outId);
+      const full: SgResult = { view: d.view, delta: d.delta, card: d.card, diagnosis: d.diagnosis, before: d.before, beforePlayers: d.beforePlayers, after: d.after, afterPlayers: d.afterPlayers, outIdx };
+      setSgResult(full); setSgPool(null);
+      writeLastResult({ mode, seed, sg: full });
+      saveResult({ encoded: d.card, mode: "surgeon", wins: d.after.wins, losses: d.after.losses, grade: d.after.grade });
+      track("surgeon_submit", { delta: d.delta, rank: d.view?.you?.rank ?? 0 });
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      if (ctrl.signal.aborted) return;
+      setError("Network error — tap Confirm swap to retry.");
+    } finally { if (!ctrl.signal.aborted) setLoading(false); }
+  }, [sgPool, sgInId, sgOutId, sgName, seed, mode]);
+
+  // Mode fork at "five locked": Factor Hunt detours through the prediction step; Surgeon detours
+  // through the diagnosis/swap step; everyone else simulates immediately (pre-FH behavior).
   const finishDraft = useCallback((r: Roster) => {
     if (mode === "factorhunt") beginFhPrediction(r);
+    else if (mode === "surgeon") beginSurgeon(r);
     else simulate(r);
-  }, [mode, beginFhPrediction, simulate]);
+  }, [mode, beginFhPrediction, beginSurgeon, simulate]);
 
   const place = useCallback((slot: Slot) => {
     if (!selPlayer || roster[slot] || !selPlayer.eligible.includes(slot)) return;
@@ -462,6 +569,14 @@ export default function Game() {
     return () => prev?.focus?.();
   }, [showBpModal]);
 
+  // Surgeon swap dialog focus management (same pattern).
+  useEffect(() => {
+    if (!sgPool) return;
+    const prev = document.activeElement as HTMLElement | null;
+    sgRef.current?.focus();
+    return () => prev?.focus?.();
+  }, [sgPool]);
+
   // Once the record is in, pull the crowd split (and your stored vote — e.g. a Daily replay
   // from another device) for the crowd-vs-you strip. Best-effort: a 503 (Redis absent) or a
   // network error just leaves the strip off / local-vote-only. Synthetic cold-restore seeds
@@ -512,6 +627,15 @@ export default function Game() {
   // Blueprint execution view: graded from the revealed result with the same pure helper the
   // submit route verifies with, so the card strip and the board grade can never disagree.
   const bpView = mode === "blueprint" && blueprint && result ? gradeBlueprint(blueprint, result.result) : undefined;
+  // Surgeon reveal: its own before/after layout + delta board, not the single-lineup ResultCard.
+  if (mode === "surgeon" && sgResult) return (
+    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} showRestart>
+      <SurgeonResult before={sgResult.before} after={sgResult.after} beforePlayers={sgResult.beforePlayers}
+        afterPlayers={sgResult.afterPlayers} outIdx={sgResult.outIdx} diagnosis={sgResult.diagnosis}
+        card={sgResult.card} onReset={() => start("surgeon")} />
+      <SgLeaderboard date={seed.replace("surgeon-", "")} preloaded={sgResult.view} />
+    </Shell>
+  );
   if (result) return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView} />
@@ -522,9 +646,9 @@ export default function Game() {
         <ChallengeResult id={challengeId} role={challengeRole} seed={seed} usedHints={false} result={result.result} players={result.players}
           trace={result.trace} onCreateOwn={() => start("challenge")} />
       )}
-      {/* FH/Prime/Blueprint seeds can't convert to H2H challenges (the challenge store only accepts
-          daily/classic/hoopiq game seeds), so the convert CTA is hidden there rather than 400ing on click. */}
-      {mode !== "challenge" && mode !== "factorhunt" && mode !== "prime" && mode !== "blueprint" && (convertedId ? (
+      {/* FH/Prime/Blueprint/Surgeon seeds can't convert to H2H challenges (the challenge store only
+          accepts daily/classic/hoopiq game seeds), so the convert CTA is hidden there. */}
+      {mode !== "challenge" && mode !== "factorhunt" && mode !== "prime" && mode !== "blueprint" && mode !== "surgeon" && (convertedId ? (
         // Convert THIS finished five into a real H2H challenge in place, carrying the original seed:
         // the friend drafts the same teams/eras and tries to beat this exact record — no re-draft.
         <ChallengeResult id={convertedId} role="create" seed={seed} usedHints={result.usedHints}
@@ -570,6 +694,9 @@ export default function Game() {
       {mode === "blueprint" && blueprint && (
         <p className="mt-2 text-center text-[11px] text-cyan-400/80">📐 Committed: {BLUEPRINTS.find((b) => b.key === blueprint)!.label} — the engine grades your execution.</p>
       )}
+      {mode === "surgeon" && (
+        <p className="mt-2 text-center text-[11px] text-rose-400/80">🩺 Draft five — then the engine diagnoses your worst factor and deals one fix.</p>
+      )}
       {/* USAGE DISCIPLINE drafts to a non-obvious budget — the live bar is the spec's fix */}
       {mode === "blueprint" && blueprint === "discipline" && <UsageBar total={drafted.reduce((a, c) => a + (c.usage ?? 0), 0)} />}
       {(current || spinning) && (
@@ -596,7 +723,7 @@ export default function Game() {
                   <p className="mb-3 text-sm text-zinc-400">Your starting five is set.</p>
                   <button onClick={() => finishDraft(roster)} disabled={loading}
                     className="rounded-xl bg-green-500 px-6 py-2.5 font-bold text-black hover:bg-green-400 disabled:opacity-50">
-                    {mode === "factorhunt" ? "Lock Five → Predict" : "Simulate Season"}
+                    {mode === "factorhunt" ? "Lock Five → Predict" : mode === "surgeon" ? "Lock Five → Diagnose" : "Simulate Season"}
                   </button>
                 </>
               ) : (
@@ -809,6 +936,85 @@ export default function Game() {
           </div>
         </div>
       )}
+
+      {/* Surgeon phase 2 — focus-trapped "Replacement Pool" dialog (spec's anti-"rigged" labelling:
+          each candidate shows WHY it was offered). Pick a candidate, then which of your five to drop
+          (only slot-eligible targets are offered); confirm submits the swap (the reveal IS the submit). */}
+      {sgPool && (
+        <div ref={sgRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Surgeon replacement pool"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { setSgPool(null); return; }
+            if (e.key === "Tab") {
+              const f = sgRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])");
+              if (!f || f.length === 0) return;
+              const first = f[0], last = f[f.length - 1];
+              if (e.shiftKey && (document.activeElement === first || document.activeElement === sgRef.current)) { e.preventDefault(); last.focus(); }
+              else if (!e.shiftKey && (document.activeElement === last || document.activeElement === sgRef.current)) { e.preventDefault(); first.focus(); }
+            }
+          }}
+          className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
+          <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
+            <div className="text-center text-xs font-black uppercase tracking-widest text-rose-400">🩺 Diagnosis</div>
+            <p className="mt-2 text-center text-base font-semibold text-zinc-100">
+              {sgPool.diagnosis.kind === "worst" ? "Your worst factor: " : "No real weaknesses — your weakest strength: "}
+              <span className="text-rose-300">{sgPool.diagnosis.label}</span>
+            </p>
+            <p className="mt-1 text-center text-[11px] text-zinc-500">
+              {sgPool.before.wins}-{sgPool.before.losses} before the fix · one swap, score = win delta
+            </p>
+
+            <div className="mt-4 text-[11px] font-bold uppercase tracking-wide text-zinc-500">Replacement pool — pick one</div>
+            <div className="mt-1.5 space-y-2" role="radiogroup" aria-label="Replacement candidates">
+              {sgPool.candidates.map((c) => (
+                <button key={c.id} role="radio" aria-checked={sgInId === c.id}
+                  onClick={() => { setSgInId(c.id); setSgOutId(null); }}
+                  className={`w-full rounded-xl border px-3 py-2 text-left transition ${
+                    sgInId === c.id ? "border-rose-400 bg-rose-500/15" : "border-zinc-700 bg-zinc-950/60 hover:border-zinc-500"}`}>
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className={`text-sm font-bold ${sgInId === c.id ? "text-rose-200" : "text-zinc-200"}`}>{displayName(c.name)}</span>
+                    <span className="shrink-0 text-[10px] text-zinc-500">{c.team} · {eraLabel(c.decade)}</span>
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-emerald-400/90">{c.why}</span>
+                </button>
+              ))}
+            </div>
+
+            {sgInId && (() => {
+              const cand = sgPool.candidates.find((c) => c.id === sgInId)!;
+              // a candidate may only take the EXACT slot the drafted player occupies (server rule)
+              return (
+                <>
+                  <div className="mt-4 text-[11px] font-bold uppercase tracking-wide text-zinc-500">Swap out — pick the player {displayName(cand.name)} replaces</div>
+                  <div className="mt-1.5 grid grid-cols-1 gap-1.5" role="radiogroup" aria-label="Player to swap out">
+                    {sgPool.roster.map(({ slot, player }) => {
+                      const eligible = cand.eligible.includes(slot);
+                      return (
+                        <button key={player.id} role="radio" aria-checked={sgOutId === player.id} disabled={!eligible}
+                          onClick={() => eligible && setSgOutId(player.id)}
+                          className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-1.5 text-left text-sm transition ${
+                            sgOutId === player.id ? "border-red-400 bg-red-500/15 text-red-200"
+                              : eligible ? "border-zinc-700 bg-zinc-950/60 text-zinc-300 hover:border-zinc-500" : "border-zinc-900 bg-zinc-950/40 text-zinc-600"}`}>
+                          <span className="truncate font-semibold">{displayName(player.name)} <span className="text-[10px] font-normal text-zinc-500">at {slot}</span></span>
+                          <span className="shrink-0 text-[10px] text-zinc-500">{eligible ? `${cand.pos} fits ${slot}` : `can't play ${slot}`}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
+
+            <input value={sgName} onChange={(e) => setSgName(e.target.value)} maxLength={24} placeholder="Your name (for the board)"
+              className="mt-4 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-rose-500" />
+            {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+            <button onClick={confirmSurgeon} disabled={!sgInId || !sgOutId || loading}
+              className="mt-3 w-full rounded-xl bg-rose-500 py-3 text-base font-black text-black hover:bg-rose-400 disabled:opacity-40">
+              {loading ? "Operating…" : "🔒 Confirm swap — reveal the delta"}
+            </button>
+            <p className="mt-2 text-center text-[10px] text-zinc-500">One swap, locked on submit — the result reveals the answer.</p>
+          </div>
+        </div>
+      )}
     </Shell>
   );
 }
@@ -842,6 +1048,7 @@ function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => void; on
     { id: "factorhunt", emoji: "🔮", title: "Factor Hunt", desc: "Daily shared spins — predict WHY before the reveal for a ×1.05 bonus." },
     { id: "prime", emoji: "⚡", title: "Prime Draft", desc: "No eras — every legend at his peak. Cross-era fives, fantasy simulation." },
     { id: "blueprint", emoji: "📐", title: "Blueprint", desc: "Commit to a tactical objective before the spin — the engine grades your execution." },
+    { id: "surgeon", emoji: "🩺", title: "Surgeon", desc: "The engine diagnoses your worst factor. One swap to fix it — score is the win delta." },
     { id: "challenge", emoji: "⚔️", title: "Challenge a Friend", desc: "Build a five, send a link. They draft the same teams — beat your record." },
   ];
   return (

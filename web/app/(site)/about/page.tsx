@@ -31,7 +31,11 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "What are the game modes?",
-    a: "Daily gives everyone the same spins each day and ranks results on a verified leaderboard. Classic shows full stats while you draft. HoopIQ hides them so you draft from memory. Challenge sends a friend the same spins to beat your record.",
+    a: "Eight ways to play. Daily gives everyone the same spins each day and ranks results on a verified leaderboard with streaks. Classic shows full stats while you draft; HoopIQ hides them so you draft from memory. Challenge sends a friend the same spins to beat your record. Then four modes that lean on the explainable engine: Factor Hunt asks you to predict which factor matters most before the reveal; Prime Draft drops the era reel so you can build cross-era fives with every legend at his peak; Blueprint has you commit to a tactical objective (spacing, defense, usage discipline, rim, or balanced) before the spin and grades your execution on that axis; and Surgeon diagnoses your lineup's single worst factor and gives you one targeted swap to fix it, scored on the win delta.",
+  },
+  {
+    q: "What makes Factor Hunt, Blueprint, and Surgeon possible?",
+    a: "They all depend on the engine explaining itself. Because every result decomposes into named factors — usage overload, spacing, interior size, perimeter defense — the game can ask you to predict them (Factor Hunt), grade you on one of them (Blueprint), or diagnose and fix your worst one (Surgeon). A tool that only outputs a number can't do any of that.",
   },
 ];
 
