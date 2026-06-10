@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { verifyDaily, verifyTrace, applySwapToTrace, type VerifyDeps } from "./dailyVerify";
 import type { DraftStep, Player, LineupResult } from "./types";
 
@@ -43,121 +44,239 @@ const legit: DraftStep[] = [
 ];
 const clone = (t: DraftStep[]): DraftStep[] => JSON.parse(JSON.stringify(t));
 
-let fail = 0;
-const assert = (c: boolean, m: string) => { if (!c) { console.error("FAIL:", m); fail++; } else console.log("ok:", m); };
+describe("verifyDaily", () => {
+  it("legit lineup verifies", () => {
+    const ok = verifyDaily("2025-1-1", legit, deps);
+    expect(ok.ok).toBe(true);
+  });
 
-const ok = verifyDaily("2025-1-1", legit, deps);
-assert(ok.ok === true, "legit lineup verifies");
-assert(ok.ok === true && ok.lineup === "p0pg,p1sg,p2sf,p3pf,p4c", "lineup serialized in slot order");
-assert(ok.ok === true && ok.result.wins === 60, "score comes from the engine, not the client");
+  it("lineup serialized in slot order", () => {
+    const ok = verifyDaily("2025-1-1", legit, deps);
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.lineup).toBe("p0pg,p1sg,p2sf,p3pf,p4c");
+  });
 
-const offpool = clone(legit); offpool[0].pickedId = "michael_jordan";
-assert(verifyDaily("2025-1-1", offpool, deps).ok === false, "off-pool pick rejected");
+  it("score comes from the engine, not the client", () => {
+    const ok = verifyDaily("2025-1-1", legit, deps);
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.result.wins).toBe(60);
+  });
 
-const dup = clone(legit); dup[1].slot = "PG";
-assert(verifyDaily("2025-1-1", dup, deps).ok === false, "duplicate slot rejected");
+  it("off-pool pick rejected", () => {
+    const offpool = clone(legit); offpool[0].pickedId = "michael_jordan";
+    expect(verifyDaily("2025-1-1", offpool, deps).ok).toBe(false);
+  });
 
-const ineligible = clone(legit); ineligible[0].slot = "C"; // p0pg is PG-only
-assert(verifyDaily("2025-1-1", ineligible, deps).ok === false, "ineligible slot rejected");
+  it("duplicate slot rejected", () => {
+    const dup = clone(legit); dup[1].slot = "PG";
+    expect(verifyDaily("2025-1-1", dup, deps).ok).toBe(false);
+  });
 
-assert(verifyDaily("2025-1-1", legit.slice(0, 4), deps).ok === false, "trace length != 5 rejected");
+  it("ineligible slot rejected", () => {
+    const ineligible = clone(legit); ineligible[0].slot = "C"; // p0pg is PG-only
+    expect(verifyDaily("2025-1-1", ineligible, deps).ok).toBe(false);
+  });
 
-const respin = clone(legit); respin[2] = { slot: "SF", pickedId: "p2sf_b", respins: ["team"] };
-assert(verifyDaily("2025-1-1", respin, deps).ok === true, "valid team re-spin accepted (salt=1)");
+  it("trace length != 5 rejected", () => {
+    expect(verifyDaily("2025-1-1", legit.slice(0, 4), deps).ok).toBe(false);
+  });
 
-const tooMany = clone(legit);
-tooMany[0] = { slot: "PG", pickedId: "r0t", respins: ["team"] };
-tooMany[1] = { slot: "SG", pickedId: "r1t", respins: ["team"] };
-assert(verifyDaily("2025-1-1", tooMany, deps).ok === false, "more than one team re-spin rejected");
+  it("valid team re-spin accepted (salt=1)", () => {
+    const respin = clone(legit); respin[2] = { slot: "SF", pickedId: "p2sf_b", respins: ["team"] };
+    expect(verifyDaily("2025-1-1", respin, deps).ok).toBe(true);
+  });
+
+  it("more than one team re-spin rejected", () => {
+    const tooMany = clone(legit);
+    tooMany[0] = { slot: "PG", pickedId: "r0t", respins: ["team"] };
+    tooMany[1] = { slot: "SG", pickedId: "r1t", respins: ["team"] };
+    expect(verifyDaily("2025-1-1", tooMany, deps).ok).toBe(false);
+  });
+});
 
 // --- applySwapToTrace: the court move/swap must keep the trace replayable (live "slot reused" bug) ---
 // User repro: round-2 spin offers a SF/PF-eligible forward; the player places him at PF, later
 // moves him PF -> SF on the court, then drafts the real PF in round 3. Without re-stamping the
 // trace, the round-3 pick lands on a "reused" PF and the Daily/challenge submit 400s.
-{
-  const moved: DraftStep[] = [
-    { slot: "PG", pickedId: "p0pg", respins: [] },
-    { slot: "SG", pickedId: "p1sg", respins: [] },
-    { slot: "PF", pickedId: "flexfwd", respins: [] }, // placed at PF first...
-    { slot: "PF", pickedId: "p3pf", respins: [] },    // ...PF re-picked after the court move
-    { slot: "C", pickedId: "p4c", respins: [] },
-  ];
-  const broken = clone(moved);
-  const r1 = verifyDaily("2025-1-1", broken, deps);
-  assert(r1.ok === false && r1.error === "slot reused 3", "un-stamped trace reproduces the live 'slot reused 3' rejection");
+describe("applySwapToTrace — move into empty slot", () => {
+  it("un-stamped trace reproduces the live 'slot reused 3' rejection", () => {
+    const moved: DraftStep[] = [
+      { slot: "PG", pickedId: "p0pg", respins: [] },
+      { slot: "SG", pickedId: "p1sg", respins: [] },
+      { slot: "PF", pickedId: "flexfwd", respins: [] }, // placed at PF first...
+      { slot: "PF", pickedId: "p3pf", respins: [] },    // ...PF re-picked after the court move
+      { slot: "C", pickedId: "p4c", respins: [] },
+    ];
+    const broken = clone(moved);
+    const r1 = verifyDaily("2025-1-1", broken, deps);
+    expect(r1.ok).toBe(false);
+    if (!r1.ok) expect(r1.error).toBe("slot reused 3");
+  });
 
-  const fixed = clone(moved);
-  // the court move happens BEFORE round 3 is drafted: flexfwd PF -> SF (SF empty at that point)
-  applySwapToTrace(fixed.slice(0, 3), "flexfwd", null, "PF", "SF");
-  const r2 = verifyDaily("2025-1-1", fixed, deps);
-  assert(r2.ok === true, "re-stamped trace verifies after a move into an empty slot");
-  assert(r2.ok === true && r2.lineup === "p0pg,p1sg,flexfwd,p3pf,p4c", "lineup serializes in the FINAL slot arrangement");
-}
-{
+  it("re-stamped trace verifies after a move into an empty slot", () => {
+    const moved: DraftStep[] = [
+      { slot: "PG", pickedId: "p0pg", respins: [] },
+      { slot: "SG", pickedId: "p1sg", respins: [] },
+      { slot: "PF", pickedId: "flexfwd", respins: [] }, // placed at PF first...
+      { slot: "PF", pickedId: "p3pf", respins: [] },    // ...PF re-picked after the court move
+      { slot: "C", pickedId: "p4c", respins: [] },
+    ];
+    const fixed = clone(moved);
+    // the court move happens BEFORE round 3 is drafted: flexfwd PF -> SF (SF empty at that point)
+    applySwapToTrace(fixed.slice(0, 3), "flexfwd", null, "PF", "SF");
+    const r2 = verifyDaily("2025-1-1", fixed, deps);
+    expect(r2.ok).toBe(true);
+  });
+
+  it("lineup serializes in the FINAL slot arrangement", () => {
+    const moved: DraftStep[] = [
+      { slot: "PG", pickedId: "p0pg", respins: [] },
+      { slot: "SG", pickedId: "p1sg", respins: [] },
+      { slot: "PF", pickedId: "flexfwd", respins: [] }, // placed at PF first...
+      { slot: "PF", pickedId: "p3pf", respins: [] },    // ...PF re-picked after the court move
+      { slot: "C", pickedId: "p4c", respins: [] },
+    ];
+    const fixed = clone(moved);
+    applySwapToTrace(fixed.slice(0, 3), "flexfwd", null, "PF", "SF");
+    const r2 = verifyDaily("2025-1-1", fixed, deps);
+    expect(r2.ok).toBe(true);
+    if (r2.ok) expect(r2.lineup).toBe("p0pg,p1sg,flexfwd,p3pf,p4c");
+  });
+});
+
+describe("applySwapToTrace — swap of two filled slots", () => {
   // swap of two FILLED slots keeps both entries in lockstep (no error before, but the served
   // permalink/lineup used to show the pre-swap arrangement)
-  const t = clone(legit);
-  applySwapToTrace(t, "p2sf", "p3pf", "SF", "PF"); // hypothetical SF<->PF swap of two placed players
-  assert(t[2].slot === "PF" && t[3].slot === "SF", "both swapped entries re-stamped");
-  assert(t[0].slot === "PG" && t[4].slot === "C", "unrelated entries untouched");
-}
-{
-  const t = clone(legit);
-  applySwapToTrace(t, null, null, "SF", "PF");
-  assert(JSON.stringify(t) === JSON.stringify(legit), "no-op when both ids are null");
-}
-{
+  it("both swapped entries re-stamped", () => {
+    const t = clone(legit);
+    applySwapToTrace(t, "p2sf", "p3pf", "SF", "PF"); // hypothetical SF<->PF swap of two placed players
+    expect(t[2].slot === "PF" && t[3].slot === "SF").toBe(true);
+  });
+
+  it("unrelated entries untouched", () => {
+    const t = clone(legit);
+    applySwapToTrace(t, "p2sf", "p3pf", "SF", "PF");
+    expect(t[0].slot === "PG" && t[4].slot === "C").toBe(true);
+  });
+});
+
+describe("applySwapToTrace — no-op when both ids are null", () => {
+  it("no-op when both ids are null", () => {
+    const t = clone(legit);
+    applySwapToTrace(t, null, null, "SF", "PF");
+    expect(JSON.stringify(t)).toBe(JSON.stringify(legit));
+  });
+});
+
+describe("applySwapToTrace — move-then-move-back round trip", () => {
   // move-then-move-back: ID matching means the second call finds the entry at its CURRENT
   // (already re-stamped) slot, so a round trip restores the original stamp exactly
-  const t: DraftStep[] = [{ slot: "PF", pickedId: "flexfwd", respins: [] }];
-  applySwapToTrace(t, "flexfwd", null, "PF", "SF");
-  assert(t[0].slot === "SF", "first move re-stamps PF -> SF");
-  applySwapToTrace(t, "flexfwd", null, "SF", "PF");
-  assert(t[0].slot === "PF", "move-back restores the original slot (round trip)");
-}
-{
+  it("first move re-stamps PF -> SF", () => {
+    const t: DraftStep[] = [{ slot: "PF", pickedId: "flexfwd", respins: [] }];
+    applySwapToTrace(t, "flexfwd", null, "PF", "SF");
+    expect(t[0].slot).toBe("SF");
+  });
+
+  it("move-back restores the original slot (round trip)", () => {
+    const t: DraftStep[] = [{ slot: "PF", pickedId: "flexfwd", respins: [] }];
+    applySwapToTrace(t, "flexfwd", null, "PF", "SF");
+    applySwapToTrace(t, "flexfwd", null, "SF", "PF");
+    expect(t[0].slot).toBe("PF");
+  });
+});
+
+describe("applySwapToTrace — double-move chain through two empty slots", () => {
   // double-move chain through two empty slots: swing drafted at SF, moved SF -> PF, then PF -> C,
   // then PF and SF are both re-drafted. The full replay must verify under the final arrangement.
-  const chain: DraftStep[] = [
-    { slot: "PG", pickedId: "p0pg", respins: [] },
-    { slot: "SG", pickedId: "p1sg", respins: [] },
-    { slot: "SF", pickedId: "swing", respins: [] },
-    { slot: "PF", pickedId: "p3pf", respins: [] },
-    { slot: "SF", pickedId: "x4sf", respins: [] }, // SF re-picked after the chain vacated it
-  ];
-  const broken = clone(chain);
-  assert(verifyDaily("2025-1-1", broken, deps).ok === false, "un-stamped double-move chain rejected (slot reused)");
-  const fixed = clone(chain);
-  applySwapToTrace(fixed.slice(0, 3), "swing", null, "SF", "PF"); // move 1, before round 3
-  applySwapToTrace(fixed.slice(0, 3), "swing", null, "PF", "C");  // move 2, still before round 3
-  const rc = verifyDaily("2025-1-1", fixed, deps);
-  assert(rc.ok === true, "double-move chain verifies after both re-stamps");
-  assert(rc.ok === true && rc.lineup === "p0pg,p1sg,x4sf,p3pf,swing", "chain lineup serializes in the FINAL slots");
-}
-{
+  it("un-stamped double-move chain rejected (slot reused)", () => {
+    const chain: DraftStep[] = [
+      { slot: "PG", pickedId: "p0pg", respins: [] },
+      { slot: "SG", pickedId: "p1sg", respins: [] },
+      { slot: "SF", pickedId: "swing", respins: [] },
+      { slot: "PF", pickedId: "p3pf", respins: [] },
+      { slot: "SF", pickedId: "x4sf", respins: [] }, // SF re-picked after the chain vacated it
+    ];
+    const broken = clone(chain);
+    expect(verifyDaily("2025-1-1", broken, deps).ok).toBe(false);
+  });
+
+  it("double-move chain verifies after both re-stamps", () => {
+    const chain: DraftStep[] = [
+      { slot: "PG", pickedId: "p0pg", respins: [] },
+      { slot: "SG", pickedId: "p1sg", respins: [] },
+      { slot: "SF", pickedId: "swing", respins: [] },
+      { slot: "PF", pickedId: "p3pf", respins: [] },
+      { slot: "SF", pickedId: "x4sf", respins: [] }, // SF re-picked after the chain vacated it
+    ];
+    const fixed = clone(chain);
+    applySwapToTrace(fixed.slice(0, 3), "swing", null, "SF", "PF"); // move 1, before round 3
+    applySwapToTrace(fixed.slice(0, 3), "swing", null, "PF", "C");  // move 2, still before round 3
+    const rc = verifyDaily("2025-1-1", fixed, deps);
+    expect(rc.ok).toBe(true);
+  });
+
+  it("chain lineup serializes in the FINAL slots", () => {
+    const chain: DraftStep[] = [
+      { slot: "PG", pickedId: "p0pg", respins: [] },
+      { slot: "SG", pickedId: "p1sg", respins: [] },
+      { slot: "SF", pickedId: "swing", respins: [] },
+      { slot: "PF", pickedId: "p3pf", respins: [] },
+      { slot: "SF", pickedId: "x4sf", respins: [] }, // SF re-picked after the chain vacated it
+    ];
+    const fixed = clone(chain);
+    applySwapToTrace(fixed.slice(0, 3), "swing", null, "SF", "PF"); // move 1, before round 3
+    applySwapToTrace(fixed.slice(0, 3), "swing", null, "PF", "C");  // move 2, still before round 3
+    const rc = verifyDaily("2025-1-1", fixed, deps);
+    expect(rc.ok).toBe(true);
+    if (rc.ok) expect(rc.lineup).toBe("p0pg,p1sg,x4sf,p3pf,swing");
+  });
+});
+
+describe("applySwapToTrace — move-after-respin", () => {
   // move-after-respin: a player offered by a TEAM re-spin is placed, then moved. The replay must
   // reconstruct the re-spin pool AND re-check eligibility against the re-stamped (new) slot.
-  const t: DraftStep[] = [
-    { slot: "PG", pickedId: "p0pg", respins: [] },
-    { slot: "SG", pickedId: "p1sg", respins: [] },
-    { slot: "SF", pickedId: "p2sf", respins: [] },
-    { slot: "PF", pickedId: "rflex", respins: ["team"] }, // placed at PF off the re-spin pool...
-    { slot: "PF", pickedId: "x4pf", respins: [] },        // ...PF re-picked after the court move
-  ];
-  const broken = clone(t);
-  assert(verifyDaily("2025-1-1", broken, deps).ok === false, "un-stamped move-after-respin rejected (slot reused)");
-  const fixed = clone(t);
-  applySwapToTrace(fixed.slice(0, 4), "rflex", null, "PF", "C"); // move PF -> C before round 4
-  const rr = verifyDaily("2025-1-1", fixed, deps);
-  assert(rr.ok === true, "move-after-respin verifies: re-spin pool reconstructed + eligibility re-checked at the new slot");
-}
+  it("un-stamped move-after-respin rejected (slot reused)", () => {
+    const t: DraftStep[] = [
+      { slot: "PG", pickedId: "p0pg", respins: [] },
+      { slot: "SG", pickedId: "p1sg", respins: [] },
+      { slot: "SF", pickedId: "p2sf", respins: [] },
+      { slot: "PF", pickedId: "rflex", respins: ["team"] }, // placed at PF off the re-spin pool...
+      { slot: "PF", pickedId: "x4pf", respins: [] },        // ...PF re-picked after the court move
+    ];
+    const broken = clone(t);
+    expect(verifyDaily("2025-1-1", broken, deps).ok).toBe(false);
+  });
+
+  it("move-after-respin verifies: re-spin pool reconstructed + eligibility re-checked at the new slot", () => {
+    const t: DraftStep[] = [
+      { slot: "PG", pickedId: "p0pg", respins: [] },
+      { slot: "SG", pickedId: "p1sg", respins: [] },
+      { slot: "SF", pickedId: "p2sf", respins: [] },
+      { slot: "PF", pickedId: "rflex", respins: ["team"] }, // placed at PF off the re-spin pool...
+      { slot: "PF", pickedId: "x4pf", respins: [] },        // ...PF re-picked after the court move
+    ];
+    const fixed = clone(t);
+    applySwapToTrace(fixed.slice(0, 4), "rflex", null, "PF", "C"); // move PF -> C before round 4
+    const rr = verifyDaily("2025-1-1", fixed, deps);
+    expect(rr.ok).toBe(true);
+  });
+});
 
 // verifyTrace: the seed-agnostic core works for any seed (e.g. an H2H challenge), not just daily
-const chal = verifyTrace("h2h-abc123", legit, deps);
-assert(chal.ok === true, "verifyTrace verifies a legit trace under an arbitrary (challenge) seed");
-assert(chal.ok === true && chal.lineup === "p0pg,p1sg,p2sf,p3pf,p4c", "verifyTrace serializes in slot order");
-const chalBad = clone(legit); chalBad[0].pickedId = "not_on_pool";
-assert(verifyTrace("h2h-abc123", chalBad, deps).ok === false, "verifyTrace rejects an off-pool pick");
+describe("verifyTrace", () => {
+  it("verifyTrace verifies a legit trace under an arbitrary (challenge) seed", () => {
+    const chal = verifyTrace("h2h-abc123", legit, deps);
+    expect(chal.ok).toBe(true);
+  });
 
-console.log(fail ? `\n${fail} ASSERTION(S) FAILED` : "\nALL VERIFY CHECKS PASSED");
-process.exit(fail ? 1 : 0);
+  it("verifyTrace serializes in slot order", () => {
+    const chal = verifyTrace("h2h-abc123", legit, deps);
+    expect(chal.ok).toBe(true);
+    if (chal.ok) expect(chal.lineup).toBe("p0pg,p1sg,p2sf,p3pf,p4c");
+  });
+
+  it("verifyTrace rejects an off-pool pick", () => {
+    const chalBad = clone(legit); chalBad[0].pickedId = "not_on_pool";
+    expect(verifyTrace("h2h-abc123", chalBad, deps).ok).toBe(false);
+  });
+});

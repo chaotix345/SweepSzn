@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { evaluateLineup } from "./engine";
 import type { Player } from "./types";
 
@@ -31,18 +32,20 @@ const stuffer: Player[] = [
 const b = evaluateLineup(balanced);
 const s = evaluateLineup(stuffer);
 
-console.log("BALANCED:", `${b.wins}-${b.losses}`, `ORtg ${b.ortg} DRtg ${b.drtg} Net ${b.netRtg}`, b.label);
-console.log("  factors:", b.factors.map((f) => `${f.label} ${f.value}`).join(" | "));
-console.log("STUFFER :", `${s.wins}-${s.losses}`, `ORtg ${s.ortg} DRtg ${s.drtg} Net ${s.netRtg}`, s.label);
-console.log("  factors:", s.factors.map((f) => `${f.label} ${f.value}`).join(" | "));
+describe("evaluateLineup", () => {
+  it("balanced two-way team beats stat-stuffer", () => {
+    expect(b.wins > s.wins).toBe(true);
+  });
 
-let fail = 0;
-function assert(cond: boolean, msg: string) { if (!cond) { console.error("FAIL:", msg); fail++; } else console.log("ok:", msg); }
+  it("stat-stuffer is far worse on net rating", () => {
+    expect(s.netRtg < b.netRtg - 8).toBe(true);
+  });
 
-assert(b.wins > s.wins, "balanced two-way team beats stat-stuffer");
-assert(s.netRtg < b.netRtg - 8, "stat-stuffer is far worse on net rating");
-assert(s.wins < 55, "defense-less stuffer is not a juggernaut");
-assert(b.wins <= 82 && s.wins >= 0, "win totals in range");
+  it("defense-less stuffer is not a juggernaut", () => {
+    expect(s.wins < 55).toBe(true);
+  });
 
-console.log(fail ? `\n${fail} ASSERTION(S) FAILED` : "\nALL BEHAVIOR CHECKS PASSED");
-process.exit(fail ? 1 : 0);
+  it("win totals in range", () => {
+    expect(b.wins <= 82 && s.wins >= 0).toBe(true);
+  });
+});
