@@ -7,6 +7,7 @@ import { getUid } from "@/lib/streak";
 import type { LineupResult, Player, Slot } from "@/lib/types";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { encodeLineup } from "@/lib/share";
+import { bpCode, type BlueprintView } from "@/lib/blueprint";
 import { factorViews, lineupRoles, headline } from "@/lib/explain";
 import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
 
@@ -22,9 +23,9 @@ const GRADE_COLOR: Record<string, string> = {
 const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1));
 
 export default function ResultCard({
-  result, players, slots, mode, onReset, shared, usedHints, pickem, factorHunt, prime,
+  result, players, slots, mode, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint,
 }: {
-  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean;
+  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean; blueprint?: BlueprintView;
 }) {
   const factors = factorViews(result);
   // split by the value's sign (what actually helped/hurt), not the engine's fixed label —
@@ -39,7 +40,7 @@ export default function ResultCard({
   const gradeColor = GRADE_COLOR[result.grade] ?? "text-zinc-300";
   // a recipient can reconstruct the exact result from these 5 ids (slot order). With Pick'Em
   // data the link goes through /pe/ so the OG card carries the crowd-split bar.
-  const lineupSeg = encodeLineup(players.map((p) => p.id), usedHints, prime);
+  const lineupSeg = encodeLineup(players.map((p) => p.id), usedHints, prime, blueprint ? bpCode(blueprint.key) : null);
   const hasPickem = !!pickem && (!!pickem.vote || pickem.y + pickem.n > 0);
   const sharePath = hasPickem ? `/pe/${encodePickemCard(lineupSeg, pickem!)}` : `/r/${lineupSeg}`;
   const names = players.map((p) => displayName(p.name));
@@ -75,6 +76,10 @@ export default function ResultCard({
             <p className="mt-2 text-[11px] text-violet-300/70">Fantasy simulation, not historical simulation — every player at his peak, eras crossed freely.</p>
           </>
         )}
+        {blueprint && (
+          <div className="mt-2 ml-1 inline-flex items-center gap-1 rounded-full bg-cyan-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-cyan-300"
+            title={`Committed before the spin: ${blueprint.label}`}>📐 {blueprint.label}</div>
+        )}
         <p className="mx-auto mt-3 max-w-md text-sm text-zinc-400">{headline(result)}</p>
         <div className="mt-4 flex justify-center gap-2 text-sm">
           <Metric label="ORtg" value={result.ortg.toFixed(1)} />
@@ -85,6 +90,7 @@ export default function ResultCard({
       </div>
 
       {hasPickem && <PickemStrip result={result} pickem={pickem!} />}
+      {blueprint && <BlueprintStrip result={result} bp={blueprint} />}
 
       {/* why this record */}
       <div className="border-t border-zinc-800 px-6 py-5">
@@ -140,7 +146,7 @@ export default function ResultCard({
       </div>
 
       <div className="flex gap-3 border-t border-zinc-800 px-6 py-4">
-        <ShareButton result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} />
+        <ShareButton result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint} />
         {shared ? (
           <Link href="/play" className="flex-1 rounded-xl bg-orange-500 py-2.5 text-center text-sm font-bold text-black hover:bg-orange-400">Build your own five →</Link>
         ) : (
@@ -156,7 +162,7 @@ const subscribeNoop = () => () => {};
 const getCanNative = () => typeof navigator !== "undefined" && "share" in navigator;
 const getServerCanNative = () => false;
 
-function ShareButton({ result, path, names, usedHints, pickem, prime }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp; prime?: boolean }) {
+function ShareButton({ result, path, names, usedHints, pickem, prime, blueprint }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp; prime?: boolean; blueprint?: BlueprintView }) {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -166,7 +172,10 @@ function ShareButton({ result, path, names, usedHints, pickem, prime }: { result
   const defyLine = pickem ? pickemShareLine(result.wins, result.losses, pickem, pickem.subject) : null;
   const text = defyLine
     ? `${defyLine} Can you beat the crowd on SweepSzn?`
-    : `My ${prime ? "PRIME cross-era five" : "all-time five"} (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""} — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}. Can you build a better one?`;
+    : blueprint
+      // the committed objective is the identity-rich share hook (spec: "I went SPACING BOMB…")
+      ? `I went ${blueprint.label} on SweepSzn — ${result.wins}-${result.losses} (${result.label}) with ${blueprint.grade} blueprint execution${usedHints ? " (with hints)" : ""}, board score ${blueprint.score % 1 === 0 ? blueprint.score : blueprint.score.toFixed(1)}. Can you out-execute me?`
+      : `My ${prime ? "PRIME cross-era five" : "all-time five"} (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""} — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}. Can you build a better one?`;
   const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
 
@@ -260,6 +269,28 @@ function PickemStrip({ result, pickem }: { result: LineupResult; pickem: PickemP
         </>
       )}
       <p className="mt-2 text-sm text-zinc-300">{verdict}</p>
+    </div>
+  );
+}
+
+// Blueprint execution strip: the committed metric, its grade on that axis alone, and the
+// composite board score (wins × execution multiplier) — the math shown so the score is legible.
+function BlueprintStrip({ result, bp }: { result: LineupResult; bp: BlueprintView }) {
+  const gradeColor = GRADE_COLOR[bp.grade] ?? "text-zinc-300";
+  return (
+    <div className="border-t border-zinc-800 px-6 py-4">
+      <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-zinc-500">
+        <span>📐 Blueprint — {bp.label}</span>
+        <span className={gradeColor}>execution: {bp.grade}</span>
+      </div>
+      <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
+        <Metric label={bp.metricLabel} value={bp.metricText} color="text-cyan-300" />
+        <Metric label="Multiplier" value={`×${bp.mult.toFixed(2)}`} color={gradeColor} />
+        <Metric label="Board score" value={`${bp.score % 1 === 0 ? bp.score : bp.score.toFixed(1)}`} color="text-zinc-100" />
+      </div>
+      <p className="mt-2 text-center text-[11px] text-zinc-500">
+        {result.wins} wins × {bp.mult.toFixed(2)} execution = your score on the {bp.label} board
+      </p>
     </div>
   );
 }

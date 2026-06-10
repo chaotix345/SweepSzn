@@ -90,11 +90,11 @@ function strSeed(s: string): number {
   return h >>> 0;
 }
 
-function toCandidate(p: Player, fit?: CandidateFit): DraftCandidate {
+function toCandidate(p: Player, fit?: CandidateFit, usage?: number): DraftCandidate {
   return {
     id: p.id, person_id: p.person_id, name: p.name, year: p.year, decade: p.decade, team: p.team,
     pos: p.pos, eligible: (p.eligible && p.eligible.length ? p.eligible : [p.pos as Slot]),
-    pts: p.pts, trb: p.trb, ast: p.ast, stl: p.stl, blk: p.blk, defense_estimated: p.defense_estimated, fit,
+    pts: p.pts, trb: p.trb, ast: p.ast, stl: p.stl, blk: p.blk, defense_estimated: p.defense_estimated, fit, usage,
   };
 }
 
@@ -207,19 +207,26 @@ function selectSpin(seed: string, round: number, opts: SpinOptions): { team: str
   return { team, decade, pool };
 }
 
-// Fit grades are a Classic-only assist. They are attached ONLY when the caller asks for them
-// (wantFit) AND the seed is a Classic free-play seed. This keeps the per-candidate fit deltas off
-// the wire entirely for Daily, HoopIQ, and every Challenge (incl. a Classic-originated one, where
-// the carried seed still starts with "classic-" but the responder draft does NOT request fit) —
-// so the network response can't be read in devtools to draft optimally and skew a leaderboard.
+// Fit grades are a Classic-style assist. They are attached ONLY when the caller asks for them
+// (wantFit) AND the seed is a Classic free-play seed or a Blueprint daily seed (Blueprint follows
+// Classic's hint rules by design — its board rows carry the hint stamp). This keeps the
+// per-candidate fit deltas off the wire entirely for Daily, HoopIQ, and every Challenge (incl. a
+// Classic-originated one, where the carried seed still starts with "classic-" but the responder
+// draft does NOT request fit) — so the network response can't be read in devtools to draft
+// optimally and skew a leaderboard.
+// Blueprint spins additionally carry each candidate's usage demand: USAGE DISCIPLINE grades on
+// total usage, so the live budget bar needs the real engine number during drafting (spec fix).
 export function spin(seed: string, round: number, opts: SpinOptions = {}, wantFit = false): SpinResult {
   const { byId, coeff } = load();
   const { team, decade, pool } = selectSpin(seed, round, opts);
-  const showFit = wantFit && seed.startsWith("classic");
+  const isBp = seed.startsWith("bp-");
+  const showFit = wantFit && (seed.startsWith("classic") || isBp);
   const excludeIds = new Set(opts.exclude ?? []);
   const drafted = showFit && excludeIds.size ? [...excludeIds].map((id) => byId.get(id)).filter((p): p is Player => !!p) : [];
   const fits = showFit ? computeFits(drafted, pool, coeff) : null;
-  const candidates = pool.map((p) => toCandidate(p, fits?.get(p.id)));
+  // send unrounded usage so the live budget bar sums the SAME floats blueprintMetric grades on —
+  // a per-player round here could straddle the A+/A boundary the bar tells the player they hit
+  const candidates = pool.map((p) => toCandidate(p, fits?.get(p.id), isBp ? playerFeatures(p, coeff).usage : undefined));
   return { team, decade, candidates };
 }
 

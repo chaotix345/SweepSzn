@@ -16,17 +16,20 @@ import { saveResult, writeLastResult, readLastResult } from "@/lib/resultHistory
 import { pickemSeedOk, getPickemSkip, setPickemSkip, getLocalVote, setLocalVote, type PickemVote } from "@/lib/pickem";
 import { buildFhChoices } from "@/lib/factorHunt";
 import FhLeaderboard from "@/components/FhLeaderboard";
+import { BLUEPRINTS, bpCode, bpFromCode, gradeBlueprint, type BlueprintKey } from "@/lib/blueprint";
+import BpLeaderboard from "@/components/BpLeaderboard";
 import { applySwapToTrace } from "@/lib/dailyVerify";
 
-type Mode = "daily" | "classic" | "hoopiq" | "challenge" | "factorhunt" | "prime";
-const MODE_LABEL: Record<Mode, string> = { daily: "daily", classic: "classic", hoopiq: "hoopiq", challenge: "challenge", factorhunt: "Factor Hunt", prime: "Prime Draft" };
+type Mode = "daily" | "classic" | "hoopiq" | "challenge" | "factorhunt" | "prime" | "blueprint";
+const MODE_LABEL: Record<Mode, string> = { daily: "daily", classic: "classic", hoopiq: "hoopiq", challenge: "challenge", factorhunt: "Factor Hunt", prime: "Prime Draft", blueprint: "Blueprint" };
 type Roster = Record<Slot, DraftCandidate | null>;
 const EMPTY: Roster = { PG: null, SG: null, SF: null, PF: null, C: null };
 interface Spin { team: string; decade: string; candidates: DraftCandidate[] }
 type SpinOpts = { lockedTeam?: string; lockedDecade?: string; excludeTeam?: string; excludeDecade?: string; salt?: number };
 // The full current result kept in localStorage for a same-session refresh (carries the draft trace
-// plus, for Factor Hunt, the locked prediction so the verdict chip survives a refresh).
-type LastResult = { mode: Mode; seed: string; result: { result: LineupResult; players: Player[]; trace: DraftStep[]; usedHints: boolean }; fh?: string | null };
+// plus, for Factor Hunt, the locked prediction so the verdict chip survives a refresh — and, for
+// Blueprint, the committed objective so the execution strip and board submit survive one too).
+type LastResult = { mode: Mode; seed: string; result: { result: LineupResult; players: Player[]; trace: DraftStep[]; usedHints: boolean }; fh?: string | null; bp?: BlueprintKey | null };
 
 // court slot positions (% of the half-court panel; basket at top)
 const COURT: Record<Slot, { left: number; top: number }> = {
@@ -87,12 +90,18 @@ export default function Game() {
   const fhFetchingRef = useRef(false);                                  // de-dupes the choices fetch
   const fhAbortRef = useRef<AbortController | null>(null);              // cancels an in-flight choices fetch on restart
   const fhRef = useRef<HTMLDivElement>(null);                           // prediction dialog
+  // Blueprint: the objective committed in the pre-spin modal (locks at confirm — gameplay psychology;
+  // the server grades whatever the submit declares, see /api/blueprint/submit).
+  const [blueprint, setBlueprint] = useState<BlueprintKey | null>(null);
+  const [bpPick, setBpPick] = useState<BlueprintKey | null>(null);      // highlighted option (not yet committed)
+  const bpRef = useRef<HTMLDivElement>(null);                           // commit dialog
 
   // Spend a hint to reveal fit grades for the current pick. Charges on reveal (not on placement), so
   // there is no way to peek and then dodge the cost. No-op once the per-game budget is spent.
-  // Prime Draft is "identical to Classic" per spec, hints included; both are free-play modes.
+  // Prime Draft is "identical to Classic" per spec, hints included; Blueprint follows Classic's hint
+  // rules too (its board rows carry the hint stamp for transparency).
   const revealHint = useCallback(() => {
-    if ((mode !== "classic" && mode !== "prime") || hintsUsedRef.current >= HINT_BUDGET) return;
+    if ((mode !== "classic" && mode !== "prime" && mode !== "blueprint") || hintsUsedRef.current >= HINT_BUDGET) return;
     hintsUsedRef.current += 1; setHintsUsed(hintsUsedRef.current);
   }, [mode]);
 
@@ -116,8 +125,8 @@ export default function Game() {
       crole = challenge?.role ?? "create";
       s = challenge?.seed ?? challengeSeed(cid); // a converted/legacy challenge replays its own carried seed
     } else {
-      // daily + factorhunt share one deterministic seed per UTC day; free-play modes roll fresh
-      s = m === "daily" ? `daily-${todaySeed()}` : m === "factorhunt" ? `fh-${todaySeed()}` : `${m}-${rand()}`;
+      // daily + factorhunt + blueprint share one deterministic seed per UTC day; free-play modes roll fresh
+      s = m === "daily" ? `daily-${todaySeed()}` : m === "factorhunt" ? `fh-${todaySeed()}` : m === "blueprint" ? `bp-${todaySeed()}` : `${m}-${rand()}`;
     }
     setChallengeId(cid); setChallengeRole(crole); setSeed(s);
     setRoster(EMPTY); setCurrent(null); setResult(null); setError(null); setLoading(false);
@@ -127,6 +136,7 @@ export default function Game() {
     hintsUsedRef.current = 0; setHintsUsed(0);
     setPickemVote(null); setPickemDismissed(false); setPickemCrowd(null); setPickemSubject(null);
     setFhStep(null); setFhPick(null); setFhPrediction(null); fhFetchingRef.current = false;
+    setBlueprint(null); setBpPick(null); // blueprint re-commits every game (the modal gates the first spin)
     setOwnerId(null);
     // a new game owns the URL — drop any restore params so a later refresh won't resurrect an old screen
     try {
@@ -181,28 +191,29 @@ export default function Game() {
 
         const enc = params.get("r");
         const m = params.get("m") as Mode | null;
-        if (enc && (m === "daily" || m === "classic" || m === "hoopiq" || m === "factorhunt" || m === "prime")) {
+        if (enc && (m === "daily" || m === "classic" || m === "hoopiq" || m === "factorhunt" || m === "prime" || m === "blueprint")) {
           setRestoring(true);
           // same-session full restore: keeps the draft trace the Daily board needs to submit
           const last = readLastResult<LastResult>();
-          if (last && last.mode === m && last.result && encodeLineup(last.result.players.map((p) => p.id), last.result.usedHints, m === "prime") === enc) {
+          if (last && last.mode === m && last.result && encodeLineup(last.result.players.map((p) => p.id), last.result.usedHints, m === "prime", m === "blueprint" && last.bp ? bpCode(last.bp) : null) === enc) {
             if (cancelled) return;
-            setMode(m); setSeed(last.seed); setResult(last.result); setFhPrediction(last.fh ?? null); setRestoring(false); return;
+            setMode(m); setSeed(last.seed); setResult(last.result); setFhPrediction(last.fh ?? null); setBlueprint(last.bp ?? null); setRestoring(false); return;
           }
           // cold restore (other device / cleared storage): rebuild from the five's ids. No trace, so the
           // Daily leaderboard renders read-only (still shows your standing, just no re-submit).
-          const { ids, hinted } = decodeShare(enc);
+          const { ids, hinted, bp } = decodeShare(enc);
           if (ids.length !== 5 || new Set(ids).size !== 5) { if (!cancelled) setRestoring(false); return; }
           try {
             const res = await fetch("/api/evaluate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids }) });
             if (!res.ok) throw new Error("evaluate failed");
             const data = await res.json();
             if (cancelled) return;
-            // daily/FH boards are per-date — use the date carried in the URL so a cold restore shows
-            // the result's own day (read-only), not today's empty board. Fall back to today if absent/bad.
+            // daily/FH/blueprint boards are per-date — use the date carried in the URL so a cold restore
+            // shows the result's own day (read-only), not today's empty board. Fall back to today if absent/bad.
             const d = params.get("d");
             const dailyDate = d && /^\d{4}-\d{1,2}-\d{1,2}$/.test(d) ? d : todaySeed();
-            setMode(m); setSeed(m === "daily" ? `daily-${dailyDate}` : m === "factorhunt" ? `fh-${dailyDate}` : `${m}-restored`);
+            setMode(m); setSeed(m === "daily" ? `daily-${dailyDate}` : m === "factorhunt" ? `fh-${dailyDate}` : m === "blueprint" ? `bp-${dailyDate}` : `${m}-restored`);
+            if (m === "blueprint") setBlueprint(bpFromCode(bp)); // the committed objective rides the encoded lineup
             setResult({ result: data.result, players: data.players, trace: [], usedHints: hinted });
           } catch { /* leave on the mode picker */ }
           finally { if (!cancelled) setRestoring(false); }
@@ -218,16 +229,17 @@ export default function Game() {
     if (!result || !mode || mode === "challenge") return;
     try {
       const u = new URL(window.location.href);
-      u.searchParams.set("r", encodeLineup(result.players.map((p) => p.id), result.usedHints, mode === "prime"));
+      u.searchParams.set("r", encodeLineup(result.players.map((p) => p.id), result.usedHints, mode === "prime", mode === "blueprint" && blueprint ? bpCode(blueprint) : null));
       u.searchParams.set("m", mode);
-      // daily/FH boards are per-date — carry the date so a cold restore shows the right day's board, not today's
+      // daily/FH/blueprint boards are per-date — carry the date so a cold restore shows the right day's board, not today's
       if (mode === "daily") u.searchParams.set("d", seed.replace("daily-", ""));
       else if (mode === "factorhunt") u.searchParams.set("d", seed.replace("fh-", ""));
+      else if (mode === "blueprint") u.searchParams.set("d", seed.replace("bp-", ""));
       else u.searchParams.delete("d");
       u.searchParams.delete("c"); u.searchParams.delete("own");
       window.history.replaceState(null, "", u.pathname + u.search + u.hash);
     } catch { /* no history API */ }
-  }, [result, mode, seed]);
+  }, [result, mode, seed, blueprint]);
 
   const runSpin = useCallback(async (opts: SpinOpts, locked: "team" | "era" | null = null) => {
     if (spinning) return;
@@ -243,9 +255,9 @@ export default function Game() {
     try {
       const r = await fetch("/api/spin", {
         method: "POST", headers: { "content-type": "application/json" },
-        // fit grades are a free-play assist (Classic + Prime); never requested in Daily/HoopIQ/
-        // Challenge/Factor Hunt so the network response can't be read to draft optimally
-        body: JSON.stringify({ seed, round: filled, exclude: drafted.map((p) => p.id), fit: mode === "classic" || mode === "prime", ...opts }),
+        // fit grades are a Classic-style hint assist (Classic + Prime + Blueprint); never requested
+        // in Daily/HoopIQ/Challenge/Factor Hunt so the network response can't be read to draft optimally
+        body: JSON.stringify({ seed, round: filled, exclude: drafted.map((p) => p.id), fit: mode === "classic" || mode === "prime" || mode === "blueprint", ...opts }),
       });
       if (!r.ok) throw new Error("spin failed");
       const res: Spin = await r.json();
@@ -282,6 +294,13 @@ export default function Game() {
     }).catch(() => { /* self-disabled or offline — the local vote still settles on the card */ });
   }, [seed, current]);
   const skipPickem = useCallback(() => { setPickemDismissed(true); setPickemSkip(); track("pickem_skip"); }, []);
+  // Blueprint commitment handlers: confirm locks the objective for this game (client-side
+  // psychology — the board's stratification is the real invariant); Escape backs out to the picker.
+  const commitBlueprint = useCallback((k: BlueprintKey) => {
+    setBlueprint(k); setBpPick(null);
+    track("bp_commit", { blueprint: k });
+  }, []);
+  const cancelBlueprint = useCallback(() => { setMode(null); setBpPick(null); }, []);
   const reSpinTeam = useCallback(() => {
     if (skips.team || !current) return;
     setSkips((s) => ({ ...s, team: true }));
@@ -314,8 +333,8 @@ export default function Game() {
       setResult(full);
       // Persist so the result survives a refresh (full object, incl. trace) and shows under "Your
       // results". A challenge entry is upgraded with its challengeId later, when the link is created.
-      writeLastResult({ mode, seed, result: full, fh: fhPred });
-      if (mode) saveResult({ encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints, mode === "prime"), mode, wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
+      writeLastResult({ mode, seed, result: full, fh: fhPred, bp: blueprint });
+      if (mode) saveResult({ encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints, mode === "prime", mode === "blueprint" && blueprint ? bpCode(blueprint) : null), mode, wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
       track("lineup_complete", { wins: data.result.wins, grade: data.result.grade });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return; // superseded by a restart — ignore
@@ -323,7 +342,7 @@ export default function Game() {
     } finally {
       if (!ctrl.signal.aborted) setLoading(false);
     }
-  }, [mode, seed]);
+  }, [mode, seed, blueprint]);
 
   // Factor Hunt prediction step: fetch the choice set (server-built — only {ask, choices} is on
   // the wire, never the answer or the record), then hold the reveal until the player locks/skips.
@@ -434,6 +453,15 @@ export default function Game() {
     return () => prev?.focus?.();
   }, [fhStep]);
 
+  // Blueprint commit dialog focus management (same pattern).
+  const showBpModal = mode === "blueprint" && !blueprint && !restoring;
+  useEffect(() => {
+    if (!showBpModal) return;
+    const prev = document.activeElement as HTMLElement | null;
+    bpRef.current?.focus();
+    return () => prev?.focus?.();
+  }, [showBpModal]);
+
   // Once the record is in, pull the crowd split (and your stored vote — e.g. a Daily replay
   // from another device) for the crowd-vs-you strip. Best-effort: a 503 (Redis absent) or a
   // network error just leaves the strip off / local-vote-only. Synthetic cold-restore seeds
@@ -481,18 +509,22 @@ export default function Game() {
     const c = buildFhChoices(result.result.factors, seed);
     return c ? { prediction: fhPrediction, answer: c.answer, correct: fhPrediction === c.answer } : undefined;
   })();
+  // Blueprint execution view: graded from the revealed result with the same pure helper the
+  // submit route verifies with, so the card strip and the board grade can never disagree.
+  const bpView = mode === "blueprint" && blueprint && result ? gradeBlueprint(blueprint, result.result) : undefined;
   if (result) return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
-      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} />
+      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView} />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
       {mode === "factorhunt" && <FhLeaderboard date={seed.replace("fh-", "")} trace={result.trace} prediction={fhPrediction} readOnly={result.trace.length === 0} />}
+      {mode === "blueprint" && blueprint && <BpLeaderboard date={seed.replace("bp-", "")} trace={result.trace} blueprint={blueprint} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
       {mode === "challenge" && challengeId && challengeRole && (
         <ChallengeResult id={challengeId} role={challengeRole} seed={seed} usedHints={false} result={result.result} players={result.players}
           trace={result.trace} onCreateOwn={() => start("challenge")} />
       )}
-      {/* FH/Prime seeds can't convert to H2H challenges (the challenge store only accepts daily/
-          classic/hoopiq game seeds), so the convert CTA is hidden there rather than 400ing on click. */}
-      {mode !== "challenge" && mode !== "factorhunt" && mode !== "prime" && (convertedId ? (
+      {/* FH/Prime/Blueprint seeds can't convert to H2H challenges (the challenge store only accepts
+          daily/classic/hoopiq game seeds), so the convert CTA is hidden there rather than 400ing on click. */}
+      {mode !== "challenge" && mode !== "factorhunt" && mode !== "prime" && mode !== "blueprint" && (convertedId ? (
         // Convert THIS finished five into a real H2H challenge in place, carrying the original seed:
         // the friend drafts the same teams/eras and tries to beat this exact record — no re-draft.
         <ChallengeResult id={convertedId} role="create" seed={seed} usedHints={result.usedHints}
@@ -535,6 +567,11 @@ export default function Game() {
       {mode === "prime" && (
         <p className="mt-2 text-center text-[11px] text-zinc-500">⚡ Fantasy simulation, not historical — every legend at his peak, any era.</p>
       )}
+      {mode === "blueprint" && blueprint && (
+        <p className="mt-2 text-center text-[11px] text-cyan-400/80">📐 Committed: {BLUEPRINTS.find((b) => b.key === blueprint)!.label} — the engine grades your execution.</p>
+      )}
+      {/* USAGE DISCIPLINE drafts to a non-obvious budget — the live bar is the spec's fix */}
+      {mode === "blueprint" && blueprint === "discipline" && <UsageBar total={drafted.reduce((a, c) => a + (c.usage ?? 0), 0)} />}
       {(current || spinning) && (
         <div className="mt-2 flex justify-center gap-2 text-xs">
           <SkipBtn label="↻ Re-spin Team" used={skips.team} onClick={reSpinTeam} disabled={spinning} />
@@ -549,6 +586,7 @@ export default function Game() {
           {current ? (
             <Browser key={`${current.team}|${current.decade}|${roundNum}`} spin={current} mode={mode} selId={selPlayer?.id ?? null}
               hintsLeft={Math.max(0, HINT_BUDGET - hintsUsed)} onReveal={revealHint}
+              showUsage={mode === "blueprint" && blueprint === "discipline"}
               canPlace={(c) => openSlots.some((s) => c.eligible.includes(s))}
               onSelect={(c) => { setSelSlot(null); setSelPlayer((p) => (p?.id === c.id ? null : c)); }} />
           ) : (
@@ -714,6 +752,66 @@ export default function Game() {
           </div>
         </div>
       )}
+
+      {/* Blueprint commitment — focus-trapped dialog gating the FIRST spin (commit before you see
+          the reels). Confirm locks the objective for the game; Escape backs out to the mode picker. */}
+      {showBpModal && (
+        <div ref={bpRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Blueprint commitment"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { cancelBlueprint(); return; }
+            // radiogroup keyboard contract: arrows move the selection (Tab alone only walks focus)
+            if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End") {
+              e.preventDefault();
+              const i = BLUEPRINTS.findIndex((b) => b.key === bpPick);
+              const n = BLUEPRINTS.length;
+              // radiogroup contract: with nothing selected (i === -1), ArrowDown starts at the
+              // first option and ArrowUp at the LAST — the modulo alone lands one short on ArrowUp
+              const next = e.key === "Home" ? 0 : e.key === "End" ? n - 1
+                : e.key === "ArrowDown" ? (i + 1 + n) % n
+                : i === -1 ? n - 1 : (i - 1 + n) % n;
+              setBpPick(BLUEPRINTS[next].key);
+              bpRef.current?.querySelectorAll<HTMLElement>("[role=radio]")[next]?.focus();
+              return;
+            }
+            if (e.key === "Tab") {
+              const f = bpRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
+              if (!f || f.length === 0) return;
+              const first = f[0], last = f[f.length - 1];
+              // the container holds initial focus — treat it as "first" so Shift+Tab can't escape
+              if (e.shiftKey && (document.activeElement === first || document.activeElement === bpRef.current)) { e.preventDefault(); last.focus(); }
+              // the container (initial focus) is "first" for forward-Tab too — guard it so focus
+              // can't walk out the back before the first button on the very first Tab
+              else if (!e.shiftKey && (document.activeElement === last || document.activeElement === bpRef.current)) { e.preventDefault(); first.focus(); }
+            }
+          }}
+          className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
+          <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
+            <div className="text-center text-xs font-black uppercase tracking-widest text-cyan-400">📐 Blueprint</div>
+            <p className="mt-2 text-center text-base font-semibold text-zinc-100">Commit to an objective — before you see the reels.</p>
+            <p className="mt-1 text-center text-[11px] text-zinc-500">The engine grades your execution on that axis. Board score = wins × execution (×1.0–1.3).</p>
+            <div className="mt-4 space-y-2" role="radiogroup" aria-label="Blueprint choices">
+              {BLUEPRINTS.map((b) => (
+                <button key={b.key} role="radio" aria-checked={bpPick === b.key} onClick={() => setBpPick(b.key)}
+                  className={`w-full rounded-xl border px-4 py-2.5 text-left transition ${
+                    bpPick === b.key ? "border-cyan-400 bg-cyan-500/15" : "border-zinc-700 bg-zinc-950/60 hover:border-zinc-500"}`}>
+                  <span className="flex items-baseline justify-between gap-2">
+                    <span className={`text-sm font-bold ${bpPick === b.key ? "text-cyan-200" : "text-zinc-200"}`}>{b.emoji} {b.label}</span>
+                    <span className="shrink-0 text-[10px] tabular-nums text-zinc-500">A+ {b.lowerIsBetter ? "≤" : "≥"} {b.format(b.bands[0])}</span>
+                  </span>
+                  <span className="mt-0.5 block text-[11px] leading-snug text-zinc-400">{b.desc}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => bpPick && commitBlueprint(bpPick)} disabled={!bpPick}
+              className="mt-4 w-full rounded-xl bg-cyan-500 py-3 text-base font-black text-black hover:bg-cyan-400 disabled:opacity-40">
+              🔒 Commit — spin the reels
+            </button>
+            <button onClick={cancelBlueprint} className="mt-2 w-full py-1 text-xs text-zinc-500 hover:text-zinc-300">
+              ← Back to all modes
+            </button>
+          </div>
+        </div>
+      )}
     </Shell>
   );
 }
@@ -746,6 +844,7 @@ function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => void; on
     { id: "hoopiq", emoji: "🧠", title: "HoopIQ", desc: "Stats hidden — draft by memory, test your ball knowledge." },
     { id: "factorhunt", emoji: "🔮", title: "Factor Hunt", desc: "Daily shared spins — predict WHY before the reveal for a ×1.05 bonus." },
     { id: "prime", emoji: "⚡", title: "Prime Draft", desc: "No eras — every legend at his peak. Cross-era fives, fantasy simulation." },
+    { id: "blueprint", emoji: "📐", title: "Blueprint", desc: "Commit to a tactical objective before the spin — the engine grades your execution." },
     { id: "challenge", emoji: "⚔️", title: "Challenge a Friend", desc: "Build a five, send a link. They draft the same teams — beat your record." },
   ];
   return (
@@ -783,6 +882,32 @@ function Reel({ kind, value, sub, color, locked, masked, spinning, prime }: {
       <div className="truncate text-[10px] text-zinc-500">{masked ? "hidden" : sub}</div>
       {/* announce the settled reel once (stay quiet while cycling and when the value is masked) */}
       <span className="sr-only" aria-live="polite" aria-atomic="true">{spinning || masked ? "" : `${kind}: ${value}`}</span>
+    </div>
+  );
+}
+
+// Live usage-budget bar for the USAGE DISCIPLINE blueprint: total engine usage demand of the five
+// so far, against the A+ target (90), the grade line the spec names (95), and the engine's
+// overload budget (100). The per-candidate numbers ride the bp-* spin response (lib/data.ts).
+const USAGE_BAR_MAX = 130; // display scale — casual fives land ~120-140, so the bar visibly fills
+function UsageBar({ total }: { total: number }) {
+  const pct = Math.min(100, (total / USAGE_BAR_MAX) * 100);
+  const color = total <= 90 ? "bg-green-400/80" : total <= 95 ? "bg-lime-400/80" : total <= 100 ? "bg-amber-400/80" : "bg-red-400/80";
+  const mark = (v: number) => `${(v / USAGE_BAR_MAX) * 100}%`;
+  return (
+    <div className="mx-auto mt-3 w-full max-w-sm">
+      <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+        <span>⚖️ Usage budget</span>
+        <span className={`tabular-nums ${total <= 90 ? "text-green-400" : total <= 95 ? "text-lime-400" : total <= 100 ? "text-amber-400" : "text-red-400"}`}>
+          {total.toFixed(1)}% / A+ ≤90
+        </span>
+      </div>
+      <div className="relative h-2.5 overflow-hidden rounded-full bg-zinc-800" role="img"
+        aria-label={`Total usage demand ${total.toFixed(1)} percent — A+ at 90 or under, overload past 100`}>
+        <div className={`h-full ${color} transition-all`} style={{ width: `${pct}%` }} />
+        <div className="absolute inset-y-0 w-px bg-zinc-400/70" style={{ left: mark(95) }} title="A grade line (95)" />
+        <div className="absolute inset-y-0 w-px bg-red-400/70" style={{ left: mark(100) }} title="Engine overload budget (100)" />
+      </div>
     </div>
   );
 }
@@ -840,13 +965,14 @@ function Court({ roster, selSlot, isTarget, onSlot, maskColors }: {
 }
 
 type SortKey = "fit" | "ppg" | "rpg" | "apg" | "az";
-function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect }: {
+function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect, showUsage }: {
   spin: Spin; mode: Mode; selId: string | null; hintsLeft: number; onReveal: () => void;
-  canPlace: (c: DraftCandidate) => boolean; onSelect: (c: DraftCandidate) => void;
+  canPlace: (c: DraftCandidate) => boolean; onSelect: (c: DraftCandidate) => void; showUsage?: boolean;
 }) {
   const hideStats = mode === "hoopiq"; // HoopIQ hides stats — draft on memory
-  // Free-play assist only (Classic + Prime): Daily/FH are competitions (fairness), HoopIQ is a memory test
-  const canHint = mode === "classic" || mode === "prime";
+  // Classic-style assist (Classic + Prime + Blueprint — Blueprint follows Classic's hint rules,
+  // hinted board rows carry the stamp): Daily/FH are hint-free competitions, HoopIQ is a memory test
+  const canHint = mode === "classic" || mode === "prime" || mode === "blueprint";
   const [revealed, setRevealed] = useState(false); // spent a hint to reveal fit for THIS pick? resets on remount (each spin/round)
   const showFit = revealed && canHint;
   const [q, setQ] = useState("");
@@ -922,7 +1048,7 @@ function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect }:
           const showRowFit = showFit && fits && c.fit;
           return (
             <button key={c.id} onClick={() => onSelect(c)} aria-pressed={sel}
-              aria-label={`Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}${showRowFit ? `, fit ${c.fit!.delta > 0 ? "+" : ""}${c.fit!.delta}${c.fit!.adds.length ? ", adds " + c.fit!.adds.join(" and ") : ""}` : ""}`}
+              aria-label={`Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}${showUsage && c.usage != null ? `, ${Math.round(c.usage)} percent usage demand` : ""}${showRowFit ? `, fit ${c.fit!.delta > 0 ? "+" : ""}${c.fit!.delta}${c.fit!.adds.length ? ", adds " + c.fit!.adds.join(" and ") : ""}` : ""}`}
               className={`mb-1.5 flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition ${
                 sel ? "border-orange-500 bg-orange-500/10" : showRowFit && c.fit!.best ? "border-emerald-600/50 bg-emerald-500/[0.06] hover:border-emerald-500" : fits ? "border-zinc-800 bg-zinc-950/60 hover:border-zinc-600" : "border-zinc-900 bg-zinc-950/40 opacity-55"}`}>
               <div className="min-w-0 flex-1">
@@ -946,6 +1072,8 @@ function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect }:
                   <Mini v={c.pts} k="PPG" /><Mini v={c.trb} k="RPG" /><Mini v={c.ast} k="APG" />
                   {/* SPG/BPG hidden on mobile to make room for the fit column; defense shows via fit tags */}
                   <Mini v={c.stl} k="SPG" className="hidden sm:block" /><Mini v={c.blk} k="BPG" className="hidden sm:block" />
+                  {/* USAGE DISCIPLINE drafts against a budget — the demand column IS the mechanic */}
+                  {showUsage && <Mini v={c.usage} k="USG%" />}
                 </div>
               )}
               {showRowFit && (

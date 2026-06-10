@@ -78,10 +78,12 @@ return {claimed, stored, y or '0', n or '0'}
 `;
 
 // --- /pe/<card> share segment: "<y>.<n>.<v|x>.<lineupSegment>" ---
-// The lineup segment is encodeLineup() output ([a-z0-9_,] plus an optional "h~" prefix — no
+// The lineup segment is encodeLineup() output ([a-z0-9_,] plus optional flag prefixes — no
 // dots), so dot-delimiting is collision-free, mirroring rankShare's card encoding.
+// Accepts EVERY encodeLineup prefix (b<code>~ / p~ / h~, in encode order) even though prime and
+// blueprint seeds can't vote today — the segment validator must never lag the encoder.
 
-const LINEUP_SEG_RE = /^(h~)?[a-z0-9_]+(,[a-z0-9_]+){4}$/;
+const LINEUP_SEG_RE = /^(b[a-z]~)?(p~)?(h~)?[a-z0-9_]+(,[a-z0-9_]+){4}$/;
 const MAX_VOTES = 1_000_000_000;
 
 export function encodePickemCard(lineup: string, v: PickemView): string {

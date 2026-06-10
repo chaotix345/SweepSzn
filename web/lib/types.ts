@@ -77,6 +77,7 @@ export interface DraftCandidate {
   blk?: number | null;
   defense_estimated?: boolean;
   fit?: CandidateFit;
+  usage?: number;       // engine usage demand — sent only on Blueprint (bp-*) spins for the live budget bar
 }
 
 // Daily leaderboard: the client submits the draft as an ordered trace (index = round) so the
