@@ -34,29 +34,39 @@ const shell = {
 };
 
 // Crowd-vs-you strip for Pick'Em share cards: split bar + verdict (satori = flex only, hex only).
+// Solo votes (no crowd counts — Redis dark) render the self-prediction verdict with no bar,
+// matching ResultCard's PickemStrip.
 function pickemStrip(result: LineupResult, pickem: PickemView) {
   const v = pickemVerdict(result.wins, pickem);
-  if (!v.total) return null;
-  const yPct = Math.round((100 * pickem.y) / v.total);
+  if (!v.total && !pickem.vote) return null;
+  const yPct = v.total ? Math.round((100 * pickem.y) / v.total) : 0;
   const verdict = v.solo
     ? `You said ${pickem.vote === "y" ? "60+ wins" : "no shot"} — ${v.youRight ? "you called it" : "not this time"}`
     : v.crowd === null
       ? "The crowd was split down the middle"
-      : `Crowd said ${v.crowd === "y" ? "60+ wins" : "no shot"} (${v.pct}%) — ${v.crowdRight ? "the crowd was right" : v.defied ? "the crowd was defied" : "the crowd was wrong"}`;
+      : `Crowd said ${v.crowd === "y" ? "60+ wins" : "no shot"} (${v.pct}%) — ${v.crowdRight ? "the crowd was right" : v.defied ? "you defied the crowd" : "the crowd was wrong"}`;
+  // Verdict color tells the story at a glance: green for a hit (you called it / you defied the
+  // crowd / the crowd was right), red for a miss, neutral when the crowd split with no majority.
+  const good = v.solo ? v.youRight === true : v.defied || v.crowdRight === true;
+  const verdictColor = !v.solo && v.crowd === null ? "#a1a1aa" : good ? "#34d399" : "#f87171";
   return (
     <div style={{ display: "flex", flexDirection: "column", marginTop: 22 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ display: "flex", fontSize: 20, fontWeight: 700, letterSpacing: 2, color: "#a1a1aa" }}>PICK&apos;EM — CROWD VS. YOU</span>
-        <span style={{ display: "flex", fontSize: 21, fontWeight: 700, color: v.crowdRight === false || v.defied ? "#f87171" : "#34d399" }}>{verdict}</span>
+        <span style={{ display: "flex", fontSize: 21, fontWeight: 700, color: verdictColor }}>{verdict}</span>
       </div>
-      <div style={{ display: "flex", height: 16, borderRadius: 8, overflow: "hidden", marginTop: 10, width: "100%", background: "#27272a" }}>
-        {yPct > 0 && <div style={{ display: "flex", width: `${yPct}%`, background: "#34d399" }} />}
-        {yPct < 100 && <div style={{ display: "flex", width: `${100 - yPct}%`, background: "#f87171" }} />}
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 17, color: "#71717a" }}>
-        <span style={{ display: "flex" }}>YES 60+ · {yPct}%</span>
-        <span style={{ display: "flex" }}>NO · {100 - yPct}%</span>
-      </div>
+      {v.total > 0 && (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", height: 16, borderRadius: 8, overflow: "hidden", marginTop: 10, width: "100%", background: "#27272a" }}>
+            {yPct > 0 && <div style={{ display: "flex", width: `${yPct}%`, background: "#34d399" }} />}
+            {yPct < 100 && <div style={{ display: "flex", width: `${100 - yPct}%`, background: "#f87171" }} />}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 17, color: "#71717a" }}>
+            <span style={{ display: "flex" }}>YES 60+ · {yPct}%</span>
+            <span style={{ display: "flex" }}>NO · {100 - yPct}%</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -64,6 +74,9 @@ function pickemStrip(result: LineupResult, pickem: PickemView) {
 export function resultOgElement(result: LineupResult, players: Player[], hinted = false, pickem?: PickemView, prime = false) {
   const grade = GRADE_HEX[result.grade] ?? "#e4e4e7";
   const net = `${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`;
+  // Render the strip first so the record size and the strip can never disagree (a truthy pickem
+  // whose strip returns null must NOT shrink the record).
+  const strip = pickem ? pickemStrip(result, pickem) : null;
   return (
     <div style={shell}>
       {/* header */}
@@ -83,7 +96,7 @@ export function resultOgElement(result: LineupResult, players: Player[], hinted 
 
       {/* record + grade (record shrinks a notch when the Pick'Em strip needs the vertical room) */}
       <div style={{ display: "flex", alignItems: "center", marginTop: 24, gap: 40 }}>
-        <div style={{ display: "flex", alignItems: "baseline", fontSize: pickem ? 116 : 150, fontWeight: 900, lineHeight: 1, color: grade }}>
+        <div style={{ display: "flex", alignItems: "baseline", fontSize: strip ? 116 : 150, fontWeight: 900, lineHeight: 1, color: grade }}>
           <span>{result.wins}</span><span style={{ color: "#3f3f46" }}>–</span><span>{result.losses}</span>
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
@@ -97,7 +110,7 @@ export function resultOgElement(result: LineupResult, players: Player[], hinted 
         </div>
       </div>
 
-      {pickem && pickemStrip(result, pickem)}
+      {strip}
 
       {/* players */}
       <div style={{ display: "flex", marginTop: "auto", gap: 14 }}>

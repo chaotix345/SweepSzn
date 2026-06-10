@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { redis, rateLimit, ipOf, TTL } from "@/lib/redis";
-import { pickemSeedOk, parseVote } from "@/lib/pickem";
+import { pickemSeedOk, parseVote, PICKEM_VOTE_LUA } from "@/lib/pickem";
 
 export const runtime = "nodejs";
 
@@ -27,7 +27,8 @@ async function counts(seed: string): Promise<{ y: number; n: number }> {
 
 export async function GET(req: Request) {
   if (!redis) return NextResponse.json({ error: "pickem not configured" }, { status: 503 });
-  if (!(await rateLimit(`rl:pickem:${ipOf(req)}`, 60, 60))) {
+  // GET and POST get separate buckets so result-card crowd fetches can't starve vote POSTs.
+  if (!(await rateLimit(`rl:pickem:g:${ipOf(req)}`, 60, 60))) {
     return NextResponse.json({ error: "too many requests" }, { status: 429 });
   }
   const url = new URL(req.url);
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   if (!redis) return NextResponse.json({ error: "pickem not configured" }, { status: 503 });
-  if (!(await rateLimit(`rl:pickem:${ipOf(req)}`, 30, 60))) {
+  if (!(await rateLimit(`rl:pickem:p:${ipOf(req)}`, 30, 60))) {
     return NextResponse.json({ error: "too many requests" }, { status: 429 });
   }
   const body = await req.json().catch(() => ({}));
@@ -55,16 +56,21 @@ export async function POST(req: Request) {
   if (!pickemSeedOk(seed) || !vote) return NextResponse.json({ error: "bad vote" }, { status: 400 });
   try {
     const voter = keyV(seed, voterId(body?.uid, req));
-    // NX claims the voter slot and stores the pick atomically; a replay (Daily re-run, refresh
-    // spam) can't double-count — it just reads the original pick back.
-    const claimed = await redis.set(voter, vote, { nx: true, ex: TTL });
-    if (claimed) {
-      const key = vote === "y" ? keyY(seed) : keyN(seed);
-      await redis.pipeline().incr(key).expire(key, TTL).exec();
-    }
-    const stored = claimed ? vote : parseVote(await redis.get<string>(voter)) ?? vote;
-    const c = await counts(seed);
-    return NextResponse.json({ ...c, vote: stored, already: !claimed });
+    // One atomic script: claim the voter slot, bump the matching counter, and read back the
+    // stored pick + both counts. A replay (Daily re-run, refresh spam) can't double-count — it
+    // just reads the original pick back — and a transient failure can no longer claim the voter
+    // without counting the vote.
+    const [claimed, stored, y, n] = (await redis.eval(
+      PICKEM_VOTE_LUA,
+      [voter, keyY(seed), keyN(seed)],
+      [vote, TTL],
+    )) as [number, string, string | number, string | number];
+    return NextResponse.json({
+      y: Number(y) || 0,
+      n: Number(n) || 0,
+      vote: parseVote(stored) ?? vote,
+      already: !claimed,
+    });
   } catch {
     return NextResponse.json({ error: "pickem unavailable" }, { status: 503 });
   }

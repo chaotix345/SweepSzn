@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { redis, isRedisEnabled, TTL, readSortedRows } from "./redis";
 import type { FhRow, FhBoardRow, FhBoardView } from "./factorHunt";
 
@@ -44,6 +45,25 @@ export async function submitFhScore(date: string, row: FhRow, sortScore: number)
     await redis.expire(keyH(date), TTL);
   }
   return getFhLeaderboard(date, row.uid);
+}
+
+// One immutable prediction lock per (uid, lineup) per day. The FIRST submission of a lineup
+// locks its prediction — including a skip (the result card reveals the factor breakdown, so an
+// unlocked replay of the same lineup could walk the four choices via direct POSTs until
+// correct=true lands the ×1.05 through keep-best). SET NX makes the lock write-once, so there
+// is no read-modify-write race to reset it; a NEW lineup (legit re-draft) locks fresh.
+// Returns the prediction to grade: the requested one when this lineup is first seen, the locked
+// one (null when the lock recorded a skip) otherwise.
+const keyPred = (d: string, uid: string, lineup: string) =>
+  `lb:fh:${d}:pred:${uid}:${createHash("sha256").update(lineup).digest("hex").slice(0, 16)}`;
+
+export async function lockFhPrediction(date: string, uid: string, lineup: string, requested: string | null): Promise<string | null> {
+  if (!redis) return requested;
+  const key = keyPred(date, uid, lineup);
+  const claimed = await redis.set(key, requested ?? "", { nx: true, ex: TTL });
+  if (claimed) return requested;
+  const locked = await redis.get<string>(key);
+  return locked || null; // "" = a locked skip
 }
 
 // Claim cleanup: drop an anon row when the same player re-submits signed-in (mirrors daily).
