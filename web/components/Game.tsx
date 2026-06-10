@@ -17,7 +17,8 @@ import { pickemSeedOk, getPickemSkip, setPickemSkip, getLocalVote, setLocalVote,
 import { buildFhChoices } from "@/lib/factorHunt";
 import FhLeaderboard from "@/components/FhLeaderboard";
 
-type Mode = "daily" | "classic" | "hoopiq" | "challenge" | "factorhunt";
+type Mode = "daily" | "classic" | "hoopiq" | "challenge" | "factorhunt" | "prime";
+const MODE_LABEL: Record<Mode, string> = { daily: "daily", classic: "classic", hoopiq: "hoopiq", challenge: "challenge", factorhunt: "Factor Hunt", prime: "Prime Draft" };
 type Roster = Record<Slot, DraftCandidate | null>;
 const EMPTY: Roster = { PG: null, SG: null, SF: null, PF: null, C: null };
 interface Spin { team: string; decade: string; candidates: DraftCandidate[] }
@@ -87,8 +88,9 @@ export default function Game() {
 
   // Spend a hint to reveal fit grades for the current pick. Charges on reveal (not on placement), so
   // there is no way to peek and then dodge the cost. No-op once the per-game budget is spent.
+  // Prime Draft is "identical to Classic" per spec, hints included; both are free-play modes.
   const revealHint = useCallback(() => {
-    if (mode !== "classic" || hintsUsedRef.current >= HINT_BUDGET) return;
+    if ((mode !== "classic" && mode !== "prime") || hintsUsedRef.current >= HINT_BUDGET) return;
     hintsUsedRef.current += 1; setHintsUsed(hintsUsedRef.current);
   }, [mode]);
 
@@ -117,7 +119,7 @@ export default function Game() {
     setChallengeId(cid); setChallengeRole(crole); setSeed(s);
     setRoster(EMPTY); setCurrent(null); setResult(null); setError(null); setLoading(false);
     setSelPlayer(null); setSelSlot(null); setSkips({ team: false, era: false });
-    setReel({ team: "ATL", era: "60's" }); setLockedReel(null); saltRef.current = 0;
+    setReel({ team: "ATL", era: m === "prime" ? "PRIME" : "60's" }); setLockedReel(null); saltRef.current = 0;
     traceRef.current = []; roundRespinsRef.current = []; setConvertedId(null);
     hintsUsedRef.current = 0; setHintsUsed(0);
     setPickemVote(null); setPickemDismissed(false); setPickemCrowd(null); setPickemSubject(null);
@@ -176,11 +178,11 @@ export default function Game() {
 
         const enc = params.get("r");
         const m = params.get("m") as Mode | null;
-        if (enc && (m === "daily" || m === "classic" || m === "hoopiq" || m === "factorhunt")) {
+        if (enc && (m === "daily" || m === "classic" || m === "hoopiq" || m === "factorhunt" || m === "prime")) {
           setRestoring(true);
           // same-session full restore: keeps the draft trace the Daily board needs to submit
           const last = readLastResult<LastResult>();
-          if (last && last.mode === m && last.result && encodeLineup(last.result.players.map((p) => p.id), last.result.usedHints) === enc) {
+          if (last && last.mode === m && last.result && encodeLineup(last.result.players.map((p) => p.id), last.result.usedHints, m === "prime") === enc) {
             if (cancelled) return;
             setMode(m); setSeed(last.seed); setResult(last.result); setFhPrediction(last.fh ?? null); setRestoring(false); return;
           }
@@ -213,7 +215,7 @@ export default function Game() {
     if (!result || !mode || mode === "challenge") return;
     try {
       const u = new URL(window.location.href);
-      u.searchParams.set("r", encodeLineup(result.players.map((p) => p.id), result.usedHints));
+      u.searchParams.set("r", encodeLineup(result.players.map((p) => p.id), result.usedHints, mode === "prime"));
       u.searchParams.set("m", mode);
       // daily/FH boards are per-date — carry the date so a cold restore shows the right day's board, not today's
       if (mode === "daily") u.searchParams.set("d", seed.replace("daily-", ""));
@@ -231,15 +233,16 @@ export default function Game() {
     tickRef.current = setInterval(() => {
       setReel({
         team: locked === "team" ? opts.lockedTeam! : FRANCHISES[Math.floor(Math.random() * FRANCHISES.length)],
-        era: locked === "era" ? eraLabel(opts.lockedDecade!) : eraLabel(DECADES[Math.floor(Math.random() * DECADES.length)]),
+        // Prime Draft: the era reel never cycles — it's permanently locked to PRIME
+        era: mode === "prime" ? "PRIME" : locked === "era" ? eraLabel(opts.lockedDecade!) : eraLabel(DECADES[Math.floor(Math.random() * DECADES.length)]),
       });
     }, 70);
     try {
       const r = await fetch("/api/spin", {
         method: "POST", headers: { "content-type": "application/json" },
-        // fit grades are a Classic-only assist; only Classic free-play requests them (keeps them off
-        // the wire in Daily/HoopIQ/Challenge so the network response can't be read to draft optimally)
-        body: JSON.stringify({ seed, round: filled, exclude: drafted.map((p) => p.id), fit: mode === "classic", ...opts }),
+        // fit grades are a free-play assist (Classic + Prime); never requested in Daily/HoopIQ/
+        // Challenge/Factor Hunt so the network response can't be read to draft optimally
+        body: JSON.stringify({ seed, round: filled, exclude: drafted.map((p) => p.id), fit: mode === "classic" || mode === "prime", ...opts }),
       });
       if (!r.ok) throw new Error("spin failed");
       const res: Spin = await r.json();
@@ -247,7 +250,7 @@ export default function Game() {
       setReel({ team: res.team, era: eraLabel(res.decade) });
       setCurrent(res);
     } catch {
-      setLockedReel(null); setReel({ team: "ATL", era: "60's" });
+      setLockedReel(null); setReel({ team: "ATL", era: mode === "prime" ? "PRIME" : "60's" });
       // roll back the re-spin we optimistically charged before this call so a network error doesn't
       // silently burn the skip (and don't leave a phantom re-spin in the verification trace)
       if (locked === "era") setSkips((s) => ({ ...s, team: false }));
@@ -306,7 +309,7 @@ export default function Game() {
       // Persist so the result survives a refresh (full object, incl. trace) and shows under "Your
       // results". A challenge entry is upgraded with its challengeId later, when the link is created.
       writeLastResult({ mode, seed, result: full, fh: fhPred });
-      if (mode) saveResult({ encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints), mode, wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
+      if (mode) saveResult({ encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints, mode === "prime"), mode, wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
       track("lineup_complete", { wins: data.result.wins, grade: data.result.grade });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return; // superseded by a restart — ignore
@@ -458,16 +461,16 @@ export default function Game() {
   })();
   if (result) return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
-      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={mode === "factorhunt" ? "Factor Hunt" : mode} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} />
+      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
       {mode === "factorhunt" && <FhLeaderboard date={seed.replace("fh-", "")} trace={result.trace} prediction={fhPrediction} readOnly={result.trace.length === 0} />}
       {mode === "challenge" && challengeId && challengeRole && (
         <ChallengeResult id={challengeId} role={challengeRole} seed={seed} usedHints={false} result={result.result} players={result.players}
           trace={result.trace} onCreateOwn={() => start("challenge")} />
       )}
-      {/* FH seeds can't convert to H2H challenges (the challenge store only accepts daily/classic/
-          hoopiq game seeds), so the convert CTA is hidden there rather than 400ing on click. */}
-      {mode !== "challenge" && mode !== "factorhunt" && (convertedId ? (
+      {/* FH/Prime seeds can't convert to H2H challenges (the challenge store only accepts daily/
+          classic/hoopiq game seeds), so the convert CTA is hidden there rather than 400ing on click. */}
+      {mode !== "challenge" && mode !== "factorhunt" && mode !== "prime" && (convertedId ? (
         // Convert THIS finished five into a real H2H challenge in place, carrying the original seed:
         // the friend drafts the same teams/eras and tries to beat this exact record — no re-draft.
         <ChallengeResult id={convertedId} role="create" seed={seed} usedHints={result.usedHints}
@@ -495,7 +498,8 @@ export default function Game() {
       {/* reels */}
       <div className="flex flex-wrap items-center justify-center gap-3">
         <Reel kind="TEAM" value={reel.team} sub={teamName(reel.team)} color="orange" locked={lockedReel === "team"} masked={reelMasked(lockedReel === "team")} spinning={spinning || !current} />
-        <Reel kind="ERA" value={reel.era} sub="decade" color="violet" locked={lockedReel === "era"} masked={reelMasked(lockedReel === "era")} spinning={spinning || !current} />
+        <Reel kind="ERA" value={reel.era} sub={mode === "prime" ? "all eras · peak form" : "decade"} color="violet"
+          locked={mode === "prime" || lockedReel === "era"} masked={reelMasked(lockedReel === "era")} spinning={mode !== "prime" && (spinning || !current)} />
         {!current && (
           <button onClick={spin} disabled={spinning}
             className="rounded-xl bg-orange-500 px-7 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400 disabled:opacity-50">
@@ -509,7 +513,8 @@ export default function Game() {
       {(current || spinning) && (
         <div className="mt-2 flex justify-center gap-2 text-xs">
           <SkipBtn label="↻ Re-spin Team" used={skips.team} onClick={reSpinTeam} disabled={spinning} />
-          <SkipBtn label="↻ Re-spin Era" used={skips.era} onClick={reSpinEra} disabled={spinning} />
+          {/* the era reel is hard-locked to PRIME in Prime Draft — no era re-spin to offer */}
+          {mode !== "prime" && <SkipBtn label="↻ Re-spin Era" used={skips.era} onClick={reSpinEra} disabled={spinning} />}
         </div>
       )}
 
@@ -693,7 +698,7 @@ function Shell({ children, roundNum, mode, onRestart, showRestart }: {
     <div className="mx-auto max-w-4xl px-4 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
       <header className="mb-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold capitalize text-zinc-300">{mode === "factorhunt" ? "Factor Hunt" : mode}</span>
+          <span className="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold capitalize text-zinc-300">{MODE_LABEL[mode]}</span>
           <span className="text-sm text-zinc-500">Round {roundNum}/5</span>
         </div>
         {showRestart && (
@@ -711,6 +716,7 @@ function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => void; on
     { id: "classic", emoji: "💯", title: "Classic", desc: "Full stats visible — draft on what you can see." },
     { id: "hoopiq", emoji: "🧠", title: "HoopIQ", desc: "Stats hidden — draft by memory, test your ball knowledge." },
     { id: "factorhunt", emoji: "🔮", title: "Factor Hunt", desc: "Daily shared spins — predict WHY before the reveal for a ×1.05 bonus." },
+    { id: "prime", emoji: "⚡", title: "Prime Draft", desc: "No eras — every legend at his peak. Cross-era fives, fantasy simulation." },
     { id: "challenge", emoji: "⚔️", title: "Challenge a Friend", desc: "Build a five, send a link. They draft the same teams — beat your record." },
   ];
   return (
@@ -808,7 +814,8 @@ function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect }:
   canPlace: (c: DraftCandidate) => boolean; onSelect: (c: DraftCandidate) => void;
 }) {
   const hideStats = mode === "hoopiq"; // HoopIQ hides stats — draft on memory
-  const canHint = mode === "classic";  // Classic only: Daily is a competition (fairness), HoopIQ is a memory test
+  // Free-play assist only (Classic + Prime): Daily/FH are competitions (fairness), HoopIQ is a memory test
+  const canHint = mode === "classic" || mode === "prime";
   const [revealed, setRevealed] = useState(false); // spent a hint to reveal fit for THIS pick? resets on remount (each spin/round)
   const showFit = revealed && canHint;
   const [q, setQ] = useState("");
@@ -890,7 +897,10 @@ function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect }:
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-semibold">{c.name}</div>
                 <div className="text-[11px] text-zinc-500">
-                  {c.eligible.join(" · ")}{!fits && <span className="ml-1 text-zinc-500">· no open slot</span>}
+                  {c.eligible.join(" · ")}
+                  {/* Prime pools span all eras — show each player's peak decade on the row */}
+                  {spin.decade === "PRIME" && <span className="ml-1 text-violet-400/80">· {eraLabel(c.decade)}</span>}
+                  {!fits && <span className="ml-1 text-zinc-500">· no open slot</span>}
                 </div>
                 {showRowFit && c.fit!.adds.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">

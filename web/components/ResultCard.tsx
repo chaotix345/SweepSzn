@@ -22,9 +22,9 @@ const GRADE_COLOR: Record<string, string> = {
 const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1));
 
 export default function ResultCard({
-  result, players, slots, mode, onReset, shared, usedHints, pickem, factorHunt,
+  result, players, slots, mode, onReset, shared, usedHints, pickem, factorHunt, prime,
 }: {
-  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp;
+  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean;
 }) {
   const factors = factorViews(result);
   // split by the value's sign (what actually helped/hurt), not the engine's fixed label —
@@ -39,7 +39,7 @@ export default function ResultCard({
   const gradeColor = GRADE_COLOR[result.grade] ?? "text-zinc-300";
   // a recipient can reconstruct the exact result from these 5 ids (slot order). With Pick'Em
   // data the link goes through /pe/ so the OG card carries the crowd-split bar.
-  const lineupSeg = encodeLineup(players.map((p) => p.id), usedHints);
+  const lineupSeg = encodeLineup(players.map((p) => p.id), usedHints, prime);
   const hasPickem = !!pickem && (!!pickem.vote || pickem.y + pickem.n > 0);
   const sharePath = hasPickem ? `/pe/${encodePickemCard(lineupSeg, pickem!)}` : `/r/${lineupSeg}`;
   const names = players.map((p) => displayName(p.name));
@@ -67,6 +67,13 @@ export default function ResultCard({
               ? <>🔮 Called it: {factorHunt.answer} · ×1.05 board bonus</>
               : <>🔮 You said {factorHunt.prediction} — it was {factorHunt.answer}</>}
           </div>
+        )}
+        {prime && (
+          <>
+            <div className="mt-2 ml-1 inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-violet-300"
+              title="All-eras roster — every player at his statistical peak">⚡ PRIME</div>
+            <p className="mt-2 text-[11px] text-violet-300/70">Fantasy simulation, not historical simulation — every player at his peak, eras crossed freely.</p>
+          </>
         )}
         <p className="mx-auto mt-3 max-w-md text-sm text-zinc-400">{headline(result)}</p>
         <div className="mt-4 flex justify-center gap-2 text-sm">
@@ -133,7 +140,7 @@ export default function ResultCard({
       </div>
 
       <div className="flex gap-3 border-t border-zinc-800 px-6 py-4">
-        <ShareButton result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} />
+        <ShareButton result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} />
         {shared ? (
           <Link href="/play" className="flex-1 rounded-xl bg-orange-500 py-2.5 text-center text-sm font-bold text-black hover:bg-orange-400">Build your own five →</Link>
         ) : (
@@ -149,7 +156,7 @@ const subscribeNoop = () => () => {};
 const getCanNative = () => typeof navigator !== "undefined" && "share" in navigator;
 const getServerCanNative = () => false;
 
-function ShareButton({ result, path, names, usedHints, pickem }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp }) {
+function ShareButton({ result, path, names, usedHints, pickem, prime }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp; prime?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -159,7 +166,7 @@ function ShareButton({ result, path, names, usedHints, pickem }: { result: Lineu
   const defyLine = pickem ? pickemShareLine(result.wins, result.losses, pickem, pickem.subject) : null;
   const text = defyLine
     ? `${defyLine} Can you beat the crowd on SweepSzn?`
-    : `My all-time five (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""} — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}. Can you build a better one?`;
+    : `My ${prime ? "PRIME cross-era five" : "all-time five"} (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""} — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}. Can you build a better one?`;
   const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
 

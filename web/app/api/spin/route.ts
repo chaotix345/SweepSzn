@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { spin, type SpinOptions } from "@/lib/data";
+import { spin, primeSpin, type SpinOptions } from "@/lib/data";
 import { rateLimit, ipOf } from "@/lib/redis";
 import { isFitLockedSeed } from "@/lib/challengeStore";
 
@@ -30,5 +30,7 @@ export async function POST(req: Request) {
     excludeDecade: typeof body?.excludeDecade === "string" ? body.excludeDecade : null,
     salt: Number.isFinite(body?.salt) ? body.salt : 0,
   };
+  // Prime Draft seeds spin team-only over all-time peak-variant pools (era locked to PRIME)
+  if (seed.startsWith("prime-")) return NextResponse.json(primeSpin(seed, round, opts, wantFit));
   return NextResponse.json(spin(seed, round, opts, wantFit));
 }

@@ -4,21 +4,27 @@
 // Player ids are [a-z0-9_], so a comma separator stays URL-path-safe.
 
 export const LINEUP_SEP = ",";
-// A leading "h~" marks a result that was drafted with Hints. It rides inside the /r/ path segment
-// (player ids are [a-z0-9_], so "h~" can't collide) so the dynamic OG card can show the stamp too.
+// Leading flag prefixes ride inside the /r/ path segment (player ids are [a-z0-9_], so "x~" can't
+// collide) so the dynamic OG card can show the stamps too: "h~" = drafted with Hints, "p~" = a
+// Prime Draft five (all-eras peak variants — OG gets the PRIME badge). Order-independent.
 const HINT_PREFIX = "h~";
+const PRIME_PREFIX = "p~";
 
-export function encodeLineup(ids: string[], usedHints = false): string {
-  return (usedHints ? HINT_PREFIX : "") + ids.join(LINEUP_SEP);
+export function encodeLineup(ids: string[], usedHints = false, prime = false): string {
+  return (prime ? PRIME_PREFIX : "") + (usedHints ? HINT_PREFIX : "") + ids.join(LINEUP_SEP);
 }
 
-// Decode a /r/ segment into the 5 ids plus whether it was hint-stamped.
-export function decodeShare(segment: string): { ids: string[]; hinted: boolean } {
+// Decode a /r/ segment into the 5 ids plus its flag stamps.
+export function decodeShare(segment: string): { ids: string[]; hinted: boolean; prime: boolean } {
   // Next already URL-decodes the route param; guard against a still-encoded comma anyway.
-  const s = decodeURIComponent(segment);
-  const hinted = s.startsWith(HINT_PREFIX);
-  const body = hinted ? s.slice(HINT_PREFIX.length) : s;
-  return { ids: body.split(LINEUP_SEP).map((x) => x.trim()).filter(Boolean), hinted };
+  let s = decodeURIComponent(segment);
+  let hinted = false, prime = false;
+  for (;;) {
+    if (!hinted && s.startsWith(HINT_PREFIX)) { hinted = true; s = s.slice(HINT_PREFIX.length); continue; }
+    if (!prime && s.startsWith(PRIME_PREFIX)) { prime = true; s = s.slice(PRIME_PREFIX.length); continue; }
+    break;
+  }
+  return { ids: s.split(LINEUP_SEP).map((x) => x.trim()).filter(Boolean), hinted, prime };
 }
 
 export function decodeLineup(segment: string): string[] {

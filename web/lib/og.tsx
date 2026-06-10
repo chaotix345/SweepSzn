@@ -61,7 +61,7 @@ function pickemStrip(result: LineupResult, pickem: PickemView) {
   );
 }
 
-export function resultOgElement(result: LineupResult, players: Player[], hinted = false, pickem?: PickemView) {
+export function resultOgElement(result: LineupResult, players: Player[], hinted = false, pickem?: PickemView, prime = false) {
   const grade = GRADE_HEX[result.grade] ?? "#e4e4e7";
   const net = `${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`;
   return (
@@ -71,11 +71,14 @@ export function resultOgElement(result: LineupResult, players: Player[], hinted 
         <div style={{ display: "flex", alignItems: "baseline" }}>
           <Wordmark />
           <span style={{ marginLeft: 16, fontSize: 22, color: "#a1a1aa", fontWeight: 600 }}>all-time starting five</span>
+          {prime && (
+            <span style={{ display: "flex", alignSelf: "center", marginLeft: 16, padding: "5px 14px", borderRadius: 999, background: "rgba(139,92,246,0.18)", color: "#a78bfa", fontSize: 18, fontWeight: 800, letterSpacing: 1 }}>PRIME</span>
+          )}
           {hinted && (
             <span style={{ display: "flex", alignSelf: "center", marginLeft: 16, padding: "5px 14px", borderRadius: 999, background: "rgba(74,222,128,0.14)", color: "#4ade80", fontSize: 18, fontWeight: 700 }}>HINTS USED</span>
           )}
         </div>
-        <span style={{ display: "flex", fontSize: 22, color: "#71717a" }}>projected 82-game record</span>
+        <span style={{ display: "flex", fontSize: 22, color: "#71717a" }}>{prime ? "fantasy simulation · peak eras" : "projected 82-game record"}</span>
       </div>
 
       {/* record + grade (record shrinks a notch when the Pick'Em strip needs the vertical room) */}
