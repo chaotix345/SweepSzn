@@ -1,10 +1,5 @@
+import { describe, it, expect } from "vitest";
 import { isoWeek } from "./isoweek";
-
-let fail = 0;
-const assert = (got: string, want: string, m: string) => {
-  if (got !== want) { console.error(`FAIL: ${m} — got ${got}, want ${want}`); fail++; }
-  else console.log(`ok: ${m} (${want})`);
-};
 
 // Authoritative ISO-8601 boundary cases (Wikipedia reference table) — these are exactly the
 // Fri/Sat/Sun + year-boundary days the naive "always go forward to Thursday" formula got wrong.
@@ -36,7 +31,10 @@ const cases: [string, string, string][] = [
   ["2026-6-15", "2026-W25", "Mon 2026-06-15"],
 ];
 
-for (const [date, want, label] of cases) assert(isoWeek(date), want, label);
-
-console.log(fail ? `\n${fail} ISOWEEK ASSERTION(S) FAILED` : "\nALL ISOWEEK CHECKS PASSED");
-process.exit(fail ? 1 : 0);
+describe("isoWeek", () => {
+  for (const [date, want, label] of cases) {
+    it(label, () => {
+      expect(isoWeek(date)).toBe(want);
+    });
+  }
+});
