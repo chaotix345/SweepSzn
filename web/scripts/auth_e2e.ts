@@ -1,11 +1,12 @@
 // Tracked env-gated harness. Verifies the auth route wiring end-to-end over HTTP.
-// Usage: BASE=http://localhost:3000 npx tsx scripts/auth_e2e.ts
-// Requires: BASE env var pointing at a running server (local dev or deployed). Skips cleanly when absent.
-process.env.AUTH_SECRET = process.env.AUTH_SECRET || "6457367b65ca9680770d7ef6acaea0b670aa2e207913de443834f96975714f09";
+// Usage: BASE=http://localhost:3000 AUTH_SECRET=<server's secret> npx tsx scripts/auth_e2e.ts
+// Requires: BASE pointing at a running server (skips cleanly when absent) and AUTH_SECRET matching
+// that server's secret (fails loudly when absent — minted cookies would just 401 otherwise).
 import { signSession, authedUid, SESSION_COOKIE } from "../lib/auth";
 
 const BASE: string = process.env.BASE ?? "";
 if (!BASE) { console.log("skipped: BASE is not set"); process.exit(0); }
+if (!process.env.AUTH_SECRET) { console.error("FAIL: AUTH_SECRET must be set to the target server's secret"); process.exit(1); }
 let fail = 0;
 const assert = (c: boolean, m: string) => { if (!c) { console.error("FAIL:", m); fail++; } else console.log("ok:", m); };
 

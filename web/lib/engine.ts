@@ -37,7 +37,7 @@ function zcap(p: Player, k: keyof NonNullable<Player["z"]>, c: Coefficients): nu
 }
 
 function posDef(pos: string, m: DefModel): number {
-  // Mapping MUST match calibrate2.py's pos_oh ({"F":"SF","G":"SG"}): a generic forward "F"
+  // Mapping MUST match calibrate.py's pos_oh ({"F":"SF","G":"SG"}): a generic forward "F"
   // was fit into the posSF dummy, so it must read posSF here (not posPF).
   switch (pos) {
     case "C": return m.posC;

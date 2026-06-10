@@ -1,3 +1,5 @@
+> **HISTORICAL (frozen 2026-06):** decision-record only — conventions here may be superseded. Current: tests are Vitest via `npm test`; see `web/AGENTS.md`.
+
 # 82-0 Async H2H / Challenge — Design Spec
 
 **Date:** 2026-06-08 · **Branch:** `feat/h2h-challenge` · **Effort:** L, has backend (Upstash)

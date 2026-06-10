@@ -42,7 +42,7 @@ This is the thing the original never did, and the single biggest source of quali
 
 ## 3. Data
 
-**Source:** the Kaggle `sumitrodatta/nba-aba-baa-stats` dataset (all players 1947–present, per-game + advanced + per-100 + season pace + league averages), backfilled from Basketball-Reference where needed. Free, complete, season-level.
+**Source (as built):** Basketball-Reference season pages (per-game + advanced + standings, 1950–2025), fetched by `data/scrape.py` at a 3.6 s throttle into a local `data/raw/` cache and parsed by `data/build_dataset.py`. The original plan was the Kaggle `sumitrodatta/nba-aba-baa-stats` snapshot; direct scraping won because it stays current and carries every column the calibration needs. Respect the throttle — B-R's terms are the reason the raw cache is local-only (gitignored) and the scraper is resumable rather than re-run casually.
 
 **Hard availability cliffs (verified) — the engine must branch on these:**
 
@@ -175,7 +175,7 @@ The engine is fit to **1,170 real NBA team-seasons** (1985–2025) and **24,687 
 - **Team mapping:** `ORtg = 104.4 + 0.618·ΣOBPM(top5)`, `DRtg = 107.6 − 0.742·ΣDBPM(top5)`, wins via Pythagorean **k = 14.0** (the fit independently recovered the canonical NBA exponent). R² ≈ 0.42/0.43 per side, wins RMSE ≈ 6. The ceiling is real: a 5-starter feature can't capture bench/coaching/health, and I deliberately don't use bench data the game can't provide.
 - **Pre-1974 offense** (z-scores → OBPM, features available pre-1974): **R² = 0.61.** Old-era offense is defensible.
 - **Pre-1974 defense** (rebounds + position → DBPM): **R² = 0.04 — near useless.** Box-score defense before steals/blocks is essentially unknowable. Adding **Defensive Win Shares** (which uses team-defense context) lifted it to **R² = 0.23**, which rescues anchors like Russell (now the engine's #1 defender) without inventing reputation. Still flagged as estimated.
-- **Usage-overload γ:** tried to fit it from real teams and the slope came back **negative** — real teams never stack five ball-dominant stars, so the data can't justify a penalty in-range. γ = 0.20 is therefore a **documented fantasy-regime heuristic** (finite ball / usage-curve logic), not a data fit. This is the one knob that is reasoned rather than regressed, by necessity.
+- **Usage-overload γ:** tried to fit it from real teams and the slope came back **negative** — real teams never stack five ball-dominant stars, so the data can't justify a penalty in-range. The shipped **γ = 0.22** (`overloadGamma` in `coefficients.json`, hand-set override of the unusable fit) is therefore a **documented fantasy-regime heuristic** (finite ball / usage-curve logic), not a data fit. This is the one knob that is reasoned rather than regressed, by necessity.
 
 **Validation (calibrated engine):** consensus panel ranks sensibly (modern two-way superteam 79 > GOAT-balanced 74 > … > 5-PG chaos 68 > 5-centers 63 > role-players 55 > pure-scorers 53); every degenerate max-stat stack (PPG/REB/AST/USG) lands ≤ the balanced GOAT team; hill-climb optimum is a sane elite roster at 79-3 (82-0 is brutal). Top-25-by-impact and top-defender lists track basketball consensus (Russell top-3 defender). Reproduce with `web/scripts/validate.ts` and `rank.ts`.
 
@@ -200,3 +200,32 @@ What changed:
 4. **Rebounding-rate penalty — tested and dropped.** A mean-DRB-z penalty *cannot* separate an all-guard fantasy lineup (meanTrbZ ≈ 0) from a real small-ball contender (also ≈ 0), so it would have hurt real teams. Size is instead carried by the interior-presence term above, which keys on *having a big at all* — something real teams always satisfy.
 
 The one residual quirk: **Nate McMillan** ranks as the top single-season defender (real 1994 DBPM of 5.5, driven by 3.0 steals/game). DBPM structurally over-weights steals; without play-by-play RAPM this isn't fully fixable, and it does not affect team-level prediction (ΣDBPM is well-calibrated), so it is left as a documented, harmless artifact.
+
+---
+
+## 12. Trust model & 82-0 parity (frozen) — read before adding a mode
+
+**Trust model: leaderboards are casual-fair, not adversarially-fair, by design.** The engine is open
+source, `players.json` / `coefficients.json` are served publicly, and `/api/evaluate` accepts arbitrary
+lineups — so a determined player can always compute optimal plays offline. No server-side secret can
+change that. The defenses we DO maintain, and that every new mode must keep:
+
+1. **Server-side replay is the only score that counts.** Every submit route re-runs the full trace
+   through `verifyTrace` + the engine; client-sent scores/factors are never read.
+2. **No free hints on competitive seeds.** Fit grades / per-candidate deltas are withheld from the
+   wire for Daily, HoopIQ, challenges, and any shared-seed mode (`lib/data.ts` spin gating) so
+   devtools alone don't reveal the optimal pick. Raising the bar from "open devtools" to "write a
+   script" is the entire goal — it filters out ~all casual cheating.
+3. **One identity, keep-best, rate-limited.** Anti-grind comes from per-uid keep-best, daily caps,
+   and per-IP rate limits — not from trying to hide the math.
+
+Corollary: anonymous identity is a **bearer token** (`crypto.randomUUID()` in localStorage,
+`lib/streak.ts`). Unguessable, but anyone who obtains the value IS that player. Accepted: friction-free
+anon play is the funnel; signed-in (Google) identity is the upgrade path for anyone who cares about
+their standing. Don't ship anon UIDs in URLs or logs.
+
+**82-0 parity: frozen as of the 2026-06 dataset.** Classic's draftable surface (current franchises,
+1960s–2020s decades, multi-position eligibility) matches 82-0.com via the committed
+`data/820_player_meta.json` (one-time export — see `data/gen_820_meta.mjs`). There is **no ongoing
+sync**: if 82-0.com changes its pool, we owe it nothing. All other modes, scoring, and data decisions
+are free to diverge. Don't re-run the meta generator or re-litigate parity per feature.

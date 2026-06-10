@@ -1,3 +1,5 @@
+> **HISTORICAL (frozen 2026-06):** decision-record only — conventions here may be superseded. Current: tests are Vitest via `npm test`; see `web/AGENTS.md`.
+
 <!-- Generated 2026-06-10 by a multi-agent research workflow (5 live-web analysts + adversarial fact-check + synthesis). Primary source: live Playwright observation of 38-0.app plus press/forum/X/App-Store triangulation. Confidence levels are labelled inline. -->
 
 # 38-0.app — Competitor Research Doc for SweepSzn
