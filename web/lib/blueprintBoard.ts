@@ -1,7 +1,7 @@
 import "server-only";
-import { redis, isRedisEnabled, TTL, readSortedRows } from "./redis";
+import { redis, isRedisEnabled, TTL, readBoardView } from "./redis";
 import { KEEP_BEST_ROW_LUA } from "./score";
-import type { BlueprintKey, BpRow, BpBoardRow, BpBoardView } from "./blueprint";
+import type { BlueprintKey, BpRow, BpBoardView } from "./blueprint";
 
 // Blueprint daily boards (Upstash sorted set + meta hash per blueprint, lb:bp:* — new keys only).
 // Five stratified boards plus a combined "all" board (best blueprint-adjusted score across the
@@ -18,21 +18,7 @@ export function isBpBoardEnabled(): boolean { return isRedisEnabled(); }
 
 export async function getBpLeaderboard(date: string, bp: BlueprintKey | "all", uid?: string): Promise<BpBoardView | null> {
   if (!redis) return null;
-  const total = await redis.zcard(keyZ(date, bp));
-  const top = await readSortedRows<BpRow>(keyZ(date, bp), keyH(date, bp), 0, 99);
-  let you: BpBoardRow | undefined;
-  if (uid) {
-    const rank = await redis.zrevrank(keyZ(date, bp), uid);
-    if (rank != null) {
-      const inTop = top.find((r) => r.uid === uid);
-      if (inTop) you = inTop;
-      else {
-        const meta = (await redis.hmget<Record<string, BpRow>>(keyH(date, bp), uid)) ?? {};
-        const m = meta[uid];
-        if (m) you = { ...m, rank: rank + 1 };
-      }
-    }
-  }
+  const { total, top, you } = await readBoardView<BpRow>(keyZ(date, bp), keyH(date, bp), uid);
   return { date, bp, total, top, you };
 }
 
@@ -60,11 +46,11 @@ export async function submitBpScore(date: string, row: BpRow, sortScore: number)
 }
 
 // Claim cleanup: drop an anon row when the same player re-submits signed-in (mirrors daily/FH).
-// The anon uid may sit on any of the six boards, so sweep them all.
+// The anon uid may sit on any of the six boards — sweep them all in ONE pipeline (this used to be
+// 12 sequential Upstash round trips on every sign-in claim).
 export async function removeBpEntry(date: string, uid: string): Promise<void> {
   if (!redis) return;
-  for (const bp of BOARDS) {
-    await redis.zrem(keyZ(date, bp), uid);
-    await redis.hdel(keyH(date, bp), uid);
-  }
+  const p = redis.pipeline();
+  for (const bp of BOARDS) p.zrem(keyZ(date, bp), uid).hdel(keyH(date, bp), uid);
+  await p.exec();
 }

@@ -1,24 +1,19 @@
 import { NextResponse, after } from "next/server";
-import { spinPool, getPlayersByIds, getCoefficients } from "@/lib/data";
-import { evaluateLineup } from "@/lib/engine";
-import { verifyDaily, type VerifyDeps } from "@/lib/dailyVerify";
+import { verifyDaily } from "@/lib/dailyVerify";
 import { isLeaderboardEnabled, submitScore, submitScoreAuthed, removeEntry } from "@/lib/leaderboard";
 import { getSession } from "@/lib/authServer";
 import { encodeLineup } from "@/lib/share";
 import { cleanName } from "@/lib/clean";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
+import { dayUTC } from "@/lib/day";
+import { engineDeps } from "@/lib/verifyDeps";
 
 export const runtime = "nodejs";
 
-const todayUTC = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
 
-const deps: VerifyDeps = {
-  spinPool,
-  getPlayer: (id) => getPlayersByIds([id])[0],
-  evaluate: (players) => evaluateLineup(players, getCoefficients()),
-};
+const deps = engineDeps();
 
 export async function POST(req: Request) {
   if (!isLeaderboardEnabled()) return NextResponse.json({ error: "leaderboard not configured" }, { status: 503 });
@@ -27,7 +22,7 @@ export async function POST(req: Request) {
   }
   const body = (await req.json().catch(() => ({}))) ?? {};
   const { date, trace } = body;
-  if (date !== todayUTC()) return NextResponse.json({ error: "stale date" }, { status: 400 });
+  if (date !== dayUTC()) return NextResponse.json({ error: "stale date" }, { status: 400 });
 
   // Identity: a valid session is authoritative (un-fakeable); otherwise fall back to the anon uid.
   const session = await getSession();

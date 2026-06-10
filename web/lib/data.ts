@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Player, Coefficients, DraftCandidate, CandidateFit, Slot } from "./types";
 import { DEFAULT_COEFFICIENTS, quickScore, playerFeatures } from "./engine";
 import { buildPrimePools, type PrimePools } from "./prime";
+import { mulberry32, strSeed } from "./rng";
 
 const DATA_DIR = path.join(process.cwd(), "public", "data");
 
@@ -72,22 +73,6 @@ export function getCoefficients(): Coefficients {
 export function getPlayersByIds(ids: string[]): Player[] {
   const { byId } = load();
   return ids.map((id) => byId.get(id)).filter((p): p is Player => !!p);
-}
-
-// deterministic PRNG (mulberry32) so Daily mode is reproducible from a seed
-function mulberry32(seed: number) {
-  return function () {
-    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function strSeed(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return h >>> 0;
 }
 
 function toCandidate(p: Player, fit?: CandidateFit, usage?: number): DraftCandidate {

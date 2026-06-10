@@ -1,13 +1,13 @@
 import { NextResponse, after } from "next/server";
-import { spinPool, getPlayersByIds, getCoefficients } from "@/lib/data";
-import { evaluateLineup } from "@/lib/engine";
-import { verifyTrace, type VerifyDeps } from "@/lib/dailyVerify";
+import { verifyTrace } from "@/lib/dailyVerify";
 import { buildFhChoices, encFhScore, decodeFhDisplay, type FhRow } from "@/lib/factorHunt";
 import { isFhBoardEnabled, submitFhScore, removeFhEntry, lockFhPrediction } from "@/lib/factorHuntBoard";
 import { getSession } from "@/lib/authServer";
 import { cleanName } from "@/lib/clean";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
+import { dayUTC } from "@/lib/day";
+import { engineDeps } from "@/lib/verifyDeps";
 
 export const runtime = "nodejs";
 
@@ -16,14 +16,9 @@ export const runtime = "nodejs";
 // apply the cosmetic ×1.05 ONLY when the locked prediction matches the recomputed answer. The
 // engine result is never modified — the bonus lives in the board's sort score and display.
 
-const todayUTC = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
 
-const deps: VerifyDeps = {
-  spinPool,
-  getPlayer: (id) => getPlayersByIds([id])[0],
-  evaluate: (players) => evaluateLineup(players, getCoefficients()),
-};
+const deps = engineDeps();
 
 export async function POST(req: Request) {
   if (!isFhBoardEnabled()) return NextResponse.json({ error: "leaderboard not configured" }, { status: 503 });
@@ -32,7 +27,7 @@ export async function POST(req: Request) {
   }
   const body = (await req.json().catch(() => ({}))) ?? {};
   const { date, trace } = body;
-  if (date !== todayUTC()) return NextResponse.json({ error: "stale date" }, { status: 400 });
+  if (date !== dayUTC()) return NextResponse.json({ error: "stale date" }, { status: 400 });
 
   const session = await getSession();
   let uid: string, name: string;

@@ -34,6 +34,26 @@ export async function readSortedRows<T extends { uid: string } = StoredRow>(
     .filter((x): x is T & { rank: number } => !!x);
 }
 
+// The one board-read shape every leaderboard shares: total + top-100 + the caller's own row
+// (in-window or looked up by rank). Upstash is HTTP, so zcard and the top read run in parallel;
+// the you-lookup only costs extra round trips when the uid exists but sits below the window.
+export async function readBoardView<T extends { uid: string } = StoredRow>(
+  keyZ: string, keyH: string, uid?: string,
+): Promise<{ total: number; top: (T & { rank: number })[]; you?: T & { rank: number } }> {
+  if (!redis) return { total: 0, top: [] };
+  const [total, top] = await Promise.all([redis.zcard(keyZ), readSortedRows<T>(keyZ, keyH, 0, 99)]);
+  let you = uid ? top.find((r) => r.uid === uid) : undefined;
+  if (uid && !you) {
+    const rank = await redis.zrevrank(keyZ, uid);
+    if (rank != null) {
+      const meta = (await redis.hmget<Record<string, T>>(keyH, uid)) ?? {};
+      const m = meta[uid];
+      if (m) you = { ...m, rank: rank + 1 };
+    }
+  }
+  return { total, top, you };
+}
+
 // Best-effort fixed-window rate limit (per bucket key). Returns true if the call is allowed.
 // Self-disabling: when redis is null (local/dev without creds) it allows everything, and any
 // transport error fails open — the limiter must never take down a route. Buckets stop trivial

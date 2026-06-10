@@ -1,8 +1,8 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { redis, isRedisEnabled, TTL, readSortedRows } from "./redis";
+import { redis, isRedisEnabled, TTL, readBoardView } from "./redis";
 import { KEEP_BEST_ROW_LUA } from "./score";
-import type { FhRow, FhBoardRow, FhBoardView } from "./factorHunt";
+import type { FhRow, FhBoardView } from "./factorHunt";
 
 // Factor Hunt daily board (Upstash sorted set + meta hash, lb:fh:* — new keys only).
 // Daily-only: FH wins carry a cosmetic ×1.05 and must never bleed into the weekly/all-time
@@ -16,21 +16,7 @@ export function isFhBoardEnabled(): boolean { return isRedisEnabled(); }
 
 export async function getFhLeaderboard(date: string, uid?: string): Promise<FhBoardView | null> {
   if (!redis) return null;
-  const total = await redis.zcard(keyZ(date));
-  const top = await readSortedRows<FhRow>(keyZ(date), keyH(date), 0, 99);
-  let you: FhBoardRow | undefined;
-  if (uid) {
-    const rank = await redis.zrevrank(keyZ(date), uid);
-    if (rank != null) {
-      const inTop = top.find((r) => r.uid === uid);
-      if (inTop) you = inTop;
-      else {
-        const meta = (await redis.hmget<Record<string, FhRow>>(keyH(date), uid)) ?? {};
-        const m = meta[uid];
-        if (m) you = { ...m, rank: rank + 1 };
-      }
-    }
-  }
+  const { total, top, you } = await readBoardView<FhRow>(keyZ(date), keyH(date), uid);
   return { date, total, top, you };
 }
 
@@ -71,6 +57,5 @@ export async function lockFhPrediction(date: string, uid: string, lineup: string
 // Claim cleanup: drop an anon row when the same player re-submits signed-in (mirrors daily).
 export async function removeFhEntry(date: string, uid: string): Promise<void> {
   if (!redis) return;
-  await redis.zrem(keyZ(date), uid);
-  await redis.hdel(keyH(date), uid);
+  await redis.pipeline().zrem(keyZ(date), uid).hdel(keyH(date), uid).exec();
 }

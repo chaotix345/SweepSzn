@@ -1,4 +1,4 @@
-import { KEEP_BEST_LUA, KEEP_BEST_ROW_LUA } from "@/lib/score";
+import { KEEP_BEST_LUA, KEEP_BEST_ROW_LUA, TRIM_BOARD_LUA } from "@/lib/score";
 import { PICKEM_VOTE_LUA } from "@/lib/pickem";
 
 // In-memory stand-in for @upstash/redis covering the command surface this codebase uses.
@@ -34,8 +34,11 @@ export function createRedisFake() {
   const sets = new Map<string, Set<string>>();
   const ttls = new Map<string, number>();
   const calls: string[] = [];
+  // HTTP round-trip counter: every top-level command is one trip; a pipeline (any op count) and an
+  // eval are one trip each. Lets tests assert a route's Redis trip budget, not just its op list.
+  let trips = 0;
 
-  const log = (...parts: unknown[]) => { calls.push(parts.map(String).join(" ")); };
+  const log = (...parts: unknown[]) => { calls.push(parts.map(String).join(" ")); trips++; };
   const hash = (k: string) => { let h = hashes.get(k); if (!h) { h = new Map(); hashes.set(k, h); } return h; };
   const zset = (k: string) => { let z = zsets.get(k); if (!z) { z = new Map(); zsets.set(k, z); } return z; };
   const list = (k: string) => { let l = lists.get(k); if (!l) { l = []; lists.set(k, l); } return l; };
@@ -105,6 +108,18 @@ export function createRedisFake() {
     return 1;
   }
 
+  // TRIM_BOARD_LUA (lib/score.ts): cap a board pair to the top N, evicting the lowest scorers
+  // from the zset AND the meta hash together.
+  function trimBoard(keys: string[], args: (string | number)[]): number {
+    const [zK, hK] = keys;
+    const cap = Number(args[0]);
+    const sorted = zsorted(zK); // ascending — lowest scores first
+    if (sorted.length <= cap) return 0;
+    const doomed = sorted.slice(0, sorted.length - cap).map(([m]) => m);
+    for (const m of doomed) { zsets.get(zK)?.delete(m); hashes.get(hK)?.delete(m); }
+    return doomed.length;
+  }
+
   // PICKEM_VOTE_LUA (lib/pickem.ts): claim voter slot, bump matching counter, read back both counts.
   function pickemVote(keys: string[], args: (string | number)[]): (string | number)[] {
     const [voterK, yK, nK] = keys;
@@ -128,6 +143,7 @@ export function createRedisFake() {
 
   const fake = {
     strings, hashes, zsets, lists, sets, ttls, calls,
+    get trips() { return trips; },
 
     get: async (k: string) => { log("get", k); return de(strings.get(k) ?? null); },
     set: async (k: string, v: unknown, opts?: { nx?: boolean; ex?: number }) => {
@@ -262,6 +278,7 @@ export function createRedisFake() {
       if (script === KEEP_BEST_LUA) return deepDe(keepBest(keys, args));
       if (script === PICKEM_VOTE_LUA) return deepDe(pickemVote(keys, args));
       if (script === KEEP_BEST_ROW_LUA) return keepBestRow(keys, args);
+      if (script === TRIM_BOARD_LUA) return trimBoard(keys, args);
       throw new Error("redisFake.eval: unknown script — add its semantics here before using it in tests");
     },
 
@@ -272,7 +289,20 @@ export function createRedisFake() {
         expire: (k: string, sec: number, opt?: string) => { ops.push(() => fake.expire(k, sec, opt)); return p; },
         lpush: (k: string, ...vs: unknown[]) => { ops.push(() => fake.lpush(k, ...vs)); return p; },
         ltrim: (k: string, start: number, stop: number) => { ops.push(() => fake.ltrim(k, start, stop)); return p; },
-        exec: async () => { const out: unknown[] = []; for (const op of ops) out.push(await op()); return out; },
+        hset: (k: string, obj: Record<string, unknown>) => { ops.push(() => fake.hset(k, obj)); return p; },
+        hdel: (k: string, ...fields: string[]) => { ops.push(() => fake.hdel(k, ...fields)); return p; },
+        hincrby: (k: string, f: string, by: number) => { ops.push(() => fake.hincrby(k, f, by)); return p; },
+        zrem: (k: string, ...members: string[]) => { ops.push(() => fake.zrem(k, ...members)); return p; },
+        sadd: (k: string, ...members: unknown[]) => { ops.push(() => fake.sadd(k, ...members)); return p; },
+        // a pipeline is ONE round trip no matter how many ops it carries: the sub-ops above each
+        // log (and bump trips); collapse their count back to a single trip on exec.
+        exec: async () => {
+          const before = trips;
+          const out: unknown[] = [];
+          for (const op of ops) out.push(await op());
+          trips = before + 1;
+          return out;
+        },
       };
       return p;
     },

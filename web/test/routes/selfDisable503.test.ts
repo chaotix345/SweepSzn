@@ -14,7 +14,7 @@ const { GET: dailyLeaderboardGET } = await import("@/app/api/daily/leaderboard/r
 const { POST: dailySubmitPOST } = await import("@/app/api/daily/submit/route");
 const { GET: challengeGetGET } = await import("@/app/api/challenge/[id]/route");
 const { POST: challengeSubmitPOST } = await import("@/app/api/challenge/submit/route");
-const { GET: challengeResultsGET } = await import("@/app/api/challenge/[id]/results/route");
+const { POST: challengeResultsPOST } = await import("@/app/api/challenge/[id]/results/route");
 const { POST: fhChoicesPOST } = await import("@/app/api/factorhunt/choices/route");
 const { GET: fhLeaderboardGET } = await import("@/app/api/factorhunt/leaderboard/route");
 const { POST: fhSubmitPOST } = await import("@/app/api/factorhunt/submit/route");
@@ -74,9 +74,9 @@ describe("self-disable 503: redis-gated routes return 503 when Redis env is abse
     expect(body).toMatchObject({ error: "challenges not configured" });
   });
 
-  it("GET /api/challenge/[id]/results → 503", async () => {
+  it("POST /api/challenge/[id]/results → 503", async () => {
     const { status, body } = await readJson(
-      await challengeResultsGET(req(`/api/challenge/${goodChalId}/results`), chalParams(goodChalId)),
+      await challengeResultsPOST(req(`/api/challenge/${goodChalId}/results`, { body: { uid: "testuid-abc123" } }), chalParams(goodChalId)),
     );
     expect(status).toBe(503);
     expect(body).toMatchObject({ error: "challenges not configured" });

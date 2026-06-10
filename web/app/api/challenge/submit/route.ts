@@ -1,7 +1,6 @@
 import { NextResponse, after } from "next/server";
-import { spinPool, getPlayersByIds, getCoefficients } from "@/lib/data";
-import { evaluateLineup } from "@/lib/engine";
-import { verifyTrace, type VerifyDeps } from "@/lib/dailyVerify";
+import { getPlayersByIds } from "@/lib/data";
+import { verifyTrace } from "@/lib/dailyVerify";
 import { isChallengeEnabled, submitChallenge, getChallengeSeed } from "@/lib/challengeStore";
 import { compareResults, challengeSeed } from "@/lib/challenge";
 import { decodeLineup, encodeLineup } from "@/lib/share";
@@ -14,6 +13,7 @@ import { buildChallengeNotification } from "@/lib/notify";
 import { enqueueNotif } from "@/lib/notifyStore";
 import { sendPushToUid } from "@/lib/pushStore";
 import type { ChallengeMiniPlayer, ChallengeSubmitResponse } from "@/lib/types";
+import { engineDeps } from "@/lib/verifyDeps";
 
 export const runtime = "nodejs";
 
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
   // (e.g. "daily-2026-6-9" or "classic-123"); otherwise it's a fresh "Challenge a Friend" (h2h-<id>).
   const stored = await getChallengeSeed(id);
   const seed = stored ?? (isGameSeed(body.seed) ? body.seed : challengeSeed(id));
-  const v = verifyTrace(seed, trace, deps());
+  const v = verifyTrace(seed, trace, engineDeps());
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
 
   const row = { uid, name, wins: v.result.wins, losses: v.result.losses, net: v.result.netRtg, lineup: v.lineup };
@@ -113,12 +113,4 @@ export async function POST(req: Request) {
     board: out.board,
   };
   return NextResponse.json(res);
-}
-
-function deps(): VerifyDeps {
-  return {
-    spinPool,
-    getPlayer: (id) => getPlayersByIds([id])[0],
-    evaluate: (players) => evaluateLineup(players, getCoefficients()),
-  };
 }

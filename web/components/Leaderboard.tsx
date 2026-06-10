@@ -8,6 +8,7 @@ import { getUid, getName, setName as persistName, recordDailyDone, getStreak, ms
 import { useSession } from "@/lib/useSession";
 import GoogleOneTap from "@/components/GoogleOneTap";
 import RankShareButton from "@/components/RankShareButton";
+import { dayUTC } from "@/lib/day";
 
 type Tab = "daily" | "week" | "alltime";
 const TABS: [Tab, string][] = [["daily", "Daily"], ["week", "Weekly"], ["alltime", "All-time"]];
@@ -20,7 +21,7 @@ const hhmmss = (ms: number) => {
 
 // the server's notion of "today" (UTC, same format as the daily seed/key) — used to detect a
 // game that straddled midnight so we can warn before the submit 400s with a cryptic "stale date".
-const serverDate = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
+const serverDate = dayUTC;
 
 export default function Leaderboard({ date, trace, usedHints = false, readOnly = false }: { date: string; trace: DraftStep[]; usedHints?: boolean; readOnly?: boolean }) {
   const { user, refresh, signOut } = useSession();

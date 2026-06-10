@@ -1,8 +1,8 @@
 import "server-only";
-import { redis, isRedisEnabled, TTL, TTL_WEEK, encScore, readSortedRows, type StoredRow } from "./redis";
+import { redis, isRedisEnabled, TTL, TTL_WEEK, encScore, readBoardView, type StoredRow } from "./redis";
 import { isoWeek } from "./isoweek";
-import { KEEP_BEST_LUA, KEEP_BEST_ROW_LUA } from "./score";
-import type { LineupResult, LeaderboardRow, LeaderboardView } from "./types";
+import { KEEP_BEST_LUA, KEEP_BEST_ROW_LUA, TRIM_BOARD_LUA } from "./score";
+import type { LineupResult, LeaderboardView } from "./types";
 
 // Daily leaderboard store (Upstash sorted sets) + weekly/all-time aggregate boards.
 // Self-disabling via the shared redis module.
@@ -14,25 +14,15 @@ export const keyWeekH = (w: string) => `lb:week:${w}:meta`;
 export const keyAlltimeZ = () => "lb:alltime";
 export const keyAlltimeH = () => "lb:alltime:meta";
 
+// The all-time board has no TTL, so it is the one pair that would grow forever. Far above any
+// plausible signed-in player count; only the lowest scorers are evicted once it's crossed.
+export const ALLTIME_CAP = 10_000;
+
 export function isLeaderboardEnabled(): boolean { return isRedisEnabled(); }
 
 export async function getLeaderboard(date: string, uid?: string): Promise<LeaderboardView | null> {
   if (!redis) return null;
-  const total = await redis.zcard(keyZ(date));
-  const top = await readSortedRows(keyZ(date), keyH(date), 0, 99);
-  let you: LeaderboardRow | undefined;
-  if (uid) {
-    const rank = await redis.zrevrank(keyZ(date), uid);
-    if (rank != null) {
-      const inTop = top.find((r) => r.uid === uid);
-      if (inTop) you = inTop;
-      else {
-        const meta = (await redis.hmget<Record<string, StoredRow>>(keyH(date), uid)) ?? {};
-        const m = meta[uid];
-        if (m) you = { ...m, rank: rank + 1 };
-      }
-    }
-  }
+  const { total, top, you } = await readBoardView<StoredRow>(keyZ(date), keyH(date), uid);
   return { date, total, top, you };
 }
 
@@ -55,8 +45,7 @@ export async function submitScore(date: string, row: StoredRow, result: LineupRe
 // Claim cleanup: drop a uid's row entirely (used when a signed-in user had posted anonymously today).
 export async function removeEntry(date: string, uid: string): Promise<void> {
   if (!redis) return;
-  await redis.zrem(keyZ(date), uid);
-  await redis.hdel(keyH(date), uid);
+  await redis.pipeline().zrem(keyZ(date), uid).hdel(keyH(date), uid).exec();
 }
 
 // --- Weekly + all-time (signed-in submitters only) ---
@@ -74,14 +63,19 @@ export async function submitScoreAuthed(date: string, row: StoredRow, result: Li
     [row.uid, score, result.wins, TTL, TTL_WEEK],
   )) as [number, number, number, number];
   if (changed) {
-    await redis.hset(keyH(date), { [row.uid]: row });
-    await redis.expire(keyH(date), TTL);
     // agg meta is display-only (the sorted-set score is authoritative for ranking). Refresh it
     // whenever the daily best changes — incl. a net-only (delta 0) improvement — so the display
     // name stays current. ww/aw are the current totals returned by the Lua in both branches.
-    await redis.hset(keyWeekH(week), { [row.uid]: { uid: row.uid, name: row.name, wins: ww } });
-    await redis.hset(keyAlltimeH(), { [row.uid]: { uid: row.uid, name: row.name, wins: aw } });
-    await redis.expire(keyWeekH(week), TTL_WEEK); // all-time meta: persistent, no expire
+    // One pipeline: Upstash is HTTP, so these five writes were five sequential round trips.
+    await redis.pipeline()
+      .hset(keyH(date), { [row.uid]: row })
+      .expire(keyH(date), TTL)
+      .hset(keyWeekH(week), { [row.uid]: { uid: row.uid, name: row.name, wins: ww } })
+      .hset(keyAlltimeH(), { [row.uid]: { uid: row.uid, name: row.name, wins: aw } })
+      .expire(keyWeekH(week), TTL_WEEK) // all-time meta: persistent, no expire
+      .exec();
+    // the all-time pair has no TTL — cap it so it can't grow unboundedly (O(1) until full)
+    await redis.eval(TRIM_BOARD_LUA, [keyAlltimeZ(), keyAlltimeH()], [ALLTIME_CAP]);
   }
   return getLeaderboard(date, row.uid);
 }

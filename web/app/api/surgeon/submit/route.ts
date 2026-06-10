@@ -1,7 +1,8 @@
 import { NextResponse, after } from "next/server";
-import { spinPool, getPlayersByIds, getCoefficients } from "@/lib/data";
+import { getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
-import { verifyTrace, type VerifyDeps } from "@/lib/dailyVerify";
+import { verifyTrace } from "@/lib/dailyVerify";
+import type { VerifyDeps } from "@/lib/dailyVerify";
 import {
   surgeonSeedOk, surgeonDiagnosis, needOf, buildSurgeonPool,
   encSurgeonScore, encodeSurgeonCard, type SurgeonRow,
@@ -16,6 +17,8 @@ import { SLOTS } from "@/lib/teams";
 import type { Player } from "@/lib/types";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
+import { dayUTC } from "@/lib/day";
+import { engineDeps } from "@/lib/verifyDeps";
 
 export const runtime = "nodejs";
 
@@ -27,7 +30,6 @@ export const runtime = "nodejs";
 // keep-best), and (5) recomputes the delta itself. Client-sent factors, pools, and deltas are
 // never trusted — they are never even read.
 
-const todayUTC = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
 const ID_RE = /^[a-z0-9_]{1,64}$/;
 
@@ -42,7 +44,7 @@ export async function POST(req: Request) {
   }
   const body = (await req.json().catch(() => ({}))) ?? {};
   const { date, trace } = body;
-  if (date !== todayUTC()) return NextResponse.json({ error: "stale date" }, { status: 400 });
+  if (date !== dayUTC()) return NextResponse.json({ error: "stale date" }, { status: 400 });
   if (typeof body.outId !== "string" || !ID_RE.test(body.outId) || typeof body.inId !== "string" || !ID_RE.test(body.inId)) {
     return NextResponse.json({ error: "bad swap" }, { status: 400 });
   }
@@ -61,15 +63,7 @@ export async function POST(req: Request) {
   const seed = `surgeon-${date}`;
   if (!surgeonSeedOk(seed)) return NextResponse.json({ error: "bad seed" }, { status: 400 });
   const pools: string[][] = [];
-  const deps: VerifyDeps = {
-    spinPool: (s, round, opts) => {
-      const r = spinPool(s, round, opts);
-      pools[round] = r.ids;
-      return r;
-    },
-    getPlayer: (id) => getPlayersByIds([id])[0],
-    evaluate: (players) => evaluateLineup(players, getCoefficients()),
-  };
+  const deps: VerifyDeps = engineDeps((round, ids) => { pools[round] = ids; });
   const v = verifyTrace(seed, trace, deps);
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
 
