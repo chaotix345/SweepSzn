@@ -13,6 +13,7 @@ import ResultsHistory from "@/components/ResultsHistory";
 import { newChallengeId, challengeSeed } from "@/lib/challenge";
 import { encodeLineup, decodeShare } from "@/lib/share";
 import { saveResult, writeLastResult, readLastResult } from "@/lib/resultHistory";
+import { applySwapToTrace } from "@/lib/dailyVerify";
 
 type Mode = "daily" | "classic" | "hoopiq" | "challenge";
 type Roster = Record<Slot, DraftCandidate | null>;
@@ -304,7 +305,12 @@ export default function Game() {
       return;
     }
     if (selSlot) {
-      if (canSwap(selSlot, slot)) setRoster((r) => ({ ...r, [slot]: r[selSlot], [selSlot]: r[slot] }));
+      if (canSwap(selSlot, slot)) {
+        // re-stamp the moved players' trace entries with their FINAL slots, or the server replay
+        // sees a later pick into the vacated slot as "slot reused" and rejects the submit
+        applySwapToTrace(traceRef.current, roster[selSlot]?.id, roster[slot]?.id, selSlot, slot);
+        setRoster((r) => ({ ...r, [slot]: r[selSlot], [selSlot]: r[slot] }));
+      }
       setSelSlot(null);
       return;
     }
