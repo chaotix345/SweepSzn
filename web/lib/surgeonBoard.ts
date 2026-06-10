@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { redis, isRedisEnabled, TTL, readSortedRows } from "./redis";
+import { BP_KEEP_BEST_LUA } from "./blueprintLua";
 import type { SurgeonRow, SurgeonBoardRow, SurgeonBoardView } from "./surgeon";
 
 // Surgeon daily board (Upstash sorted set + meta hash, lb:surgeon:* — new keys only).
@@ -36,17 +37,25 @@ export async function getSurgeonLeaderboard(date: string, uid?: string): Promise
 export async function submitSurgeonScore(date: string, row: SurgeonRow, sortScore: number): Promise<SurgeonBoardView | null> {
   if (!redis) return null;
   if (!Number.isFinite(sortScore)) return getSurgeonLeaderboard(date, row.uid);
-  const prev = await redis.zscore(keyZ(date), row.uid);
-  // keep-best: score AND meta only move together when this run beats the stored one.
-  // gt:true makes the score update server-side monotonic (the read-then-write guard is not
-  // atomic) — concurrent same-uid submits can never regress the rank, mirroring blueprintBoard.
-  if (prev == null || sortScore > Number(prev)) {
-    await redis.zadd(keyZ(date), { gt: true }, { score: sortScore, member: row.uid });
-    await redis.hset(keyH(date), { [row.uid]: row });
-    await redis.expire(keyZ(date), TTL);
-    await redis.expire(keyH(date), TTL);
-  }
+  // atomic keep-best (the bp boards' script — generic zset+meta semantics): compare, score, meta
+  // row, and TTLs in ONE script, so a concurrent same-uid submit from a second tab (different
+  // lineup → different sortScore) can't install its meta row under the winner's score.
+  await redis.eval(BP_KEEP_BEST_LUA, [keyZ(date), keyH(date)], [row.uid, sortScore, JSON.stringify(row), TTL]);
   return getSurgeonLeaderboard(date, row.uid);
+}
+
+// Cross-lineup score-shopping cap: the per-lineup swap lock seals the 3x5 combo walk for ONE
+// five, but a fresh lock per redraft + keep-best still lets a determined uid shop many valid
+// lineups a day (each must pass verifyTrace, so this is a patience attack, not a script-kiddie
+// one — review finding, medium). Cap fresh-lineup submissions per uid per day; generous enough
+// that honest replayers never see it. The route rejects past the cap BEFORE any board write.
+export const SURGEON_DAILY_CAP = 10;
+export async function bumpSurgeonSubs(date: string, uid: string): Promise<number> {
+  if (!redis) return 0;
+  const k = `lb:surgeon:${date}:subs:${uid}`;
+  const n = await redis.incr(k);
+  await redis.expire(k, TTL);
+  return n;
 }
 
 // One immutable swap lock per (uid, lineup) per day — the Factor Hunt prediction-lock pattern.
@@ -60,19 +69,26 @@ const keySwap = (d: string, uid: string, lineup: string) =>
 
 export async function lockSurgeonSwap(
   date: string, uid: string, lineup: string, requested: { outId: string; inId: string },
-): Promise<{ outId: string; inId: string }> {
-  if (!redis) return requested;
+): Promise<{ outId: string; inId: string; claimed: boolean }> {
+  if (!redis) return { ...requested, claimed: false };
   const key = keySwap(date, uid, lineup);
   const val = `${requested.outId}>${requested.inId}`;
   const claimed = await redis.set(key, val, { nx: true, ex: TTL });
-  if (claimed) return requested;
+  if (claimed) return { ...requested, claimed: true };
   const locked = await redis.get<string>(key);
   const [outId, inId] = (locked ?? "").split(">");
-  if (outId && inId) return { outId, inId };
+  if (outId && inId) return { outId, inId, claimed: false };
   // the lock vanished between NX and GET (expiry/eviction edge) — re-claim it with the swap
   // being graded rather than silently bypassing write-once
   await redis.set(key, val, { ex: TTL });
-  return requested;
+  return { ...requested, claimed: true };
+}
+
+// Undo a just-claimed lock when the submit is rejected for a non-swap reason (daily cap): the
+// lineup must not stay bricked behind a lock that never produced a row.
+export async function releaseSurgeonSwap(date: string, uid: string, lineup: string): Promise<void> {
+  if (!redis) return;
+  await redis.del(keySwap(date, uid, lineup));
 }
 
 // Claim cleanup: drop an anon row when the same player re-submits signed-in (mirrors daily/FH/BP).

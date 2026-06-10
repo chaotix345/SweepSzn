@@ -484,6 +484,9 @@ export default function Game() {
       if (!res.ok) { setError(d?.error === "stale date" ? "Today's case just reset — start today's Surgeon to post." : d?.error ?? "submit failed"); return; }
       if (sgName.trim()) persistName(sgName.trim());
       const outIdx = (d.beforePlayers as Player[]).findIndex((p) => p.id === d.swap.outId);
+      // a server response whose locked swap doesn't match its own before-lineup should never
+      // happen — but an outIdx of -1 would crash SurgeonResult, so refuse it instead
+      if (outIdx < 0 || outIdx > 4) { setError("Result looked corrupted — tap Confirm swap to retry."); return; }
       const full: SgResult = { view: d.view, delta: d.delta, card: d.card, diagnosis: d.diagnosis, before: d.before, beforePlayers: d.beforePlayers, after: d.after, afterPlayers: d.afterPlayers, outIdx };
       setSgResult(full); setSgPool(null);
       writeLastResult({ mode, seed, sg: full });
@@ -952,7 +955,10 @@ export default function Game() {
       {sgPool && (
         <div ref={sgRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Surgeon replacement pool"
           onKeyDown={(e) => {
-            if (e.key === "Escape") { setSgPool(null); return; }
+            // dismiss must also ABORT an in-flight submit/pool fetch — otherwise a resolving
+            // submit re-renders the reveal over the draft board (and its error copy references
+            // a dialog that is no longer on screen)
+            if (e.key === "Escape") { sgAbortRef.current?.abort(); setSgBusy(false); setSgPool(null); return; }
             // radiogroup keyboard contract: arrows rove WITHIN whichever group holds focus
             if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End") {
               const group = (document.activeElement as HTMLElement | null)?.closest("[role=radiogroup]");
@@ -1036,7 +1042,8 @@ export default function Game() {
               className="mt-3 w-full rounded-xl bg-rose-500 py-3 text-base font-black text-black hover:bg-rose-400 disabled:opacity-40">
               {sgBusy ? "Operating…" : "🔒 Confirm swap — reveal the delta"}
             </button>
-            <button onClick={() => setSgPool(null)} className="mt-2 w-full py-1 text-xs text-zinc-500 hover:text-zinc-300">
+            <button onClick={() => { sgAbortRef.current?.abort(); setSgBusy(false); setSgPool(null); }}
+              className="mt-2 w-full py-1 text-xs text-zinc-500 hover:text-zinc-300">
               ← Back to the draft
             </button>
             <p className="mt-2 text-center text-[10px] text-zinc-500">One swap, locked on submit — the result reveals the answer.</p>

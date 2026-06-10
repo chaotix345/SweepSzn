@@ -6,7 +6,10 @@ import {
   surgeonSeedOk, surgeonDiagnosis, needOf, buildSurgeonPool,
   encSurgeonScore, encodeSurgeonCard, type SurgeonRow,
 } from "@/lib/surgeon";
-import { submitSurgeonScore, lockSurgeonSwap, removeSurgeonEntry } from "@/lib/surgeonBoard";
+import {
+  submitSurgeonScore, lockSurgeonSwap, releaseSurgeonSwap, removeSurgeonEntry,
+  bumpSurgeonSubs, SURGEON_DAILY_CAP,
+} from "@/lib/surgeonBoard";
 import { getSession } from "@/lib/authServer";
 import { cleanName } from "@/lib/clean";
 import { SLOTS } from "@/lib/teams";
@@ -99,6 +102,14 @@ export async function POST(req: Request) {
 
   // now consume the write-once lock; a replay of this lineup grades the LOCKED swap, not the retry
   const swap = await lockSurgeonSwap(date, uid, v.lineup, { outId: body.outId, inId: body.inId });
+  // Cross-lineup cap (review finding): the per-lineup lock seals the 3x5 walk for ONE five, but a
+  // fresh lock per redraft + keep-best lets a patient uid shop many lineups a day. Count only
+  // FRESH lineups (claimed) — replays of an already-locked five always re-render their result —
+  // and release the just-claimed lock on rejection so the lineup isn't bricked behind it.
+  if (swap.claimed && (await bumpSurgeonSubs(date, uid)) > SURGEON_DAILY_CAP) {
+    await releaseSurgeonSwap(date, uid, v.lineup);
+    return NextResponse.json({ error: "daily case limit reached — fresh case tomorrow" }, { status: 429 });
+  }
   // the locked swap was validated when first written, but re-check defensively before grading
   const check = validate(swap.outId, swap.inId);
   if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
@@ -123,7 +134,7 @@ export async function POST(req: Request) {
   after(() => bump(redis, "submit", { uid }));
   // the locked swap is echoed so a replayed lineup renders ITS result, not the requested retry
   return NextResponse.json({
-    view, delta, card, swap,
+    view, delta, card, swap: { outId: swap.outId, inId: swap.inId },
     diagnosis,
     before: v.result, beforePlayers: v.players,
     after: afterResult, afterPlayers,
