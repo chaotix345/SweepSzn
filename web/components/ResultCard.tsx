@@ -8,6 +8,10 @@ import type { LineupResult, Player, Slot } from "@/lib/types";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { encodeLineup } from "@/lib/share";
 import { factorViews, lineupRoles, headline } from "@/lib/explain";
+import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
+
+// Crowd snapshot + your vote (and, same-session only, the spun team/era the vote was about).
+type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
 
 const GRADE_COLOR: Record<string, string> = {
   S: "text-gold", "A+": "text-gold", A: "text-green-400",
@@ -16,9 +20,9 @@ const GRADE_COLOR: Record<string, string> = {
 const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1));
 
 export default function ResultCard({
-  result, players, slots, mode, onReset, shared, usedHints,
+  result, players, slots, mode, onReset, shared, usedHints, pickem,
 }: {
-  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean;
+  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp;
 }) {
   const factors = factorViews(result);
   // split by the value's sign (what actually helped/hurt), not the engine's fixed label —
@@ -31,8 +35,11 @@ export default function ResultCard({
     { pts: 0, trb: 0, ast: 0, stl: 0, blk: 0 }
   );
   const gradeColor = GRADE_COLOR[result.grade] ?? "text-zinc-300";
-  // a recipient can reconstruct the exact result from these 5 ids (slot order)
-  const sharePath = `/r/${encodeLineup(players.map((p) => p.id), usedHints)}`;
+  // a recipient can reconstruct the exact result from these 5 ids (slot order). With Pick'Em
+  // data the link goes through /pe/ so the OG card carries the crowd-split bar.
+  const lineupSeg = encodeLineup(players.map((p) => p.id), usedHints);
+  const hasPickem = !!pickem && (!!pickem.vote || pickem.y + pickem.n > 0);
+  const sharePath = hasPickem ? `/pe/${encodePickemCard(lineupSeg, pickem!)}` : `/r/${lineupSeg}`;
   const names = players.map((p) => displayName(p.name));
 
   return (
@@ -58,6 +65,8 @@ export default function ResultCard({
             color={result.netRtg >= 0 ? "text-green-400" : "text-red-400"} />
         </div>
       </div>
+
+      {hasPickem && <PickemStrip result={result} pickem={pickem!} />}
 
       {/* why this record */}
       <div className="border-t border-zinc-800 px-6 py-5">
@@ -113,7 +122,7 @@ export default function ResultCard({
       </div>
 
       <div className="flex gap-3 border-t border-zinc-800 px-6 py-4">
-        <ShareButton result={result} path={sharePath} names={names} usedHints={usedHints} />
+        <ShareButton result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} />
         {shared ? (
           <Link href="/play" className="flex-1 rounded-xl bg-orange-500 py-2.5 text-center text-sm font-bold text-black hover:bg-orange-400">Build your own five →</Link>
         ) : (
@@ -129,13 +138,17 @@ const subscribeNoop = () => () => {};
 const getCanNative = () => typeof navigator !== "undefined" && "share" in navigator;
 const getServerCanNative = () => false;
 
-function ShareButton({ result, path, names, usedHints }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean }) {
+function ShareButton({ result, path, names, usedHints, pickem }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp }) {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyErr, setCopyErr] = useState(false);
   const canNative = useSyncExternalStore(subscribeNoop, getCanNative, getServerCanNative);
-  const text = `My all-time five (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""} — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}. Can you build a better one?`;
+  // Defying the crowd is the share-worthy Pick'Em moment — it rewrites the share copy (spec).
+  const defyLine = pickem ? pickemShareLine(result.wins, result.losses, pickem, pickem.subject) : null;
+  const text = defyLine
+    ? `${defyLine} Can you beat the crowd on SweepSzn?`
+    : `My all-time five (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""} — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}. Can you build a better one?`;
   const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
 
@@ -184,6 +197,51 @@ function ShareButton({ result, path, names, usedHints }: { result: LineupResult;
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Crowd-vs-you strip: split bar + verdict line. Solo votes (no crowd yet — free-play seeds,
+// or Redis dark) read as a self-prediction instead of a crowd story.
+function PickemStrip({ result, pickem }: { result: LineupResult; pickem: PickemProp }) {
+  const v = pickemVerdict(result.wins, pickem);
+  if (!v.total && !pickem.vote) return null;
+  const yPct = v.total ? Math.round((100 * pickem.y) / v.total) : 0;
+  const crowdLabel = (p: "y" | "n") => (p === "y" ? "60+ wins" : "no shot");
+  let verdict: string;
+  if (v.solo) verdict = `You said ${crowdLabel(pickem.vote!)} — ${v.youRight ? "you called it." : "not this time."}`;
+  else if (v.crowd === null) verdict = "The crowd split down the middle.";
+  else {
+    verdict = `The crowd said ${crowdLabel(v.crowd)} (${v.pct}%) — ${v.crowdRight ? "they were right." : "they were wrong."}`;
+    if (v.defied) verdict += " You defied the crowd.";
+    else if (v.youRight === true) verdict += " You called it too.";
+    else if (v.youRight === false) verdict += v.crowdRight ? " The crowd saw this one coming." : " You went down with them.";
+  }
+  return (
+    <div className="border-t border-zinc-800 px-6 py-4">
+      <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-zinc-500">
+        <span>🗳️ Pick&apos;Em — crowd vs. you</span>
+        {pickem.vote && (
+          <span className={pickem.vote === "y" ? "text-green-400" : "text-red-400"}>
+            you: {pickem.vote === "y" ? "YES 60+" : "NO"}
+          </span>
+        )}
+      </div>
+      {v.total > 0 && (
+        <>
+          <div className="flex h-2.5 overflow-hidden rounded-full bg-zinc-800" role="img"
+            aria-label={`Crowd vote: ${yPct}% yes, ${100 - yPct}% no, ${v.total} vote${v.total === 1 ? "" : "s"}`}>
+            <div className="bg-green-400/80" style={{ width: `${yPct}%` }} />
+            <div className="bg-red-400/80" style={{ width: `${100 - yPct}%` }} />
+          </div>
+          <div className="mt-1 flex justify-between text-[10px] text-zinc-500">
+            <span>YES 60+ · {yPct}%</span>
+            <span>{v.total} vote{v.total === 1 ? "" : "s"}</span>
+            <span>NO · {100 - yPct}%</span>
+          </div>
+        </>
+      )}
+      <p className="mt-2 text-sm text-zinc-300">{verdict}</p>
     </div>
   );
 }

@@ -13,6 +13,7 @@ import ResultsHistory from "@/components/ResultsHistory";
 import { newChallengeId, challengeSeed } from "@/lib/challenge";
 import { encodeLineup, decodeShare } from "@/lib/share";
 import { saveResult, writeLastResult, readLastResult } from "@/lib/resultHistory";
+import { pickemSeedOk, getPickemSkip, setPickemSkip, getLocalVote, setLocalVote, type PickemVote } from "@/lib/pickem";
 
 type Mode = "daily" | "classic" | "hoopiq" | "challenge";
 type Roster = Record<Slot, DraftCandidate | null>;
@@ -68,6 +69,12 @@ export default function Game() {
   const [convertedId, setConvertedId] = useState<string | null>(null); // challenge minted from a finished game
   const abortSimRef = useRef<AbortController | null>(null);             // cancels an in-flight simulate on restart
   const sheetRef = useRef<HTMLDivElement>(null);                        // mobile "choose position" dialog
+  // Pick'Em: one-tap crowd vote locked after the first reels settle, settled on the result card.
+  const [pickemVote, setPickemVote] = useState<PickemVote | null>(null);
+  const [pickemDismissed, setPickemDismissed] = useState(false);        // voted or skipped THIS game
+  const [pickemCrowd, setPickemCrowd] = useState<{ y: number; n: number } | null>(null);
+  const [pickemSubject, setPickemSubject] = useState<string | null>(null); // "the 1970s Knicks" — captured at vote time for share copy
+  const pickemRef = useRef<HTMLDivElement>(null);                       // vote overlay dialog
 
   // Spend a hint to reveal fit grades for the current pick. Charges on reveal (not on placement), so
   // there is no way to peek and then dodge the cost. No-op once the per-game budget is spent.
@@ -103,6 +110,7 @@ export default function Game() {
     setReel({ team: "ATL", era: "60's" }); setLockedReel(null); saltRef.current = 0;
     traceRef.current = []; roundRespinsRef.current = []; setConvertedId(null);
     hintsUsedRef.current = 0; setHintsUsed(0);
+    setPickemVote(null); setPickemDismissed(false); setPickemCrowd(null); setPickemSubject(null);
     setOwnerId(null);
     // a new game owns the URL — drop any restore params so a later refresh won't resurrect an old screen
     try {
@@ -242,6 +250,19 @@ export default function Game() {
   }, [spinning, seed, filled, drafted, mode]);
 
   const spin = useCallback(() => runSpin({}), [runSpin]);
+
+  // Pick'Em handlers. The vote is optimistic-local first (works even when Redis is dark) and
+  // fire-and-forget to /api/pickem; X (or Escape) skips AND remembers the preference (spec).
+  const votePickem = useCallback((v: PickemVote) => {
+    setPickemVote(v); setPickemDismissed(true); setLocalVote(seed, v);
+    setPickemSubject(current ? `the ${current.decade} ${teamName(current.team)}` : null);
+    track("pickem_vote", { vote: v });
+    fetch("/api/pickem", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ seed, vote: v, uid: getUid() }),
+    }).catch(() => { /* self-disabled or offline — the local vote still settles on the card */ });
+  }, [seed, current]);
+  const skipPickem = useCallback(() => { setPickemDismissed(true); setPickemSkip(); track("pickem_skip"); }, []);
   const reSpinTeam = useCallback(() => {
     if (skips.team || !current) return;
     setSkips((s) => ({ ...s, team: true }));
@@ -318,6 +339,39 @@ export default function Game() {
     return false;
   }, [selPlayer, selSlot, roster, canSwap]);
 
+  // Pick'Em overlay gate: first reels settled, nothing drafted yet, a votable seed, not yet
+  // voted/skipped (this game, this seed via localStorage, or for good via the skip preference).
+  const showPickem = !!current && filled === 0 && mode !== "challenge" && mode !== null &&
+    !pickemDismissed && !pickemVote && pickemSeedOk(seed) && !getPickemSkip() && !getLocalVote(seed);
+
+  // Vote overlay focus management (same pattern as the mobile position sheet above).
+  useEffect(() => {
+    if (!showPickem) return;
+    const prev = document.activeElement as HTMLElement | null;
+    pickemRef.current?.focus();
+    return () => prev?.focus?.();
+  }, [showPickem]);
+
+  // Once the record is in, pull the crowd split (and your stored vote — e.g. a Daily replay
+  // from another device) for the crowd-vs-you strip. Best-effort: a 503 (Redis absent) or a
+  // network error just leaves the strip off / local-vote-only.
+  useEffect(() => {
+    if (!result || mode === "challenge" || !pickemSeedOk(seed)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/pickem?seed=${encodeURIComponent(seed)}&uid=${encodeURIComponent(getUid())}`);
+        if (!r.ok || cancelled) return;
+        const d = await r.json();
+        if (cancelled) return;
+        setPickemCrowd({ y: Number(d?.y) || 0, n: Number(d?.n) || 0 });
+        const sv: PickemVote | null = d?.vote === "y" || d?.vote === "n" ? d.vote : null;
+        if (sv) setPickemVote((p) => p ?? sv);
+      } catch { /* crowd strip stays off */ }
+    })();
+    return () => { cancelled = true; };
+  }, [result, mode, seed]);
+
   if (restoring) return <div className="mx-auto max-w-4xl px-4 py-24 text-center text-sm text-zinc-400 animate-pulse">Loading your result…</div>;
   if (!mode) {
     if (ownerId) return (
@@ -329,9 +383,15 @@ export default function Game() {
     );
     return <ModeSelect onPick={start} onOpenChallenge={(cid) => setOwnerId(cid)} />;
   }
+  // Pick'Em crowd-vs-you strip data for the result card (vote falls back to the per-seed local
+  // copy so a Daily replay in the same browser still shows your pick when the API is dark).
+  const effPickemVote = pickemVote ?? (pickemSeedOk(seed) ? getLocalVote(seed) : null);
+  const pickemView = mode !== "challenge" && (effPickemVote || pickemCrowd)
+    ? { y: pickemCrowd?.y ?? 0, n: pickemCrowd?.n ?? 0, vote: effPickemVote, subject: pickemSubject }
+    : undefined;
   if (result) return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
-      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={mode} usedHints={result.usedHints} onReset={() => start(mode)} />
+      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={mode} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
       {mode === "challenge" && challengeId && challengeRole && (
         <ChallengeResult id={challengeId} role={challengeRole} seed={seed} usedHints={false} result={result.result} players={result.players}
@@ -463,6 +523,46 @@ export default function Game() {
                 </button>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Pick'Em pre-draft vote — focus-trapped dialog (same a11y mechanics as the sheet above).
+          One tap votes; ✕ or Escape skips AND remembers the skip preference. Never blocks: the
+          draft continues the moment either happens. */}
+      {showPickem && current && (
+        <div ref={pickemRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Pick'Em crowd vote"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { skipPickem(); return; }
+            if (e.key === "Tab") {
+              const f = pickemRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
+              if (!f || f.length === 0) return;
+              const first = f[0], last = f[f.length - 1];
+              if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+              else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+          }}
+          className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-5 text-center shadow-2xl">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase tracking-widest text-orange-500">🗳️ Pick&apos;Em</span>
+              <button onClick={skipPickem} aria-label="Skip Pick'Em — won't ask again" title="Skip — won't ask again"
+                className="px-2 text-zinc-400 hover:text-zinc-200">✕</button>
+            </div>
+            {mode === "hoopiq" ? (
+              <div className="mt-3 text-lg font-black">🧠 Mystery roster</div>
+            ) : (
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <span className="rounded-md px-2 py-1 text-sm font-black" style={{ background: teamColors(current.team).bg, color: teamColors(current.team).text }}>{current.team}</span>
+                <span className="rounded-md bg-violet-500/20 px-2 py-1 text-sm font-bold text-violet-300">{eraLabel(current.decade)}</span>
+              </div>
+            )}
+            <p className="mt-3 text-base font-semibold text-zinc-100">Will the best possible five from this roster win more than 60 games?</p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button onClick={() => votePickem("y")} className="rounded-xl bg-green-500 py-3 text-base font-black text-black hover:bg-green-400">YES — 60+</button>
+              <button onClick={() => votePickem("n")} className="rounded-xl bg-red-500 py-3 text-base font-black text-black hover:bg-red-400">NO</button>
+            </div>
+            <p className="mt-3 text-[11px] text-zinc-500">One tap — the crowd&apos;s call settles with your result.</p>
           </div>
         </div>
       )}
