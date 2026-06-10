@@ -1,6 +1,7 @@
 import "server-only";
 import { redis, isRedisEnabled, TTL, encScore, readBoardView, readSortedRows, type StoredRow } from "./redis";
 import { KEEP_BEST_ROW_LUA } from "./score";
+import { logError } from "./log";
 import { challengeSeed, buildOwnerView } from "./challenge";
 import { getPlayersByIds } from "./data";
 import type { ChallengeInfo, ChallengePublic, ChallengeBoard, ChallengeBoardRow, ChallengeOwnerView, LineupResult, LeaderboardRow } from "./types";
@@ -108,7 +109,7 @@ export async function submitChallenge(
     role = "creator"; creator = info;
   } else {
     const existing = await redis.get<ChallengeInfo>(keyInfo(id));
-    if (!existing) return null; // key vanished between NX and GET — bail rather than mislabel the requester's own data
+    if (!existing) { logError("challenge.infoVanished", "info key vanished between NX and GET", { id }); return null; } // bail rather than mislabel the requester's own data
     creator = existing;
     role = existing.uid === row.uid ? "creator" : "responder"; // the creator re-submitting stays the creator (idempotent)
   }

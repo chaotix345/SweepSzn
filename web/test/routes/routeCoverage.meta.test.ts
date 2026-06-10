@@ -45,6 +45,7 @@ const ROUTE_TO_TEST: Record<string, string> = {
   "challenge/[id]":                 "challengeId",
   "challenge/[id]/results":         "challengeIdResults",
   "challenge/submit":               "challengeSubmit",
+  "cron/streak-saver":              "cronStreakSaver",
   "daily/leaderboard":              "dailyLeaderboard",
   "daily/submit":                   "dailySubmit",
   "ev":                             "ev",

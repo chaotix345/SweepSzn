@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/streak-saver",
+      "schedule": "0 21 * * *"
+    }
+  ]
+}

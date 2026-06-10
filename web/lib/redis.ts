@@ -1,5 +1,6 @@
 import "server-only";
 import { Redis } from "@upstash/redis";
+import { logEvent } from "./log";
 import type { LeaderboardRow } from "./types";
 
 // Shared Upstash Redis client + helpers for all leaderboard-style features (Daily board,
@@ -66,7 +67,10 @@ export async function rateLimit(bucket: string, max: number, windowSec: number):
     // just under the limit extend its window forever) while still healing an orphaned no-TTL key.
     const [n] = (await redis.pipeline().incr(bucket).expire(bucket, windowSec, "nx").exec()) as [number, number];
     return Number(n) <= max;
-  } catch {
+  } catch (err) {
+    // fail open by design (availability > strictness for a game) — but make it VISIBLE: a burst
+    // of these during a Redis outage means every limit is off across all routes simultaneously.
+    logEvent("rateLimit.failopen", { bucket: bucket.split(":").slice(0, 2).join(":"), msg: err instanceof Error ? err.message : String(err) });
     return true;
   }
 }
