@@ -25,9 +25,13 @@ const SEO_COPY =
   "exactly what is working and what is costing wins. Daily mode gives every player the same spins " +
   "each day and ranks results on a verified server-side leaderboard with streak tracking. Classic " +
   "mode shows player statistics during the draft; HoopIQ mode hides them so you draft entirely from " +
-  "memory. Every result generates a unique shareable permalink and result card. The goal: can you " +
-  "build an all-time NBA five that goes 82-0, undefeated over a full season? It is achievable, but " +
-  "the engine makes it brutally honest.";
+  "memory. Factor Hunt mode asks you to predict which engine factor matters most before the reveal; " +
+  "Prime Draft drops the era reel so you can build cross-era fives with every player at his peak; " +
+  "Blueprint mode has you commit to a tactical objective before the spin and grades your execution; " +
+  "and Surgeon mode diagnoses your lineup's worst factor and gives you one targeted swap to fix it. " +
+  "You can also challenge a friend to the same spins. Every result generates a unique shareable " +
+  "permalink and result card. The goal: can you build an all-time NBA five that goes 82-0, " +
+  "undefeated over a full season? It is achievable, but the engine makes it brutally honest.";
 
 const jsonLd = {
   "@context": "https://schema.org",

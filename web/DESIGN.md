@@ -34,7 +34,7 @@ contrast + one accent, not decoration. Not minimal (epic needs weight); not chao
 | `--color-gold-soft` | `#FFD66B` | gold gradient highlight |
 | win | `#34D399` (green-400) | wins, positive factors, Net ≥ 0 |
 | loss | `#F87171` (red-400) | losses, negative factors, Net < 0 |
-| mode accents | violet-400 · cyan-400 | per-mode identity chips only (violet = Factor Hunt / Prime, cyan = Blueprint). Never for grades, CTAs, or win/loss semantics. |
+| mode accents | violet-400 · cyan-400 · rose-400 | per-mode identity chips only (violet = Factor Hunt / Prime, cyan = Blueprint, rose = Surgeon). Never for grades, CTAs, or win/loss semantics. |
 
 The orange scale is overridden once in `@theme`, so every existing `orange-*` utility retones uniformly.
 

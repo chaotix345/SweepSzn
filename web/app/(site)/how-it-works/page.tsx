@@ -56,6 +56,46 @@ export default function HowItWorks() {
         </ol>
       </section>
 
+      {/* game modes */}
+      <section className="mt-14">
+        <h2 className="font-display text-2xl tracking-tight">Eight ways to play</h2>
+        <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+          The same engine drives every mode. Four of them are only possible because the engine explains itself —
+          a tool that just prints a number can&apos;t ask you to predict a factor, grade you on one, or diagnose your worst.
+        </p>
+        <div className="mt-6 space-y-5">
+          <Principle term="Daily">
+            Everyone gets the same spins each day, ranked on a server-verified leaderboard with streaks.
+          </Principle>
+          <Principle term="Classic">
+            Full stats visible while you draft, with a couple of optional fit hints per game.
+          </Principle>
+          <Principle term="HoopIQ">
+            Team, era, and stats are hidden — draft the five from memory and test your ball knowledge.
+          </Principle>
+          <Principle term="Factor Hunt">
+            Before the reveal, predict which factor matters most to your five. Nail it for a small leaderboard bonus —
+            and learn the engine&apos;s vocabulary as you play.
+          </Principle>
+          <Principle term="Prime Draft">
+            The era reel is gone. Each franchise offers its all-time pool with every player at his statistical peak,
+            so you can build cross-era fives. A fantasy simulation, not a historical one.
+          </Principle>
+          <Principle term="Blueprint">
+            Commit to a tactical objective — Spacing Bomb, Defensive Fortress, Usage Discipline, Rim Dominance, or
+            Balanced — before you spin. The engine grades your execution on that axis, and each blueprint has its own board.
+          </Principle>
+          <Principle term="Surgeon">
+            Draft your five, then the engine diagnoses its single worst factor and deals three targeted replacements.
+            Make one swap to fix the weakness. Your score is the win delta, so a sharp fix on a flawed roster beats a
+            lazy tweak on a great one.
+          </Principle>
+          <Principle term="Challenge a friend">
+            Send a link with your exact spins. Your friend drafts the same teams and eras and tries to beat your record.
+          </Principle>
+        </div>
+      </section>
+
       {/* live example */}
       <section className="mt-14">
         <h2 className="font-display text-2xl tracking-tight">A real example</h2>

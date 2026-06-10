@@ -76,7 +76,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Mode split (plays)</h2>
-        {["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint"].map(k => <Bar key={k} label={k} value={m.modeSplit[k] ?? 0} max={modeMax} />)}
+        {["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon"].map(k => <Bar key={k} label={k} value={m.modeSplit[k] ?? 0} max={modeMax} />)}
       </section>
 
       <section className="space-y-2">

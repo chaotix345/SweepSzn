@@ -23,6 +23,10 @@ export default function Leaderboards() {
         In Daily mode everyone gets the same spins, so the board is a pure test of judgment. Weekly sums your best
         daily wins; All-time is your career total. Play today&apos;s Daily to post a score.
       </p>
+      <p className="mt-2 max-w-xl text-sm text-zinc-500">
+        Factor Hunt, Blueprint, and Surgeon run their own separate daily boards — prediction bonuses, execution
+        multipliers, and win deltas never mix into the boards below. You&apos;ll find each board on its result screen.
+      </p>
 
       <Leaderboard date={date} trace={[]} readOnly />
 

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { listResults, type ResultEntry } from "@/lib/resultHistory";
 
-const MODE_LABEL: Record<ResultEntry["mode"], string> = { daily: "Daily", classic: "Classic", hoopiq: "HoopIQ", challenge: "Challenge", factorhunt: "Factor Hunt", prime: "Prime", blueprint: "Blueprint" };
+const MODE_LABEL: Record<ResultEntry["mode"], string> = { daily: "Daily", classic: "Classic", hoopiq: "HoopIQ", challenge: "Challenge", factorhunt: "Factor Hunt", prime: "Prime", blueprint: "Blueprint", surgeon: "Surgeon" };
 const gradeText = (g: string) =>
   g === "S" || g === "A+" ? "text-gold" : g.startsWith("A") ? "text-green-400" : g.startsWith("B") ? "text-blue-400"
   : g.startsWith("C") ? "text-amber-400" : g.startsWith("D") ? "text-slate-400" : "text-red-400";
@@ -41,12 +41,14 @@ export default function ResultsHistory({ onOpenChallenge }: { onOpenChallenge: (
       <div className="space-y-2">
         {items.slice(0, 12).map((e) => {
           const cls = "flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 transition hover:border-zinc-600";
+          // surgeon entries store the /sg/ card and open the before/after permalink, not /r/
+          const href = e.mode === "surgeon" ? `/sg/${e.encoded}` : `/r/${e.encoded}`;
           return e.mode === "challenge" && e.challengeId ? (
             <button key={`${e.mode}:${e.encoded}`} onClick={() => onOpenChallenge(e.challengeId!)} className={`w-full text-left ${cls}`}>
               <Row e={e} />
             </button>
           ) : (
-            <Link key={`${e.mode}:${e.encoded}`} href={`/r/${e.encoded}`} className={cls}>
+            <Link key={`${e.mode}:${e.encoded}`} href={href} className={cls}>
               <Row e={e} />
             </Link>
           );

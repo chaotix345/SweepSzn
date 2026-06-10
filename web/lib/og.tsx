@@ -146,6 +146,75 @@ export function resultOgElement(result: LineupResult, players: Player[], hinted 
   );
 }
 
+// Surgeon card: the delta is the headline; BEFORE → AFTER records side by side with the swap and
+// the diagnosis that drove it. The delta story IS the share content (spec).
+export function surgeonOgElement(
+  before: LineupResult, after: LineupResult,
+  diagnosis: { label: string; kind: "worst" | "weakest" },
+  outP: Player, inP: Player,
+) {
+  const delta = after.wins - before.wins;
+  const deltaColor = delta > 0 ? "#34d399" : delta < 0 ? "#f87171" : "#e4e4e7";
+  const beforeC = GRADE_HEX[before.grade] ?? "#e4e4e7";
+  const afterC = GRADE_HEX[after.grade] ?? "#e4e4e7";
+  const tok = (p: Player) => {
+    const c = teamColors(p.team);
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 56, height: 56, borderRadius: 12, background: c.bg, color: c.text, fontSize: 19, fontWeight: 800 }}>{initials(p.name)}</div>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <span style={{ display: "flex", fontSize: 24, fontWeight: 700, color: "#fafafa" }}>{ascii(displayName(p.name))}</span>
+          <span style={{ display: "flex", fontSize: 16, color: "#71717a" }}>{p.team} · {eraLabel(p.decade)}</span>
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div style={shell}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "baseline" }}>
+          <Wordmark />
+          <span style={{ marginLeft: 16, fontSize: 22, color: "#a1a1aa", fontWeight: 600 }}>surgeon · one swap</span>
+          <span style={{ display: "flex", alignSelf: "center", marginLeft: 16, padding: "5px 14px", borderRadius: 999, background: "rgba(244,63,94,0.15)", color: "#fb7185", fontSize: 18, fontWeight: 800, letterSpacing: 1 }}>🩺 {ascii(diagnosis.label)}</span>
+        </div>
+        <span style={{ display: "flex", fontSize: 22, color: "#71717a" }}>win delta</span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", marginTop: 22, gap: 40 }}>
+        <div style={{ display: "flex", alignItems: "baseline", fontSize: 130, fontWeight: 900, lineHeight: 1, color: deltaColor }}>
+          <span>{delta > 0 ? "+" : ""}{delta}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 18, fontSize: 52, fontWeight: 900 }}>
+          <span style={{ display: "flex", color: beforeC }}>{before.wins}–{before.losses}</span>
+          <span style={{ display: "flex", color: "#3f3f46", fontSize: 40 }}>→</span>
+          <span style={{ display: "flex", color: afterC }}>{after.wins}–{after.losses}</span>
+        </div>
+      </div>
+      <div style={{ display: "flex", marginTop: 10, fontSize: 24, color: "#a1a1aa" }}>
+        Net {before.netRtg > 0 ? "+" : ""}{before.netRtg.toFixed(1)} → {after.netRtg > 0 ? "+" : ""}{after.netRtg.toFixed(1)}
+      </div>
+
+      {/* the swap */}
+      <div style={{ display: "flex", alignItems: "center", marginTop: "auto", gap: 28 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={{ display: "flex", fontSize: 15, fontWeight: 700, letterSpacing: 2, color: "#f87171" }}>OUT</span>
+          {tok(outP)}
+        </div>
+        <span style={{ display: "flex", fontSize: 40, color: "#3f3f46" }}>→</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <span style={{ display: "flex", fontSize: 15, fontWeight: 700, letterSpacing: 2, color: "#34d399" }}>IN</span>
+          {tok(inP)}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 28 }}>
+        <span style={{ display: "flex", fontSize: 22, color: "#a1a1aa" }}>{diagnosis.kind === "weakest" ? "no weaknesses — sharpened the weakest strength" : "diagnosed the worst factor, then fixed it"}</span>
+        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#ff6a00" }}>Can you out-operate it?</span>
+      </div>
+    </div>
+  );
+}
+
 export function brandOgElement(sub: string) {
   return (
     <div style={{ ...shell, alignItems: "center", justifyContent: "center", textAlign: "center" }}>

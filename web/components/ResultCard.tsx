@@ -162,7 +162,9 @@ const subscribeNoop = () => () => {};
 const getCanNative = () => typeof navigator !== "undefined" && "share" in navigator;
 const getServerCanNative = () => false;
 
-function ShareButton({ result, path, names, usedHints, pickem, prime, blueprint }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp; prime?: boolean; blueprint?: BlueprintView }) {
+// Exported so modes with their own result layout (Surgeon) reuse the exact share affordance
+// (native share / popover / copy / per-platform links). Pass `text` to fully override the copy.
+export function ShareButton({ result, path, names, usedHints, pickem, prime, blueprint, text: textOverride }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp; prime?: boolean; blueprint?: BlueprintView; text?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -170,7 +172,9 @@ function ShareButton({ result, path, names, usedHints, pickem, prime, blueprint 
   const canNative = useSyncExternalStore(subscribeNoop, getCanNative, getServerCanNative);
   // Defying the crowd is the share-worthy Pick'Em moment — it rewrites the share copy (spec).
   const defyLine = pickem ? pickemShareLine(result.wins, result.losses, pickem, pickem.subject) : null;
-  const text = defyLine
+  const text = textOverride
+    ? textOverride
+    : defyLine
     ? `${defyLine} Can you beat the crowd on SweepSzn?`
     : blueprint
       // the committed objective is the identity-rich share hook (spec: "I went SPACING BOMB…")
