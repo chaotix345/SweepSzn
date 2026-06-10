@@ -18,7 +18,8 @@ export default async function Image({ params }: { params: Promise<{ lineup: stri
     return new ImageResponse(brandOgElement("Build an all-time NBA starting five."), { ...OG_SIZE });
   }
   const result = evaluateLineup(players, getCoefficients());
+  // blueprint and prime are mutually exclusive modes — a crafted bs~p~ URL renders as blueprint only
   const bpKey = bpFromCode(bp);
   const blueprint = bpKey ? gradeBlueprint(bpKey, result) : undefined;
-  return new ImageResponse(resultOgElement(result, players, hinted, undefined, prime, blueprint), { ...OG_SIZE });
+  return new ImageResponse(resultOgElement(result, players, hinted, undefined, bpKey ? false : prime, blueprint), { ...OG_SIZE });
 }

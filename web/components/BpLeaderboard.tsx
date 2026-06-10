@@ -13,6 +13,10 @@ import { getUid, getName, setName as persistName } from "@/lib/streak";
 
 const serverDate = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; };
 type BoardTab = BlueprintKey | "all";
+// grade colors: DESIGN.md single-source rule (mirrors ResultCard/ResultsHistory/og GRADE maps)
+const gradeText = (g: string) =>
+  g === "S" || g === "A+" ? "text-gold" : g.startsWith("A") ? "text-green-400" : g.startsWith("B") ? "text-blue-400"
+  : g.startsWith("C") ? "text-amber-400" : g.startsWith("D") ? "text-slate-400" : "text-red-400";
 
 export default function BpLeaderboard({ date, trace, blueprint, usedHints = false, readOnly = false }: {
   date: string; trace: DraftStep[]; blueprint: BlueprintKey; usedHints?: boolean; readOnly?: boolean;
@@ -109,7 +113,7 @@ export default function BpLeaderboard({ date, trace, blueprint, usedHints = fals
 
 function Chip({ active, onClick, label, title }: { active: boolean; onClick: () => void; label: string; title: string }) {
   return (
-    <button onClick={onClick} title={title} aria-pressed={active}
+    <button onClick={onClick} title={title} aria-label={title} aria-pressed={active}
       className={`rounded-md px-2 py-1.5 ${active ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>{label}</button>
   );
 }
@@ -149,7 +153,7 @@ function Row({ r, me, showBp }: { r: BpBoardRow; me?: boolean; showBp: boolean }
       </span>
       <span className="shrink-0 tabular-nums font-bold text-zinc-100">
         {r.score % 1 === 0 ? r.score : r.score.toFixed(1)}
-        <span className="ml-1 text-[10px] font-semibold text-cyan-300">{r.grade}</span>
+        <span className={`ml-1 text-[10px] font-semibold ${gradeText(r.grade)}`}>{r.grade}</span>
       </span>
       <span className="w-12 shrink-0 text-right text-xs tabular-nums text-zinc-500">{r.wins}-{r.losses}</span>
     </Link>

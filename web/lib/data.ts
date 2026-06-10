@@ -224,7 +224,9 @@ export function spin(seed: string, round: number, opts: SpinOptions = {}, wantFi
   const excludeIds = new Set(opts.exclude ?? []);
   const drafted = showFit && excludeIds.size ? [...excludeIds].map((id) => byId.get(id)).filter((p): p is Player => !!p) : [];
   const fits = showFit ? computeFits(drafted, pool, coeff) : null;
-  const candidates = pool.map((p) => toCandidate(p, fits?.get(p.id), isBp ? Math.round(playerFeatures(p, coeff).usage * 10) / 10 : undefined));
+  // send unrounded usage so the live budget bar sums the SAME floats blueprintMetric grades on —
+  // a per-player round here could straddle the A+/A boundary the bar tells the player they hit
+  const candidates = pool.map((p) => toCandidate(p, fits?.get(p.id), isBp ? playerFeatures(p, coeff).usage : undefined));
   return { team, decade, candidates };
 }
 

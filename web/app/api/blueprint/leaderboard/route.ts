@@ -19,11 +19,12 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const date = url.searchParams.get("date") ?? "";
   const bpParam = url.searchParams.get("bp") ?? "all";
-  const uidParam = url.searchParams.get("uid") ?? "";
+  const uidParam = url.searchParams.get("uid");
   if (!DATE_RE.test(date)) return NextResponse.json({ error: "bad date" }, { status: 400 });
   const bp = bpParam === "all" ? "all" : bpKeyOk(bpParam) ? bpParam : null;
   if (!bp) return NextResponse.json({ error: "bad blueprint" }, { status: 400 });
-  const uid = UID_RE.test(uidParam) ? uidParam : undefined;
-  const view = await getBpLeaderboard(date, bp, uid);
+  // a present-but-malformed uid is a 400, not a silent anonymous read (FH board route parity)
+  if (uidParam != null && !UID_RE.test(uidParam)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+  const view = await getBpLeaderboard(date, bp, uidParam ?? undefined);
   return NextResponse.json(view);
 }

@@ -759,17 +759,30 @@ export default function Game() {
         <div ref={bpRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Blueprint commitment"
           onKeyDown={(e) => {
             if (e.key === "Escape") { cancelBlueprint(); return; }
+            // radiogroup keyboard contract: arrows move the selection (Tab alone only walks focus)
+            if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End") {
+              e.preventDefault();
+              const i = BLUEPRINTS.findIndex((b) => b.key === bpPick);
+              const n = BLUEPRINTS.length;
+              const next = e.key === "Home" ? 0 : e.key === "End" ? n - 1
+                : e.key === "ArrowDown" ? (i + 1 + n) % n : (i - 1 + n) % n;
+              setBpPick(BLUEPRINTS[next].key);
+              bpRef.current?.querySelectorAll<HTMLElement>("[role=radio]")[next]?.focus();
+              return;
+            }
             if (e.key === "Tab") {
               const f = bpRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
               if (!f || f.length === 0) return;
               const first = f[0], last = f[f.length - 1];
               // the container holds initial focus — treat it as "first" so Shift+Tab can't escape
               if (e.shiftKey && (document.activeElement === first || document.activeElement === bpRef.current)) { e.preventDefault(); last.focus(); }
-              else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+              // the container (initial focus) is "first" for forward-Tab too — guard it so focus
+              // can't walk out the back before the first button on the very first Tab
+              else if (!e.shiftKey && (document.activeElement === last || document.activeElement === bpRef.current)) { e.preventDefault(); first.focus(); }
             }
           }}
           className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
-          <div className="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
+          <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
             <div className="text-center text-xs font-black uppercase tracking-widest text-cyan-400">📐 Blueprint</div>
             <p className="mt-2 text-center text-base font-semibold text-zinc-100">Commit to an objective — before you see the reels.</p>
             <p className="mt-1 text-center text-[11px] text-zinc-500">The engine grades your execution on that axis. Board score = wins × execution (×1.0–1.3).</p>
@@ -954,8 +967,9 @@ function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect, s
   canPlace: (c: DraftCandidate) => boolean; onSelect: (c: DraftCandidate) => void; showUsage?: boolean;
 }) {
   const hideStats = mode === "hoopiq"; // HoopIQ hides stats — draft on memory
-  // Free-play assist only (Classic + Prime): Daily/FH are competitions (fairness), HoopIQ is a memory test
-  const canHint = mode === "classic" || mode === "prime";
+  // Classic-style assist (Classic + Prime + Blueprint — Blueprint follows Classic's hint rules,
+  // hinted board rows carry the stamp): Daily/FH are hint-free competitions, HoopIQ is a memory test
+  const canHint = mode === "classic" || mode === "prime" || mode === "blueprint";
   const [revealed, setRevealed] = useState(false); // spent a hint to reveal fit for THIS pick? resets on remount (each spin/round)
   const showFit = revealed && canHint;
   const [q, setQ] = useState("");
@@ -1031,7 +1045,7 @@ function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect, s
           const showRowFit = showFit && fits && c.fit;
           return (
             <button key={c.id} onClick={() => onSelect(c)} aria-pressed={sel}
-              aria-label={`Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}${showRowFit ? `, fit ${c.fit!.delta > 0 ? "+" : ""}${c.fit!.delta}${c.fit!.adds.length ? ", adds " + c.fit!.adds.join(" and ") : ""}` : ""}`}
+              aria-label={`Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}${showUsage && c.usage != null ? `, ${Math.round(c.usage)} percent usage demand` : ""}${showRowFit ? `, fit ${c.fit!.delta > 0 ? "+" : ""}${c.fit!.delta}${c.fit!.adds.length ? ", adds " + c.fit!.adds.join(" and ") : ""}` : ""}`}
               className={`mb-1.5 flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition ${
                 sel ? "border-orange-500 bg-orange-500/10" : showRowFit && c.fit!.best ? "border-emerald-600/50 bg-emerald-500/[0.06] hover:border-emerald-500" : fits ? "border-zinc-800 bg-zinc-950/60 hover:border-zinc-600" : "border-zinc-900 bg-zinc-950/40 opacity-55"}`}>
               <div className="min-w-0 flex-1">

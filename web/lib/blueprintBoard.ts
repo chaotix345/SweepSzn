@@ -40,7 +40,10 @@ async function keepBest(date: string, bp: string, row: BpRow, sortScore: number)
   if (!redis) return;
   const prev = await redis.zscore(keyZ(date, bp), row.uid);
   if (prev == null || sortScore > Number(prev)) {
-    await redis.zadd(keyZ(date, bp), { score: sortScore, member: row.uid });
+    // gt:true makes the score update server-side monotonic, so two concurrent same-uid submits
+    // (double-tap/retry) can never regress the rank — the read-then-write guard above is not
+    // atomic. The meta hset still races, but only display fields (name) can briefly lag.
+    await redis.zadd(keyZ(date, bp), { gt: true }, { score: sortScore, member: row.uid });
     await redis.hset(keyH(date, bp), { [row.uid]: row });
     await redis.expire(keyZ(date, bp), TTL);
     await redis.expire(keyH(date, bp), TTL);

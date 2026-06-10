@@ -92,7 +92,7 @@ export function resultOgElement(result: LineupResult, players: Player[], hinted 
               📐 {blueprint.label} · {blueprint.grade}
             </span>
           )}
-          {prime && (
+          {!blueprint && prime && (
             <span style={{ display: "flex", alignSelf: "center", marginLeft: 16, padding: "5px 14px", borderRadius: 999, background: "rgba(139,92,246,0.18)", color: "#a78bfa", fontSize: 18, fontWeight: 800, letterSpacing: 1 }}>PRIME</span>
           )}
           {hinted && (

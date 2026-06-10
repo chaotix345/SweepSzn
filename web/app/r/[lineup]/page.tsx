@@ -20,9 +20,10 @@ const loadLineup = cache((lineup: string) => {
   const players = getPlayersByIds(ids);
   if (players.length !== 5) return null;
   const result = evaluateLineup(players, getCoefficients());
-  // a b<code>~ prefix re-derives the blueprint execution grade from the same result (deterministic)
+  // a b<code>~ prefix re-derives the blueprint execution grade from the same result (deterministic).
+  // blueprint and prime are mutually exclusive modes — a crafted bs~p~ URL renders as blueprint only
   const bpKey = bpFromCode(bp);
-  return { players, result, hinted, prime, blueprint: bpKey ? gradeBlueprint(bpKey, result) : null };
+  return { players, result, hinted, prime: bpKey ? false : prime, blueprint: bpKey ? gradeBlueprint(bpKey, result) : null };
 });
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {

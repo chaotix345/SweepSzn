@@ -6,6 +6,7 @@
 // already in the result: factor values, the per-player usage/def breakdown, and net rating).
 
 import type { LineupResult } from "./types";
+import { DEFAULT_COEFFICIENTS } from "./engine";
 
 export type BlueprintKey = "spacing" | "fortress" | "discipline" | "rim" | "balanced";
 
@@ -83,7 +84,7 @@ export const BP_MULT: Record<string, number> = { "A+": 1.3, A: 1.22, B: 1.15, C:
 //               ceiling for ~75% of CASUAL drafts (probe, n=400), so it cannot grade dominance —
 //               this keeps the intent (anchor the paint) with a metric that discriminates.
 // - balanced:   net rating
-const DEF_SCALE = 0.742; // mirrors DEFAULT_COEFFICIENTS.defScale (display weighting only)
+const DEF_SCALE = DEFAULT_COEFFICIENTS.defScale; // display weighting only; tethered to the engine default
 function factorValue(r: LineupResult, prefix: string): number {
   const f = r.factors.find((x) => x.label.startsWith(prefix));
   return f ? f.value : 0;
