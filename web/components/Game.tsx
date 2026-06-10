@@ -113,6 +113,7 @@ export default function Game() {
   const [sgOutId, setSgOutId] = useState<string | null>(null);          // chosen drafted player to drop
   const [sgResult, setSgResult] = useState<SgResult | null>(null);      // submit response (the reveal)
   const [sgName, setSgName] = useState("");                             // board name, captured at swap-confirm
+  const [sgBusy, setSgBusy] = useState(false);                          // submit in flight — keeps the dialog mounted (global `loading` would swap it for the spinner screen)
   const sgFetchingRef = useRef(false);                                  // de-dupes the pool fetch
   const sgAbortRef = useRef<AbortController | null>(null);              // cancels in-flight pool/submit on restart
   const sgRef = useRef<HTMLDivElement>(null);                           // swap dialog
@@ -158,14 +159,14 @@ export default function Game() {
     setPickemVote(null); setPickemDismissed(false); setPickemCrowd(null); setPickemSubject(null);
     setFhStep(null); setFhPick(null); setFhPrediction(null); fhFetchingRef.current = false;
     setBlueprint(null); setBpPick(null); // blueprint re-commits every game (the modal gates the first spin)
-    setSgPool(null); setSgInId(null); setSgOutId(null); setSgResult(null); sgFetchingRef.current = false;
+    setSgPool(null); setSgInId(null); setSgOutId(null); setSgResult(null); setSgBusy(false); sgFetchingRef.current = false;
     sgAbortRef.current?.abort(); sgAbortRef.current = null;
     setOwnerId(null);
     // a new game owns the URL — drop any restore params so a later refresh won't resurrect an old screen
     try {
       const u = new URL(window.location.href);
-      if (u.searchParams.has("r") || u.searchParams.has("m") || u.searchParams.has("own") || u.searchParams.has("d")) {
-        u.searchParams.delete("r"); u.searchParams.delete("m"); u.searchParams.delete("own"); u.searchParams.delete("d");
+      if (u.searchParams.has("r") || u.searchParams.has("m") || u.searchParams.has("own") || u.searchParams.has("d") || u.searchParams.has("sg")) {
+        u.searchParams.delete("r"); u.searchParams.delete("m"); u.searchParams.delete("own"); u.searchParams.delete("d"); u.searchParams.delete("sg");
         window.history.replaceState(null, "", u.pathname + u.search + u.hash);
       }
     } catch { /* no history API */ }
@@ -445,9 +446,14 @@ export default function Game() {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ seed, trace: traceRef.current }), signal: ctrl.signal,
       });
-      if (!res.ok) throw new Error("pool failed");
-      const d = await res.json();
+      const d = await res.json().catch(() => null);
       if (ctrl.signal.aborted) return;
+      if (res.status === 422) {
+        // degenerate roster: the engine found no factors / no legal replacement — only a redraft helps
+        setError("No legal replacement exists for this five — hit Restart and draft again.");
+        return;
+      }
+      if (!res.ok) throw new Error("pool failed");
       if (!d?.diagnosis || !Array.isArray(d?.candidates) || d.candidates.length === 0) throw new Error("bad pool");
       const drafted = SLOTS.map((s) => (r[s] ? { slot: s, player: r[s]! } : null)).filter(Boolean) as { slot: Slot; player: DraftCandidate }[];
       setSgName(getName()); setSgInId(null); setSgOutId(null);
@@ -462,8 +468,8 @@ export default function Game() {
   // Surgeon submit = the reveal. The server recomputes the pool, rejects an off-pool swap,
   // write-once locks the swap, and recomputes the delta itself — client values are never trusted.
   const confirmSurgeon = useCallback(async () => {
-    if (!sgPool || !sgInId || !sgOutId) return;
-    setLoading(true); setError(null);
+    if (!sgPool || !sgInId || !sgOutId || sgBusy) return;
+    setSgBusy(true); setError(null);
     sgAbortRef.current?.abort();
     const ctrl = new AbortController();
     sgAbortRef.current = ctrl;
@@ -487,8 +493,8 @@ export default function Game() {
       if (e instanceof DOMException && e.name === "AbortError") return;
       if (ctrl.signal.aborted) return;
       setError("Network error — tap Confirm swap to retry.");
-    } finally { if (!ctrl.signal.aborted) setLoading(false); }
-  }, [sgPool, sgInId, sgOutId, sgName, seed, mode]);
+    } finally { if (!ctrl.signal.aborted) setSgBusy(false); }
+  }, [sgPool, sgInId, sgOutId, sgName, seed, mode, sgBusy]);
 
   // Mode fork at "five locked": Factor Hunt detours through the prediction step; Surgeon detours
   // through the diagnosis/swap step; everyone else simulates immediately (pre-FH behavior).
@@ -944,6 +950,20 @@ export default function Game() {
         <div ref={sgRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Surgeon replacement pool"
           onKeyDown={(e) => {
             if (e.key === "Escape") { setSgPool(null); return; }
+            // radiogroup keyboard contract: arrows rove WITHIN whichever group holds focus
+            if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End") {
+              const group = (document.activeElement as HTMLElement | null)?.closest("[role=radiogroup]");
+              if (!group) return;
+              e.preventDefault();
+              const radios = [...group.querySelectorAll<HTMLElement>("[role=radio]:not([disabled])")];
+              if (!radios.length) return;
+              const i = radios.indexOf(document.activeElement as HTMLElement);
+              const n = radios.length;
+              const next = e.key === "Home" ? 0 : e.key === "End" ? n - 1
+                : e.key === "ArrowDown" ? (i + 1 + n) % n : (i - 1 + n) % n;
+              radios[next].focus(); radios[next].click();
+              return;
+            }
             if (e.key === "Tab") {
               const f = sgRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])");
               if (!f || f.length === 0) return;
@@ -984,12 +1004,14 @@ export default function Game() {
               // a candidate may only take the EXACT slot the drafted player occupies (server rule)
               return (
                 <>
-                  <div className="mt-4 text-[11px] font-bold uppercase tracking-wide text-zinc-500">Swap out — pick the player {displayName(cand.name)} replaces</div>
+                  <div role="status" aria-live="polite" className="mt-4 text-[11px] font-bold uppercase tracking-wide text-zinc-500">Swap out — pick the player {displayName(cand.name)} replaces</div>
                   <div className="mt-1.5 grid grid-cols-1 gap-1.5" role="radiogroup" aria-label="Player to swap out">
                     {sgPool.roster.map(({ slot, player }) => {
                       const eligible = cand.eligible.includes(slot);
                       return (
-                        <button key={player.id} role="radio" aria-checked={sgOutId === player.id} disabled={!eligible}
+                        // aria-disabled (not disabled) keeps ineligible targets discoverable to AT
+                        // users inside the radiogroup; the click guard makes them inert
+                        <button key={player.id} role="radio" aria-checked={sgOutId === player.id} aria-disabled={!eligible}
                           onClick={() => eligible && setSgOutId(player.id)}
                           className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-1.5 text-left text-sm transition ${
                             sgOutId === player.id ? "border-red-400 bg-red-500/15 text-red-200"
@@ -1007,9 +1029,12 @@ export default function Game() {
             <input value={sgName} onChange={(e) => setSgName(e.target.value)} maxLength={24} placeholder="Your name (for the board)"
               className="mt-4 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-rose-500" />
             {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
-            <button onClick={confirmSurgeon} disabled={!sgInId || !sgOutId || loading}
+            <button onClick={confirmSurgeon} disabled={!sgInId || !sgOutId || sgBusy}
               className="mt-3 w-full rounded-xl bg-rose-500 py-3 text-base font-black text-black hover:bg-rose-400 disabled:opacity-40">
-              {loading ? "Operating…" : "🔒 Confirm swap — reveal the delta"}
+              {sgBusy ? "Operating…" : "🔒 Confirm swap — reveal the delta"}
+            </button>
+            <button onClick={() => setSgPool(null)} className="mt-2 w-full py-1 text-xs text-zinc-500 hover:text-zinc-300">
+              ← Back to the draft
             </button>
             <p className="mt-2 text-center text-[10px] text-zinc-500">One swap, locked on submit — the result reveals the answer.</p>
           </div>

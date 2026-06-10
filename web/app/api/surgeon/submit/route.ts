@@ -70,10 +70,6 @@ export async function POST(req: Request) {
   const v = verifyTrace(seed, trace, deps);
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
 
-  if (session?.anon && session.anon !== uid) {
-    await removeSurgeonEntry(date, session.anon);
-  }
-
   // recompute the deal from the verified lineup — the only pool a swap may come from
   const diagnosis = surgeonDiagnosis(v.result.factors);
   if (!diagnosis) return NextResponse.json({ error: "no factors" }, { status: 422 });
@@ -118,6 +114,11 @@ export async function POST(req: Request) {
     uid, name, delta,
     beforeWins: v.result.wins, afterWins: afterResult.wins, net: afterResult.netRtg, card,
   };
+  // Claim cleanup only now that this submit is definitely landing a row — running it earlier
+  // would let a FAILED submit (bad swap) silently delete the player's anon score (mirrors daily).
+  if (session?.anon && session.anon !== uid) {
+    await removeSurgeonEntry(date, session.anon);
+  }
   const view = await submitSurgeonScore(date, row, sortScore);
   after(() => bump(redis, "submit", { uid }));
   // the locked swap is echoed so a replayed lineup renders ITS result, not the requested retry

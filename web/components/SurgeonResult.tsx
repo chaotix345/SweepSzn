@@ -109,7 +109,7 @@ function SwapChip({ p, out }: { p: Player; out?: boolean }) {
       </div>
       <div className="min-w-0 text-left">
         <div className="truncate text-xs font-semibold">{displayName(p.name)}</div>
-        <div className={`text-[9px] font-bold uppercase ${out ? "text-red-400" : "text-green-400"}`}>{out ? "out" : "in"}</div>
+        <div className={`text-[10px] font-bold uppercase ${out ? "text-red-400" : "text-green-400"}`}>{out ? "out" : "in"}</div>
       </div>
     </div>
   );

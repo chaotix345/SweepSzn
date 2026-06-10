@@ -15,6 +15,7 @@ export default async function Image({ params }: { params: Promise<{ card: string
   const beforePlayers = dec ? getPlayersByIds(dec.beforeIds) : [];
   const afterPlayers = dec ? getPlayersByIds(dec.afterIds) : [];
   if (!dec || beforePlayers.length !== 5 || afterPlayers.length !== 5
+    || new Set(beforePlayers.map((p) => p.person_id ?? p.id)).size !== 5
     || new Set(afterPlayers.map((p) => p.person_id ?? p.id)).size !== 5) {
     return new ImageResponse(brandOgElement("Build an all-time NBA starting five."), { ...OG_SIZE });
   }

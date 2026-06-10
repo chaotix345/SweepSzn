@@ -19,6 +19,13 @@ export async function POST(req: Request) {
   }
   const body = await req.json().catch(() => ({}));
   if (!surgeonSeedOk(body?.seed)) return NextResponse.json({ error: "bad seed" }, { status: 400 });
+  // today only: the deal (diagnosis + targeted pool) is the day's puzzle — no pre-fetching
+  // tomorrow's case; a midnight-straddling game fails here with the same error the submit
+  // would have given it anyway
+  const d = new Date();
+  if (body.seed !== `surgeon-${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`) {
+    return NextResponse.json({ error: "stale date" }, { status: 400 });
+  }
 
   // collect each round's FINAL pool (post-respins) through the injected deps — the exact
   // rosters the player drafted from, reproduced identically at submit time

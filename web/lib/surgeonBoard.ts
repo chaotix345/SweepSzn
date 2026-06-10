@@ -37,9 +37,11 @@ export async function submitSurgeonScore(date: string, row: SurgeonRow, sortScor
   if (!redis) return null;
   if (!Number.isFinite(sortScore)) return getSurgeonLeaderboard(date, row.uid);
   const prev = await redis.zscore(keyZ(date), row.uid);
-  // keep-best: score AND meta only move together when this run beats the stored one
+  // keep-best: score AND meta only move together when this run beats the stored one.
+  // gt:true makes the score update server-side monotonic (the read-then-write guard is not
+  // atomic) — concurrent same-uid submits can never regress the rank, mirroring blueprintBoard.
   if (prev == null || sortScore > Number(prev)) {
-    await redis.zadd(keyZ(date), { score: sortScore, member: row.uid });
+    await redis.zadd(keyZ(date), { gt: true }, { score: sortScore, member: row.uid });
     await redis.hset(keyH(date), { [row.uid]: row });
     await redis.expire(keyZ(date), TTL);
     await redis.expire(keyH(date), TTL);
@@ -61,11 +63,16 @@ export async function lockSurgeonSwap(
 ): Promise<{ outId: string; inId: string }> {
   if (!redis) return requested;
   const key = keySwap(date, uid, lineup);
-  const claimed = await redis.set(key, `${requested.outId}>${requested.inId}`, { nx: true, ex: TTL });
+  const val = `${requested.outId}>${requested.inId}`;
+  const claimed = await redis.set(key, val, { nx: true, ex: TTL });
   if (claimed) return requested;
   const locked = await redis.get<string>(key);
   const [outId, inId] = (locked ?? "").split(">");
-  return outId && inId ? { outId, inId } : requested;
+  if (outId && inId) return { outId, inId };
+  // the lock vanished between NX and GET (expiry/eviction edge) — re-claim it with the swap
+  // being graded rather than silently bypassing write-once
+  await redis.set(key, val, { ex: TTL });
+  return requested;
 }
 
 // Claim cleanup: drop an anon row when the same player re-submits signed-in (mirrors daily/FH/BP).

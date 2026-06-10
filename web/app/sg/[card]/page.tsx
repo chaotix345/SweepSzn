@@ -20,7 +20,9 @@ const loadCard = cache((card: string) => {
   const beforePlayers = getPlayersByIds(dec.beforeIds);
   const afterPlayers = getPlayersByIds(dec.afterIds);
   if (beforePlayers.length !== 5 || afterPlayers.length !== 5) return null;
-  // mirror verifyTrace's person-dupe guard against crafted URLs
+  // mirror verifyTrace's person-dupe guard against crafted URLs — BOTH lineups (distinct ids
+  // can still be two era-variants of the same person)
+  if (new Set(beforePlayers.map((p) => p.person_id ?? p.id)).size !== 5) return null;
   if (new Set(afterPlayers.map((p) => p.person_id ?? p.id)).size !== 5) return null;
   const c = getCoefficients();
   const before = evaluateLineup(beforePlayers, c);
