@@ -1,12 +1,12 @@
-import { verifyDaily, verifyTrace, type VerifyDeps } from "./dailyVerify";
+import { verifyDaily, verifyTrace, applySwapToTrace, type VerifyDeps } from "./dailyVerify";
 import type { DraftStep, Player, LineupResult } from "./types";
 
 // Fake spin world (no real data / no server-only) so we can exercise the verifier's logic.
-const mkP = (id: string, slot: string): Player =>
-  ({ id, person_id: id, name: id, year: 2015, decade: "2010s", tier: "complete", team: "XXX", pos: slot, eligible: [slot] } as Player);
+const mkP = (id: string, slot: string, eligible?: string[]): Player =>
+  ({ id, person_id: id, name: id, year: 2015, decade: "2010s", tier: "complete", team: "XXX", pos: slot, eligible: eligible ?? [slot] } as Player);
 
 const basePool: Record<number, string[]> = {
-  0: ["p0pg", "x0"], 1: ["p1sg", "x1"], 2: ["p2sf", "x2"], 3: ["p3pf", "x3"], 4: ["p4c", "x4"],
+  0: ["p0pg", "x0"], 1: ["p1sg", "x1"], 2: ["p2sf", "flexfwd", "x2"], 3: ["p3pf", "x3"], 4: ["p4c", "x4"],
 };
 // respin pools keyed by `${round}-${type}-${salt}` (salt = global re-spin count at that point)
 const respinPool: Record<string, string[]> = {
@@ -16,6 +16,7 @@ const respinPool: Record<string, string[]> = {
 const players: Record<string, Player> = {
   p0pg: mkP("p0pg", "PG"), p1sg: mkP("p1sg", "SG"), p2sf: mkP("p2sf", "SF"), p3pf: mkP("p3pf", "PF"), p4c: mkP("p4c", "C"),
   p2sf_b: mkP("p2sf_b", "SF"), r0t: mkP("r0t", "PG"), r1t: mkP("r1t", "SG"),
+  flexfwd: mkP("flexfwd", "PF", ["SF", "PF"]), // multi-eligible forward for the court-move scenario
   x0: mkP("x0", "PG"), x1: mkP("x1", "SG"), x2: mkP("x2", "SF"), x3: mkP("x3", "PF"), x4: mkP("x4", "C"),
 };
 
@@ -64,6 +65,43 @@ const tooMany = clone(legit);
 tooMany[0] = { slot: "PG", pickedId: "r0t", respins: ["team"] };
 tooMany[1] = { slot: "SG", pickedId: "r1t", respins: ["team"] };
 assert(verifyDaily("2025-1-1", tooMany, deps).ok === false, "more than one team re-spin rejected");
+
+// --- applySwapToTrace: the court move/swap must keep the trace replayable (live "slot reused" bug) ---
+// User repro: round-2 spin offers a SF/PF-eligible forward; the player places him at PF, later
+// moves him PF -> SF on the court, then drafts the real PF in round 3. Without re-stamping the
+// trace, the round-3 pick lands on a "reused" PF and the Daily/challenge submit 400s.
+{
+  const moved: DraftStep[] = [
+    { slot: "PG", pickedId: "p0pg", respins: [] },
+    { slot: "SG", pickedId: "p1sg", respins: [] },
+    { slot: "PF", pickedId: "flexfwd", respins: [] }, // placed at PF first...
+    { slot: "PF", pickedId: "p3pf", respins: [] },    // ...PF re-picked after the court move
+    { slot: "C", pickedId: "p4c", respins: [] },
+  ];
+  const broken = clone(moved);
+  const r1 = verifyDaily("2025-1-1", broken, deps);
+  assert(r1.ok === false && r1.error === "slot reused 3", "un-stamped trace reproduces the live 'slot reused 3' rejection");
+
+  const fixed = clone(moved);
+  // the court move happens BEFORE round 3 is drafted: flexfwd PF -> SF (SF empty at that point)
+  applySwapToTrace(fixed.slice(0, 3), "flexfwd", null, "PF", "SF");
+  const r2 = verifyDaily("2025-1-1", fixed, deps);
+  assert(r2.ok === true, "re-stamped trace verifies after a move into an empty slot");
+  assert(r2.ok === true && r2.lineup === "p0pg,p1sg,flexfwd,p3pf,p4c", "lineup serializes in the FINAL slot arrangement");
+}
+{
+  // swap of two FILLED slots keeps both entries in lockstep (no error before, but the served
+  // permalink/lineup used to show the pre-swap arrangement)
+  const t = clone(legit);
+  applySwapToTrace(t, "p2sf", "p3pf", "SF", "PF"); // hypothetical SF<->PF swap of two placed players
+  assert(t[2].slot === "PF" && t[3].slot === "SF", "both swapped entries re-stamped");
+  assert(t[0].slot === "PG" && t[4].slot === "C", "unrelated entries untouched");
+}
+{
+  const t = clone(legit);
+  applySwapToTrace(t, null, null, "SF", "PF");
+  assert(JSON.stringify(t) === JSON.stringify(legit), "no-op when both ids are null");
+}
 
 // verifyTrace: the seed-agnostic core works for any seed (e.g. an H2H challenge), not just daily
 const chal = verifyTrace("h2h-abc123", legit, deps);
