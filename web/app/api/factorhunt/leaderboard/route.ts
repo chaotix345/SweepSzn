@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { isFhBoardEnabled, getFhLeaderboard } from "@/lib/factorHuntBoard";
+import { rateLimit, ipOf } from "@/lib/redis";
 
 export async function GET(req: Request) {
   if (!isFhBoardEnabled()) return NextResponse.json({ error: "leaderboard not configured" }, { status: 503 });
+  // each call is 3-5 Redis round-trips — keep a flood from amplifying into Redis egress
+  if (!(await rateLimit(`rl:fhboard:${ipOf(req)}`, 60, 60))) {
+    return NextResponse.json({ error: "too many requests" }, { status: 429 });
+  }
   const u = new URL(req.url);
   const date = u.searchParams.get("date");
   const uid = u.searchParams.get("uid") ?? undefined;

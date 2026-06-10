@@ -3,7 +3,7 @@ import { spinPool, getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
 import { verifyTrace, type VerifyDeps } from "@/lib/dailyVerify";
 import { buildFhChoices, encFhScore, decodeFhDisplay, type FhRow } from "@/lib/factorHunt";
-import { isFhBoardEnabled, submitFhScore, removeFhEntry } from "@/lib/factorHuntBoard";
+import { isFhBoardEnabled, submitFhScore, removeFhEntry, lockFhPrediction } from "@/lib/factorHuntBoard";
 import { getSession } from "@/lib/authServer";
 import { cleanName } from "@/lib/clean";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
@@ -56,9 +56,14 @@ export async function POST(req: Request) {
   // The bonus is granted only when the submitted prediction is one of the seed's actual choices
   // AND matches the recomputed answer — a fabricated label earns nothing.
   const choices = buildFhChoices(v.result.factors, seed);
-  const predicted = choices && typeof body.prediction === "string" && choices.choices.includes(body.prediction)
+  const requested = choices && typeof body.prediction === "string" && choices.choices.includes(body.prediction)
     ? body.prediction
     : null;
+  // First submission of this lineup locks the prediction (skips included) for the day; replays
+  // of the same lineup are graded against the locked value, so the result card's revealed
+  // breakdown can't be fed back through keep-best to retroactively earn the ×1.05.
+  const locked = await lockFhPrediction(date, uid, v.lineup, requested);
+  const predicted = locked && choices?.choices.includes(locked) ? locked : null;
   const correct = !!choices && !!predicted && predicted === choices.answer;
   const sortScore = encFhScore(v.result.wins, v.result.netRtg, correct);
   const row: FhRow = {
