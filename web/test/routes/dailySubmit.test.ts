@@ -22,6 +22,10 @@ enableRedisEnv();
 // Also need auth env so getSession / isAuthEnabled work without actual Google creds.
 authEnv();
 
+// Freeze Date (only — timers stay real) mid-day UTC so a CI run straddling UTC midnight can't
+// flake the date checks: TODAY here and the route's request-time todayUTC() see the same day.
+vi.useFakeTimers({ now: new Date("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+
 // ---- Deterministic fixture world (mirrors dailyVerify.test.ts pattern) ----
 const mkP = (id: string, slot: string, eligible?: string[]): Player =>
   ({
