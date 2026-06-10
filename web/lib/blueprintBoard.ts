@@ -1,6 +1,6 @@
 import "server-only";
 import { redis, isRedisEnabled, TTL, readSortedRows } from "./redis";
-import { BP_KEEP_BEST_LUA } from "./blueprintLua";
+import { KEEP_BEST_ROW_LUA } from "./score";
 import type { BlueprintKey, BpRow, BpBoardRow, BpBoardView } from "./blueprint";
 
 // Blueprint daily boards (Upstash sorted set + meta hash per blueprint, lb:bp:* — new keys only).
@@ -43,7 +43,7 @@ export async function getBpLeaderboard(date: string, bp: BlueprintKey | "all", u
 async function keepBest(date: string, bp: string, row: BpRow, sortScore: number): Promise<void> {
   if (!redis) return;
   await redis.eval(
-    BP_KEEP_BEST_LUA,
+    KEEP_BEST_ROW_LUA,
     [keyZ(date, bp), keyH(date, bp)],
     [row.uid, sortScore, JSON.stringify(row), TTL],
   );

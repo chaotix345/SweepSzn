@@ -41,9 +41,10 @@ export async function readSortedRows<T extends { uid: string } = StoredRow>(
 export async function rateLimit(bucket: string, max: number, windowSec: number): Promise<boolean> {
   if (!redis) return true;
   try {
-    // INCR + EXPIRE in one pipeline so a key can't be orphaned without a TTL (which would wedge the
-    // bucket permanently). EXPIRE is idempotent, so refreshing the window each call is harmless.
-    const [n] = (await redis.pipeline().incr(bucket).expire(bucket, windowSec).exec()) as [number, number];
+    // INCR + EXPIRE NX in one pipeline: NX sets the TTL only when the key has none, so the window
+    // is fixed from the bucket's first hit (a plain EXPIRE refreshed per call let a steady drip
+    // just under the limit extend its window forever) while still healing an orphaned no-TTL key.
+    const [n] = (await redis.pipeline().incr(bucket).expire(bucket, windowSec, "nx").exec()) as [number, number];
     return Number(n) <= max;
   } catch {
     return true;

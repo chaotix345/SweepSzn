@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { freshFake, ctx, signIn, readJson } from "@/test/routeHarness";
+import { freshFake, ctx, signIn, readJson, req } from "@/test/routeHarness";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -9,11 +9,20 @@ import { SESSION_COOKIE } from "@/lib/auth";
 
 const { POST } = await import("@/app/api/auth/signout/route");
 
-const post = () => POST(); // the handler takes no Request: it only clears the session cookie
+const post = () => POST(req("/api/auth/signout", { method: "POST", headers: { "x-requested-with": "fetch" } }));
 
 beforeEach(() => { freshFake(); });
 
 describe("POST /api/auth/signout", () => {
+  it("rejects a request without the CSRF header (cross-site form can't set it)", async () => {
+    await signIn({ uid: "g123456789012345678901234567890ab", name: "Alice" });
+    const { status, body } = await readJson(await POST(req("/api/auth/signout", { method: "POST" })));
+    expect(status).toBe(403);
+    expect(body).toMatchObject({ error: "forbidden" });
+    // the session survives a forged signout attempt
+    expect(ctx.cookies.has(SESSION_COOKIE)).toBe(true);
+  });
+
   it("returns ok:true even when no session exists", async () => {
     const { status, body } = await readJson(await post());
     expect(status).toBe(200);

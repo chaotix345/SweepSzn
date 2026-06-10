@@ -37,8 +37,10 @@ const assert = (c: boolean, m: string) => { if (!c) { console.error("FAIL:", m);
   const g400 = await fetch(`${BASE}/api/auth/google`, { method: "POST", headers: { "content-type": "application/json", "x-requested-with": "fetch" }, body: "{}" });
   assert(g400.status === 400, "POST /api/auth/google with no credential -> 400");
 
-  // 5. signout
-  const so = await fetch(`${BASE}/api/auth/signout`, { method: "POST" });
+  // 5. signout (CSRF header required, same as nonce/google)
+  const so403 = await fetch(`${BASE}/api/auth/signout`, { method: "POST" });
+  assert(so403.status === 403, "POST /api/auth/signout without x-requested-with -> 403");
+  const so = await fetch(`${BASE}/api/auth/signout`, { method: "POST", headers: { "x-requested-with": "fetch" } });
   assert(so.status === 200, "POST /api/auth/signout -> 200");
 
   console.log(fail ? `\n${fail} AUTH E2E ASSERTION(S) FAILED` : "\nALL AUTH E2E CHECKS PASSED");

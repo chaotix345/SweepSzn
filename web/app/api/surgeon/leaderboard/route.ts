@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isSurgeonBoardEnabled, getSurgeonLeaderboard } from "@/lib/surgeonBoard";
 import { rateLimit, ipOf } from "@/lib/redis";
+import { BOARD_CACHE } from "@/lib/boardCache";
 
 export const runtime = "nodejs";
 
@@ -21,5 +22,5 @@ export async function GET(req: Request) {
   if (!DATE_RE.test(date)) return NextResponse.json({ error: "bad date" }, { status: 400 });
   const uid = UID_RE.test(uidParam) ? uidParam : undefined;
   const view = await getSurgeonLeaderboard(date, uid);
-  return NextResponse.json(view);
+  return NextResponse.json(view, { headers: BOARD_CACHE });
 }

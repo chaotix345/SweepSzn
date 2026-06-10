@@ -43,3 +43,21 @@ end
 redis.call('EXPIRE', KEYS[2], tonumber(ARGV[5]))
 return {1, delta, math.floor(ww), math.floor(aw)}
 `;
+
+// Atomic keep-best for one (zset, meta hash) board pair: compare, score write, meta write, and
+// TTLs in ONE script so the sorted-set score and the meta row can never diverge (a non-atomic
+// zscore -> zadd+hset lets a concurrent lower-scoring submit install its meta under the winner's
+// score: wrong name, wrong lineup link). Shared by every plain keep-best board: anon daily,
+// challenge, Factor Hunt, Blueprint (per-bp + combined), Surgeon. KEYS: 1=zset 2=meta hash.
+// ARGV: 1=uid 2=sortScore 3=row JSON 4=ttl seconds. Returns 1 when written, 0 on no-improve.
+// (Pure string — lives here, not in a server-only store, so the test fake keys eval() on this
+// exact script and a dev harness can EVAL it against real Redis.)
+export const KEEP_BEST_ROW_LUA = `
+local prev = redis.call('ZSCORE', KEYS[1], ARGV[1])
+if prev and tonumber(prev) >= tonumber(ARGV[2]) then return 0 end
+redis.call('ZADD', KEYS[1], ARGV[2], ARGV[1])
+redis.call('HSET', KEYS[2], ARGV[1], ARGV[3])
+redis.call('EXPIRE', KEYS[1], ARGV[4])
+redis.call('EXPIRE', KEYS[2], ARGV[4])
+return 1
+`;

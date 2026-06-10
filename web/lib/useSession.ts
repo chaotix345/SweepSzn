@@ -22,7 +22,7 @@ export function useSession() {
 
   const signOut = useCallback(async () => {
     // only drop local state if the server actually cleared the cookie (avoid a split-brain UI)
-    try { const r = await fetch("/api/auth/signout", { method: "POST" }); if (r.ok) setUser(null); }
+    try { const r = await fetch("/api/auth/signout", { method: "POST", headers: { "x-requested-with": "fetch" } }); if (r.ok) setUser(null); }
     catch { /* ignore — leave state as-is */ }
   }, []);
 

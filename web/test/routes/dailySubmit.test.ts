@@ -229,6 +229,23 @@ describe("POST /api/daily/submit — anon path", () => {
     const stored = ctx.redis!.zsets.get(dailyZ)?.get(anonUid) ?? 0;
     expect(stored).toBe(highScore);
   });
+
+  it("anon keep-best is atomic (eval) and a worse submit still refreshes the board TTLs", async () => {
+    const anonUid = "anon-uid-12345678";
+    const dailyZ = `lb:${TODAY}`;
+    const dailyH = `lb:${TODAY}:meta`;
+    // First (improving) submit goes through the shared keep-best Lua — meta + score move together.
+    await submit({ date: TODAY, trace: LEGIT_TRACE, uid: anonUid });
+    expect(ctx.redis!.calls.some((c) => c.startsWith(`eval ${dailyZ},${dailyH}`))).toBe(true);
+    expect(ctx.redis!.ttls.has(dailyZ)).toBe(true);
+
+    // A repeat (non-improving) submit must still refresh both TTLs — no TTL-stranded keys.
+    ctx.redis!.ttls.delete(dailyZ);
+    ctx.redis!.ttls.delete(dailyH);
+    await submit({ date: TODAY, trace: LEGIT_TRACE, uid: anonUid }, "5.6.7.8");
+    expect(ctx.redis!.ttls.has(dailyZ)).toBe(true);
+    expect(ctx.redis!.ttls.has(dailyH)).toBe(true);
+  });
 });
 
 // ---- Authed path ----

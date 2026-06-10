@@ -12,6 +12,13 @@ export const runtime = "nodejs";
 // replacement pool from the players those verified spins actually offered. Returns the BEFORE
 // record + diagnosis + the three candidates with WHY each was offered — but never any
 // after-swap value: the delta is only revealed by the submit, which locks the swap first.
+//
+// Intentionally NO isSurgeonBoardEnabled() gate (mirrors the submit route): the deal is part of
+// playing, so a Redis-absent deploy must still serve it — only board writes self-disable.
+// Intentionally no pre-deal lock either: per the trust model (DESIGN.md §12), a patient player
+// can compute swap outcomes offline anyway (open engine + public data + /api/evaluate); the
+// per-lineup swap lock at submit plus the daily case cap are the real anti-shopping guards, and
+// the 60/min IP limit here bounds the verifyTrace+evaluate CPU this route can be made to burn.
 
 export async function POST(req: Request) {
   if (!(await rateLimit(`rl:sgpool:${ipOf(req)}`, 60, 60))) {

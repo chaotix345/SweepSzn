@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { bpKeyOk } from "@/lib/blueprint";
 import { isBpBoardEnabled, getBpLeaderboard } from "@/lib/blueprintBoard";
 import { rateLimit, ipOf } from "@/lib/redis";
+import { BOARD_CACHE } from "@/lib/boardCache";
 
 export const runtime = "nodejs";
 
@@ -26,5 +27,5 @@ export async function GET(req: Request) {
   // a present-but-malformed uid is a 400, not a silent anonymous read (FH board route parity)
   if (uidParam != null && !UID_RE.test(uidParam)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
   const view = await getBpLeaderboard(date, bp, uidParam ?? undefined);
-  return NextResponse.json(view);
+  return NextResponse.json(view, { headers: BOARD_CACHE });
 }

@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { redis, isRedisEnabled, TTL, readSortedRows } from "./redis";
-import { BP_KEEP_BEST_LUA } from "./blueprintLua";
+import { KEEP_BEST_ROW_LUA } from "./score";
 import type { SurgeonRow, SurgeonBoardRow, SurgeonBoardView } from "./surgeon";
 
 // Surgeon daily board (Upstash sorted set + meta hash, lb:surgeon:* — new keys only).
@@ -37,10 +37,10 @@ export async function getSurgeonLeaderboard(date: string, uid?: string): Promise
 export async function submitSurgeonScore(date: string, row: SurgeonRow, sortScore: number): Promise<SurgeonBoardView | null> {
   if (!redis) return null;
   if (!Number.isFinite(sortScore)) return getSurgeonLeaderboard(date, row.uid);
-  // atomic keep-best (the bp boards' script — generic zset+meta semantics): compare, score, meta
-  // row, and TTLs in ONE script, so a concurrent same-uid submit from a second tab (different
-  // lineup → different sortScore) can't install its meta row under the winner's score.
-  await redis.eval(BP_KEEP_BEST_LUA, [keyZ(date), keyH(date)], [row.uid, sortScore, JSON.stringify(row), TTL]);
+  // atomic keep-best (shared KEEP_BEST_ROW_LUA): compare, score, meta row, and TTLs in ONE
+  // script, so a concurrent same-uid submit from a second tab (different lineup → different
+  // sortScore) can't install its meta row under the winner's score.
+  await redis.eval(KEEP_BEST_ROW_LUA, [keyZ(date), keyH(date)], [row.uid, sortScore, JSON.stringify(row), TTL]);
   return getSurgeonLeaderboard(date, row.uid);
 }
 

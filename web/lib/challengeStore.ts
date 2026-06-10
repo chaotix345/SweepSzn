@@ -1,5 +1,6 @@
 import "server-only";
 import { redis, isRedisEnabled, TTL, encScore, readSortedRows, type StoredRow } from "./redis";
+import { KEEP_BEST_ROW_LUA } from "./score";
 import { challengeSeed, buildOwnerView } from "./challenge";
 import { getPlayersByIds } from "./data";
 import type { ChallengeInfo, ChallengePublic, ChallengeBoard, ChallengeBoardRow, ChallengeOwnerView, LineupResult, LeaderboardRow } from "./types";
@@ -127,15 +128,12 @@ export async function submitChallenge(
   let improved = false; // a new personal best for this uid (drives the "your challenge got beaten" notification)
   const score = encScore(result.wins, result.netRtg);
   if (Number.isFinite(score)) {
-    const prev = await redis.zscore(keyZ(id), row.uid);
-    if (prev == null || score > Number(prev)) {
-      improved = true;
-      await redis.zadd(keyZ(id), { score, member: row.uid });
-      await redis.hset(keyH(id), { [row.uid]: row });
-    }
-    await redis.expire(keyZ(id), TTL);
-    await redis.expire(keyH(id), TTL);
-    await redis.expire(keyInfo(id), TTL);
+    // atomic keep-best (shared KEEP_BEST_ROW_LUA): board score and meta row move together, so two
+    // concurrent submits for the same uid can't land a worse run's meta under the better score.
+    improved =
+      ((await redis.eval(KEEP_BEST_ROW_LUA, [keyZ(id), keyH(id)], [row.uid, score, JSON.stringify(row), TTL])) as number) === 1;
+    // every attempt keeps the whole challenge alive (board + info), improved or not
+    await redis.pipeline().expire(keyZ(id), TTL).expire(keyH(id), TTL).expire(keyInfo(id), TTL).exec();
   }
   // a classic-originated challenge exposes its classic seed to responders — lock fit on it (see isFitLockedSeed)
   if (meta.seed.startsWith("classic")) await redis.set(keyFitLock(meta.seed), "1", { ex: TTL });

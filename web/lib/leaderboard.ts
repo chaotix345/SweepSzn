@@ -1,7 +1,7 @@
 import "server-only";
 import { redis, isRedisEnabled, TTL, TTL_WEEK, encScore, readSortedRows, type StoredRow } from "./redis";
 import { isoWeek } from "./isoweek";
-import { KEEP_BEST_LUA } from "./score";
+import { KEEP_BEST_LUA, KEEP_BEST_ROW_LUA } from "./score";
 import type { LineupResult, LeaderboardRow, LeaderboardView } from "./types";
 
 // Daily leaderboard store (Upstash sorted sets) + weekly/all-time aggregate boards.
@@ -40,14 +40,15 @@ export async function submitScore(date: string, row: StoredRow, result: LineupRe
   if (!redis) return null;
   const score = encScore(result.wins, result.netRtg);
   if (!Number.isFinite(score)) return getLeaderboard(date, row.uid);
-  const prev = await redis.zscore(keyZ(date), row.uid);
-  // keep-best: only overwrite score AND meta together when this run beats the stored one
-  if (prev == null || score > Number(prev)) {
-    await redis.zadd(keyZ(date), { score, member: row.uid });
-    await redis.hset(keyH(date), { [row.uid]: row });
-    await redis.expire(keyZ(date), TTL);
-    await redis.expire(keyH(date), TTL);
-  }
+  // atomic keep-best (shared KEEP_BEST_ROW_LUA): score and meta move together, so a two-tab race
+  // can no longer install a worse run's meta under the better score. The script refreshes TTLs on
+  // write; refresh on the no-improve path too so a repeat submit keeps the day's keys alive.
+  const written = (await redis.eval(
+    KEEP_BEST_ROW_LUA,
+    [keyZ(date), keyH(date)],
+    [row.uid, score, JSON.stringify(row), TTL],
+  )) as number;
+  if (!written) await redis.pipeline().expire(keyZ(date), TTL).expire(keyH(date), TTL).exec();
   return getLeaderboard(date, row.uid);
 }
 

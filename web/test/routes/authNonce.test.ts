@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { freshFake, ctx, authEnv, req, readJson } from "@/test/routeHarness";
+import { enableRedisEnv, freshFake, ctx, authEnv, req, readJson, exhaustRateLimit } from "@/test/routeHarness";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
 vi.mock("next/server", async (orig) => (await import("@/test/routeHarness")).nextServerMockModule(await orig()));
 
-// nonce/route.ts does not call redis, but we still declare the three mocks per harness convention.
+// nonce/route.ts rate-limits via lib/redis — enableRedisEnv() must run before the dynamic import.
 // lib/auth is pure (no redis), so we can import it statically for constants.
 import { NONCE_COOKIE } from "@/lib/auth";
 
+enableRedisEnv();
 const { POST } = await import("@/app/api/auth/nonce/route");
 
 const post = (headers?: Record<string, string>) =>
@@ -83,5 +84,20 @@ describe("POST /api/auth/nonce", () => {
     expect(cookieValue.split(".").length).toBe(3);
     // Body nonce is the raw UUID, cookie is the signed token — they differ
     expect(cookieValue).not.toBe(body.nonce);
+  });
+
+  it("429 once the per-IP bucket is exhausted (nonce-cookie flooding)", async () => {
+    authEnv();
+    exhaustRateLimit("rl:nonce:9.9.9.9", 10);
+    const { status, body } = await readJson(
+      await POST(req("/api/auth/nonce", { method: "POST", body: {}, headers: goodHeaders, ip: "9.9.9.9" })),
+    );
+    expect(status).toBe(429);
+    expect(body).toMatchObject({ error: "too many requests" });
+    // another IP is unaffected
+    const ok = await readJson(
+      await POST(req("/api/auth/nonce", { method: "POST", body: {}, headers: goodHeaders, ip: "8.8.8.8" })),
+    );
+    expect(ok.status).toBe(200);
   });
 });

@@ -1,6 +1,5 @@
-import { KEEP_BEST_LUA } from "@/lib/score";
+import { KEEP_BEST_LUA, KEEP_BEST_ROW_LUA } from "@/lib/score";
 import { PICKEM_VOTE_LUA } from "@/lib/pickem";
-import { BP_KEEP_BEST_LUA } from "@/lib/blueprintLua";
 
 // In-memory stand-in for @upstash/redis covering the command surface this codebase uses.
 // Mirrors the real client's JSON auto-(de)serialization: strings are stored raw, everything
@@ -91,9 +90,9 @@ export function createRedisFake() {
     return [1, delta, Math.floor(ww), Math.floor(aw)];
   }
 
-  // BP_KEEP_BEST_LUA (lib/blueprint.ts): atomic per-board keep-best — compare, score, meta row,
+  // KEEP_BEST_ROW_LUA (lib/score.ts): atomic per-board keep-best — compare, score, meta row,
   // and TTLs move together so the zset score and the meta hash can never diverge.
-  function bpKeepBest(keys: string[], args: (string | number)[]): number {
+  function keepBestRow(keys: string[], args: (string | number)[]): number {
     const [zK, hK] = keys;
     const uid = String(args[0]);
     const sortScore = Number(args[1]);
@@ -150,7 +149,12 @@ export function createRedisFake() {
       return n;
     },
     exists: async (...ks: string[]) => { log("exists", ...ks); return ks.filter(hasKey).length; },
-    expire: async (k: string, sec: number) => { log("expire", k, sec); return rawExpire(k, sec); },
+    expire: async (k: string, sec: number, opt?: string) => {
+      if (opt) log("expire", k, sec, opt); else log("expire", k, sec);
+      // NX: only set a TTL when the key has none (real EXPIRE NX semantics)
+      if (opt && opt.toLowerCase() === "nx" && ttls.has(k)) return 0;
+      return rawExpire(k, sec);
+    },
 
     zadd: async (k: string, ...entries: { score: number; member: string }[]) => {
       log("zadd", k, ...entries.map((e) => `${e.score}:${e.member}`));
@@ -257,7 +261,7 @@ export function createRedisFake() {
       log("eval", keys.join(","), args.join(","));
       if (script === KEEP_BEST_LUA) return deepDe(keepBest(keys, args));
       if (script === PICKEM_VOTE_LUA) return deepDe(pickemVote(keys, args));
-      if (script === BP_KEEP_BEST_LUA) return bpKeepBest(keys, args);
+      if (script === KEEP_BEST_ROW_LUA) return keepBestRow(keys, args);
       throw new Error("redisFake.eval: unknown script — add its semantics here before using it in tests");
     },
 
@@ -265,7 +269,7 @@ export function createRedisFake() {
       const ops: Array<() => Promise<unknown>> = [];
       const p = {
         incr: (k: string) => { ops.push(() => fake.incr(k)); return p; },
-        expire: (k: string, sec: number) => { ops.push(() => fake.expire(k, sec)); return p; },
+        expire: (k: string, sec: number, opt?: string) => { ops.push(() => fake.expire(k, sec, opt)); return p; },
         lpush: (k: string, ...vs: unknown[]) => { ops.push(() => fake.lpush(k, ...vs)); return p; },
         ltrim: (k: string, start: number, stop: number) => { ops.push(() => fake.ltrim(k, start, stop)); return p; },
         exec: async () => { const out: unknown[] = []; for (const op of ops) out.push(await op()); return out; },

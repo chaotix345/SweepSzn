@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { randomUUID } from "crypto";
 import { isAuthEnabled, signNonce, NONCE_COOKIE, NONCE_TTL } from "@/lib/auth";
+import { rateLimit, ipOf } from "@/lib/redis";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "bad content-type" }, { status: 415 });
   if (req.headers.get("x-requested-with") !== "fetch")
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  // sign-ins are rare per-user; 10/min/IP stops nonce-cookie flooding without touching real flows
+  if (!(await rateLimit(`rl:nonce:${ipOf(req)}`, 10, 60))) {
+    return NextResponse.json({ error: "too many requests" }, { status: 429 });
+  }
   const nonce = randomUUID();
   const c = await cookies();
   c.set(NONCE_COOKIE, await signNonce(nonce), {
