@@ -1,40 +1,42 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CandidateFit, DraftCandidate, DraftStep, LineupResult, Player, Slot } from "@/lib/types";
-import { SLOTS, FRANCHISES, DECADES, teamColors, teamName, initials, displayName, eraLabel } from "@/lib/teams";
+import { buildFocusTrapHandler } from "@/components/game/useFocusTrap";
+import { type Mode, MODE_LABEL } from "@/components/game/types";
+import { Shell } from "@/components/game/Shell";
+import { ModeSelect } from "@/components/game/ModeSelect";
+import { Reel } from "@/components/game/Reel";
+import { UsageBar, SkipBtn } from "@/components/game/controls";
+import { Court } from "@/components/game/court";
+import { Browser } from "@/components/game/browser";
+import { usePickem } from "@/components/game/usePickem";
+import { PickemOverlay } from "@/components/game/PickemOverlay";
+import { useFactorHunt } from "@/components/game/useFactorHunt";
+import { FhDialog } from "@/components/game/FhDialog";
+import { useBlueprint } from "@/components/game/useBlueprint";
+import { BlueprintDialog } from "@/components/game/BlueprintDialog";
+import { useSurgeon, type SgResult } from "@/components/game/useSurgeon";
+import { SurgeonDialog } from "@/components/game/SurgeonDialog";
+import type { DraftCandidate, DraftStep, LineupResult, Player, Slot } from "@/lib/types";
+import { SLOTS, FRANCHISES, DECADES, teamName, displayName, eraLabel } from "@/lib/teams";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
-import { getUid, getName, setName as persistName } from "@/lib/streak";
+import { getUid } from "@/lib/streak";
 import ResultCard from "@/components/ResultCard";
 import Leaderboard from "@/components/Leaderboard";
 import ChallengeResult from "@/components/ChallengeResult";
 import ChallengeOwner from "@/components/ChallengeOwner";
-import ResultsHistory from "@/components/ResultsHistory";
 import { newChallengeId, challengeSeed } from "@/lib/challenge";
 import { encodeLineup, decodeShare } from "@/lib/share";
 import { saveResult, writeLastResult, readLastResult } from "@/lib/resultHistory";
-import { pickemSeedOk, getPickemSkip, setPickemSkip, getLocalVote, setLocalVote, type PickemVote } from "@/lib/pickem";
+import { pickemSeedOk, getPickemSkip, getLocalVote } from "@/lib/pickem";
 import { buildFhChoices } from "@/lib/factorHunt";
 import FhLeaderboard from "@/components/FhLeaderboard";
 import { BLUEPRINTS, bpCode, bpFromCode, gradeBlueprint, type BlueprintKey } from "@/lib/blueprint";
 import BpLeaderboard from "@/components/BpLeaderboard";
-import type { SurgeonCandidate, SurgeonDiagnosis, SurgeonBoardView } from "@/lib/surgeon";
 import SurgeonResult from "@/components/SurgeonResult";
 import SgLeaderboard from "@/components/SgLeaderboard";
 import { applySwapToTrace } from "@/lib/trace";
 import { dayUTC } from "@/lib/day";
-
-type Mode = "daily" | "classic" | "hoopiq" | "challenge" | "factorhunt" | "prime" | "blueprint" | "surgeon";
-const MODE_LABEL: Record<Mode, string> = { daily: "daily", classic: "classic", hoopiq: "hoopiq", challenge: "challenge", factorhunt: "Factor Hunt", prime: "Prime Draft", blueprint: "Blueprint", surgeon: "Surgeon" };
-// Surgeon phase-2 state: the dealt pool + diagnosis (after the five lock), and the final
-// before/after the submit returns (the reveal IS the submit — see /api/surgeon/submit).
-// roster carries each drafted player's ASSIGNED slot — a candidate may only replace a player whose
-// slot the candidate is eligible for (the server checks the exact slot, not shared eligibility).
-type SgPool = { diagnosis: SurgeonDiagnosis; before: { wins: number; losses: number; net: number; grade: string }; candidates: SurgeonCandidate[]; roster: { slot: Slot; player: DraftCandidate }[] };
-type SgResult = {
-  view: SurgeonBoardView | null; delta: number; card: string; diagnosis: SurgeonDiagnosis;
-  before: LineupResult; beforePlayers: Player[]; after: LineupResult; afterPlayers: Player[]; outIdx: number;
-};
 type Roster = Record<Slot, DraftCandidate | null>;
 const EMPTY: Roster = { PG: null, SG: null, SF: null, PF: null, C: null };
 interface Spin { team: string; decade: string; candidates: DraftCandidate[] }
@@ -43,12 +45,6 @@ type SpinOpts = { lockedTeam?: string; lockedDecade?: string; excludeTeam?: stri
 // plus, for Factor Hunt, the locked prediction so the verdict chip survives a refresh — and, for
 // Blueprint, the committed objective so the execution strip and board submit survive one too).
 type LastResult = { mode: Mode; seed: string; result?: { result: LineupResult; players: Player[]; trace: DraftStep[]; usedHints: boolean }; fh?: string | null; bp?: BlueprintKey | null; sg?: SgResult };
-
-// court slot positions (% of the half-court panel; basket at top)
-const COURT: Record<Slot, { left: number; top: number }> = {
-  C: { left: 34, top: 21 }, PF: { left: 62, top: 21 },
-  SF: { left: 15, top: 49 }, SG: { left: 79, top: 49 }, PG: { left: 47, top: 68 },
-};
 
 function todaySeed() {
   return dayUTC();
@@ -90,33 +86,13 @@ export default function Game() {
   const abortSimRef = useRef<AbortController | null>(null);             // cancels an in-flight simulate on restart
   const sheetRef = useRef<HTMLDivElement>(null);                        // mobile "choose position" dialog
   // Pick'Em: one-tap crowd vote locked after the first reels settle, settled on the result card.
-  const [pickemVote, setPickemVote] = useState<PickemVote | null>(null);
-  const [pickemDismissed, setPickemDismissed] = useState(false);        // voted or skipped THIS game
-  const [pickemCrowd, setPickemCrowd] = useState<{ y: number; n: number } | null>(null);
-  const [pickemSubject, setPickemSubject] = useState<string | null>(null); // "the 1970s Knicks" — captured at vote time for share copy
-  const pickemRef = useRef<HTMLDivElement>(null);                       // vote overlay dialog
-  // Factor Hunt: prediction step between "five locked" and the reveal.
-  const [fhStep, setFhStep] = useState<{ roster: Roster; ask: "worst" | "best"; choices: string[] } | null>(null);
-  const [fhPick, setFhPick] = useState<string | null>(null);            // highlighted choice (not yet locked)
-  const [fhPrediction, setFhPrediction] = useState<string | null>(null); // locked choice (null = skipped)
-  const fhFetchingRef = useRef(false);                                  // de-dupes the choices fetch
-  const fhAbortRef = useRef<AbortController | null>(null);              // cancels an in-flight choices fetch on restart
-  const fhRef = useRef<HTMLDivElement>(null);                           // prediction dialog
+  const { pickemVote, pickemDismissed, pickemCrowd, pickemSubject, pickemRef, votePickem, skipPickem, reset: resetPickem } = usePickem(seed, current, mode, result);
+  // Factor Hunt: prediction step between "five locked" and the reveal (hook called after simulate, see below).
   // Blueprint: the objective committed in the pre-spin modal (locks at confirm — gameplay psychology;
   // the server grades whatever the submit declares, see /api/blueprint/submit).
-  const [blueprint, setBlueprint] = useState<BlueprintKey | null>(null);
-  const [bpPick, setBpPick] = useState<BlueprintKey | null>(null);      // highlighted option (not yet committed)
-  const bpRef = useRef<HTMLDivElement>(null);                           // commit dialog
+  const { blueprint, setBlueprint, bpPick, setBpPick, bpRef, commitBlueprint, reset: resetBp } = useBlueprint();
   // Surgeon: phase-2 replacement-pool step between "five locked" and the delta reveal.
-  const [sgPool, setSgPool] = useState<SgPool | null>(null);            // dealt pool + diagnosis (dialog open)
-  const [sgInId, setSgInId] = useState<string | null>(null);            // chosen replacement candidate
-  const [sgOutId, setSgOutId] = useState<string | null>(null);          // chosen drafted player to drop
-  const [sgResult, setSgResult] = useState<SgResult | null>(null);      // submit response (the reveal)
-  const [sgName, setSgName] = useState("");                             // board name, captured at swap-confirm
-  const [sgBusy, setSgBusy] = useState(false);                          // submit in flight — keeps the dialog mounted (global `loading` would swap it for the spinner screen)
-  const sgFetchingRef = useRef(false);                                  // de-dupes the pool fetch
-  const sgAbortRef = useRef<AbortController | null>(null);              // cancels in-flight pool/submit on restart
-  const sgRef = useRef<HTMLDivElement>(null);                           // swap dialog
+  const { sgPool, sgInId, setSgInId, sgOutId, setSgOutId, sgResult, setSgResult, sgName, setSgName, sgBusy, sgRef, beginSurgeon, confirmSurgeon, dismissPool: dismissSgPool, reset: resetSg } = useSurgeon(seed, mode, traceRef, setLoading, setError);
 
   // Spend a hint to reveal fit grades for the current pick. Charges on reveal (not on placement), so
   // there is no way to peek and then dodge the cost. No-op once the per-game budget is spent.
@@ -133,11 +109,142 @@ export default function Game() {
   const roundNum = Math.min(filled + 1, 5);
   const openSlots = useMemo(() => SLOTS.filter((s) => !roster[s]), [roster]);
 
+  useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
+
+  // move keyboard focus into the mobile position sheet when it opens, and restore it to the
+  // triggering element when it closes (paired with the Tab trap in the sheet's onKeyDown below)
+  useEffect(() => {
+    if (!(selPlayer || selSlot)) return;
+    const prev = document.activeElement as HTMLElement | null;
+    sheetRef.current?.focus();
+    return () => prev?.focus?.();
+  }, [selPlayer, selSlot]);
+
+  // Hold-your-place: while a finished result is on screen, mirror it into the URL (?r=&m=) so a refresh
+  // restores it. Challenge mode owns the URL via ?own=<id> (set by ChallengeOwner), so it's skipped here.
+  // Surgeon hold-your-place: mirror the /sg/ card so a same-session refresh restores the delta.
+  useEffect(() => {
+    if (mode !== "surgeon" || !sgResult) return;
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("sg", sgResult.card); u.searchParams.set("m", "surgeon");
+      u.searchParams.delete("r"); u.searchParams.delete("d"); u.searchParams.delete("c"); u.searchParams.delete("own");
+      window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+    } catch { /* no history API */ }
+  }, [mode, sgResult]);
+
+  useEffect(() => {
+    if (!result || !mode || mode === "challenge") return;
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("r", encodeLineup(result.players.map((p) => p.id), result.usedHints, mode === "prime", mode === "blueprint" && blueprint ? bpCode(blueprint) : null));
+      u.searchParams.set("m", mode);
+      // daily/FH/blueprint boards are per-date — carry the date so a cold restore shows the right day's board, not today's
+      if (mode === "daily") u.searchParams.set("d", seed.replace("daily-", ""));
+      else if (mode === "factorhunt") u.searchParams.set("d", seed.replace("fh-", ""));
+      else if (mode === "blueprint") u.searchParams.set("d", seed.replace("bp-", ""));
+      else u.searchParams.delete("d");
+      u.searchParams.delete("c"); u.searchParams.delete("own");
+      window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+    } catch { /* no history API */ }
+  }, [result, mode, seed, blueprint]);
+
+  const runSpin = useCallback(async (opts: SpinOpts, locked: "team" | "era" | null = null) => {
+    if (spinning) return;
+    setError(null); setSpinning(true); setCurrent(null); setSelPlayer(null); setSelSlot(null); setLockedReel(locked);
+    if (tickRef.current) clearInterval(tickRef.current);
+    tickRef.current = setInterval(() => {
+      setReel({
+        team: locked === "team" ? opts.lockedTeam! : FRANCHISES[Math.floor(Math.random() * FRANCHISES.length)],
+        // Prime Draft: the era reel never cycles — it's permanently locked to PRIME
+        era: mode === "prime" ? "PRIME" : locked === "era" ? eraLabel(opts.lockedDecade!) : eraLabel(DECADES[Math.floor(Math.random() * DECADES.length)]),
+      });
+    }, 70);
+    try {
+      const r = await fetch("/api/spin", {
+        method: "POST", headers: { "content-type": "application/json" },
+        // fit grades are a Classic-style hint assist (Classic + Prime + Blueprint); never requested
+        // in Daily/HoopIQ/Challenge/Factor Hunt so the network response can't be read to draft optimally
+        body: JSON.stringify({ seed, round: filled, exclude: drafted.map((p) => p.id), fit: mode === "classic" || mode === "prime" || mode === "blueprint", ...opts }),
+      });
+      if (!r.ok) throw new Error("spin failed");
+      const res: Spin = await r.json();
+      await new Promise((rs) => setTimeout(rs, 1100));
+      setReel({ team: res.team, era: eraLabel(res.decade) });
+      setCurrent(res);
+    } catch {
+      setLockedReel(null); setReel({ team: "ATL", era: mode === "prime" ? "PRIME" : "60's" });
+      // roll back the re-spin we optimistically charged before this call so a network error doesn't
+      // silently burn the skip (and don't leave a phantom re-spin in the verification trace)
+      if (locked === "era") setSkips((s) => ({ ...s, team: false }));
+      else if (locked === "team") setSkips((s) => ({ ...s, era: false }));
+      // also roll back the pre-incremented salt — the next successful re-spin must reuse this salt
+      // value, or verifyTrace (which counts only the re-spins in the trace) would reject the submit.
+      if (locked !== null) { roundRespinsRef.current = roundRespinsRef.current.slice(0, -1); saltRef.current--; }
+      setError("Network hiccup — tap SPIN to try again.");
+    } finally {
+      if (tickRef.current) clearInterval(tickRef.current);
+      setSpinning(false);
+    }
+  }, [spinning, seed, filled, drafted, mode]);
+
+  const spin = useCallback(() => runSpin({}), [runSpin]);
+
+  // Blueprint: cancelBlueprint also resets mode (backs to picker) — uses setMode from Game scope.
+  const cancelBlueprint = useCallback(() => { setMode(null); resetBp(); }, [resetBp]);
+  const reSpinTeam = useCallback(() => {
+    if (skips.team || !current) return;
+    setSkips((s) => ({ ...s, team: true }));
+    roundRespinsRef.current.push("team");
+    runSpin({ lockedDecade: current.decade, excludeTeam: current.team, salt: ++saltRef.current }, "era");
+  }, [skips.team, current, runSpin]);
+  const reSpinEra = useCallback(() => {
+    if (skips.era || !current) return;
+    setSkips((s) => ({ ...s, era: true }));
+    roundRespinsRef.current.push("era");
+    runSpin({ lockedTeam: current.team, excludeDecade: current.decade, salt: ++saltRef.current }, "team");
+  }, [skips.era, current, runSpin]);
+
+  const simulate = useCallback(async (r: Roster, fhPred: string | null = null) => {
+    abortSimRef.current?.abort();
+    const ctrl = new AbortController();
+    abortSimRef.current = ctrl;
+    setLoading(true); setError(null);
+    try {
+      const ids = SLOTS.map((s) => r[s]?.id);
+      const res = await fetch("/api/evaluate", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids }), signal: ctrl.signal,
+      });
+      if (!res.ok) throw new Error("evaluate failed");
+      const data = await res.json();
+      // abort() can't interrupt the body parse once the response has landed — re-check before
+      // committing, or a Restart racing the parse would stamp the OLD game's result onto the new one
+      if (ctrl.signal.aborted) return;
+      const full = { result: data.result, players: data.players as Player[], trace: [...traceRef.current], usedHints: hintsUsedRef.current > 0 };
+      setResult(full);
+      // Persist so the result survives a refresh (full object, incl. trace) and shows under "Your
+      // results". A challenge entry is upgraded with its challengeId later, when the link is created.
+      writeLastResult({ mode, seed, result: full, fh: fhPred, bp: blueprint });
+      if (mode) saveResult({ encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints, mode === "prime", mode === "blueprint" && blueprint ? bpCode(blueprint) : null), mode, wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
+      track("lineup_complete", { wins: data.result.wins, grade: data.result.grade });
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return; // superseded by a restart — ignore
+      setError("Couldn't simulate the season — tap Simulate to retry.");
+    } finally {
+      if (!ctrl.signal.aborted) setLoading(false);
+    }
+  }, [mode, seed, blueprint]);
+
+  // Factor Hunt: hook placed after simulate so beginFhPrediction can close over the stable callback.
+  const { fhStep, fhPick, setFhPick, fhPrediction, setFhPrediction, fhRef, beginFhPrediction, lockFh, reset: resetFh } = useFactorHunt(seed, simulate, setError);
+
+  // start() placed after all per-mode hook calls so it can close over their stable reset functions
+  // without triggering react-hooks/immutability (resetFh, resetPickem, resetBp, resetSg all have []
+  // deps — but must be declared before start references them).
   const start = useCallback((m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string }) => {
     track("mode_start", { mode: m });
     ev("play", { uid: getUid(), mode: m });
     abortSimRef.current?.abort(); abortSimRef.current = null; // cancel any in-flight simulate
-    fhAbortRef.current?.abort(); fhAbortRef.current = null;   // and any in-flight FH choices fetch
     setMode(m);
     let cid: string | null = null;
     let crole: "create" | "respond" | null = null;
@@ -156,11 +263,7 @@ export default function Game() {
     setReel({ team: "ATL", era: m === "prime" ? "PRIME" : "60's" }); setLockedReel(null); saltRef.current = 0;
     traceRef.current = []; roundRespinsRef.current = []; setConvertedId(null);
     hintsUsedRef.current = 0; setHintsUsed(0);
-    setPickemVote(null); setPickemDismissed(false); setPickemCrowd(null); setPickemSubject(null);
-    setFhStep(null); setFhPick(null); setFhPrediction(null); fhFetchingRef.current = false;
-    setBlueprint(null); setBpPick(null); // blueprint re-commits every game (the modal gates the first spin)
-    setSgPool(null); setSgInId(null); setSgOutId(null); setSgResult(null); setSgBusy(false); sgFetchingRef.current = false;
-    sgAbortRef.current?.abort(); sgAbortRef.current = null;
+    resetPickem(); resetFh(); resetBp(); resetSg();
     setOwnerId(null);
     // a new game owns the URL — drop any restore params so a later refresh won't resurrect an old screen
     try {
@@ -170,18 +273,7 @@ export default function Game() {
         window.history.replaceState(null, "", u.pathname + u.search + u.hash);
       }
     } catch { /* no history API */ }
-  }, []);
-
-  useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
-
-  // move keyboard focus into the mobile position sheet when it opens, and restore it to the
-  // triggering element when it closes (paired with the Tab trap in the sheet's onKeyDown below)
-  useEffect(() => {
-    if (!(selPlayer || selSlot)) return;
-    const prev = document.activeElement as HTMLElement | null;
-    sheetRef.current?.focus();
-    return () => prev?.focus?.();
-  }, [selPlayer, selSlot]);
+  }, [resetPickem, resetFh, resetBp, resetSg]);
 
   // Bootstrap the view from the URL (hold-your-place restore on refresh). Priority: a joiner deep link
   // (?c=<id>) → respond mode; then a creator dashboard (?own=<id>); then a finished-result restore
@@ -258,247 +350,11 @@ export default function Game() {
       } catch { /* no query / no history API */ }
     })();
     return () => { cancelled = true; };
-  }, [start]);
-
-  // Hold-your-place: while a finished result is on screen, mirror it into the URL (?r=&m=) so a refresh
-  // restores it. Challenge mode owns the URL via ?own=<id> (set by ChallengeOwner), so it's skipped here.
-  // Surgeon hold-your-place: mirror the /sg/ card so a same-session refresh restores the delta.
-  useEffect(() => {
-    if (mode !== "surgeon" || !sgResult) return;
-    try {
-      const u = new URL(window.location.href);
-      u.searchParams.set("sg", sgResult.card); u.searchParams.set("m", "surgeon");
-      u.searchParams.delete("r"); u.searchParams.delete("d"); u.searchParams.delete("c"); u.searchParams.delete("own");
-      window.history.replaceState(null, "", u.pathname + u.search + u.hash);
-    } catch { /* no history API */ }
-  }, [mode, sgResult]);
-
-  useEffect(() => {
-    if (!result || !mode || mode === "challenge") return;
-    try {
-      const u = new URL(window.location.href);
-      u.searchParams.set("r", encodeLineup(result.players.map((p) => p.id), result.usedHints, mode === "prime", mode === "blueprint" && blueprint ? bpCode(blueprint) : null));
-      u.searchParams.set("m", mode);
-      // daily/FH/blueprint boards are per-date — carry the date so a cold restore shows the right day's board, not today's
-      if (mode === "daily") u.searchParams.set("d", seed.replace("daily-", ""));
-      else if (mode === "factorhunt") u.searchParams.set("d", seed.replace("fh-", ""));
-      else if (mode === "blueprint") u.searchParams.set("d", seed.replace("bp-", ""));
-      else u.searchParams.delete("d");
-      u.searchParams.delete("c"); u.searchParams.delete("own");
-      window.history.replaceState(null, "", u.pathname + u.search + u.hash);
-    } catch { /* no history API */ }
-  }, [result, mode, seed, blueprint]);
-
-  const runSpin = useCallback(async (opts: SpinOpts, locked: "team" | "era" | null = null) => {
-    if (spinning) return;
-    setError(null); setSpinning(true); setCurrent(null); setSelPlayer(null); setSelSlot(null); setLockedReel(locked);
-    if (tickRef.current) clearInterval(tickRef.current);
-    tickRef.current = setInterval(() => {
-      setReel({
-        team: locked === "team" ? opts.lockedTeam! : FRANCHISES[Math.floor(Math.random() * FRANCHISES.length)],
-        // Prime Draft: the era reel never cycles — it's permanently locked to PRIME
-        era: mode === "prime" ? "PRIME" : locked === "era" ? eraLabel(opts.lockedDecade!) : eraLabel(DECADES[Math.floor(Math.random() * DECADES.length)]),
-      });
-    }, 70);
-    try {
-      const r = await fetch("/api/spin", {
-        method: "POST", headers: { "content-type": "application/json" },
-        // fit grades are a Classic-style hint assist (Classic + Prime + Blueprint); never requested
-        // in Daily/HoopIQ/Challenge/Factor Hunt so the network response can't be read to draft optimally
-        body: JSON.stringify({ seed, round: filled, exclude: drafted.map((p) => p.id), fit: mode === "classic" || mode === "prime" || mode === "blueprint", ...opts }),
-      });
-      if (!r.ok) throw new Error("spin failed");
-      const res: Spin = await r.json();
-      await new Promise((rs) => setTimeout(rs, 1100));
-      setReel({ team: res.team, era: eraLabel(res.decade) });
-      setCurrent(res);
-    } catch {
-      setLockedReel(null); setReel({ team: "ATL", era: mode === "prime" ? "PRIME" : "60's" });
-      // roll back the re-spin we optimistically charged before this call so a network error doesn't
-      // silently burn the skip (and don't leave a phantom re-spin in the verification trace)
-      if (locked === "era") setSkips((s) => ({ ...s, team: false }));
-      else if (locked === "team") setSkips((s) => ({ ...s, era: false }));
-      // also roll back the pre-incremented salt — the next successful re-spin must reuse this salt
-      // value, or verifyTrace (which counts only the re-spins in the trace) would reject the submit.
-      if (locked !== null) { roundRespinsRef.current = roundRespinsRef.current.slice(0, -1); saltRef.current--; }
-      setError("Network hiccup — tap SPIN to try again.");
-    } finally {
-      if (tickRef.current) clearInterval(tickRef.current);
-      setSpinning(false);
-    }
-  }, [spinning, seed, filled, drafted, mode]);
-
-  const spin = useCallback(() => runSpin({}), [runSpin]);
-
-  // Pick'Em handlers. The vote is optimistic-local first (works even when Redis is dark) and
-  // fire-and-forget to /api/pickem; X (or Escape) skips AND remembers the preference (spec).
-  const votePickem = useCallback((v: PickemVote) => {
-    setPickemVote(v); setPickemDismissed(true); setLocalVote(seed, v);
-    setPickemSubject(current ? `the ${current.decade} ${teamName(current.team)}` : null);
-    track("pickem_vote", { vote: v });
-    fetch("/api/pickem", {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ seed, vote: v, uid: getUid() }),
-    }).catch(() => { /* self-disabled or offline — the local vote still settles on the card */ });
-  }, [seed, current]);
-  const skipPickem = useCallback(() => { setPickemDismissed(true); setPickemSkip(); track("pickem_skip"); }, []);
-  // Blueprint commitment handlers: confirm locks the objective for this game (client-side
-  // psychology — the board's stratification is the real invariant); Escape backs out to the picker.
-  const commitBlueprint = useCallback((k: BlueprintKey) => {
-    setBlueprint(k); setBpPick(null);
-    track("bp_commit", { blueprint: k });
-  }, []);
-  const cancelBlueprint = useCallback(() => { setMode(null); setBpPick(null); }, []);
-  const reSpinTeam = useCallback(() => {
-    if (skips.team || !current) return;
-    setSkips((s) => ({ ...s, team: true }));
-    roundRespinsRef.current.push("team");
-    runSpin({ lockedDecade: current.decade, excludeTeam: current.team, salt: ++saltRef.current }, "era");
-  }, [skips.team, current, runSpin]);
-  const reSpinEra = useCallback(() => {
-    if (skips.era || !current) return;
-    setSkips((s) => ({ ...s, era: true }));
-    roundRespinsRef.current.push("era");
-    runSpin({ lockedTeam: current.team, excludeDecade: current.decade, salt: ++saltRef.current }, "team");
-  }, [skips.era, current, runSpin]);
-
-  const simulate = useCallback(async (r: Roster, fhPred: string | null = null) => {
-    abortSimRef.current?.abort();
-    const ctrl = new AbortController();
-    abortSimRef.current = ctrl;
-    setLoading(true); setError(null);
-    try {
-      const ids = SLOTS.map((s) => r[s]?.id);
-      const res = await fetch("/api/evaluate", {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids }), signal: ctrl.signal,
-      });
-      if (!res.ok) throw new Error("evaluate failed");
-      const data = await res.json();
-      // abort() can't interrupt the body parse once the response has landed — re-check before
-      // committing, or a Restart racing the parse would stamp the OLD game's result onto the new one
-      if (ctrl.signal.aborted) return;
-      const full = { result: data.result, players: data.players as Player[], trace: [...traceRef.current], usedHints: hintsUsedRef.current > 0 };
-      setResult(full);
-      // Persist so the result survives a refresh (full object, incl. trace) and shows under "Your
-      // results". A challenge entry is upgraded with its challengeId later, when the link is created.
-      writeLastResult({ mode, seed, result: full, fh: fhPred, bp: blueprint });
-      if (mode) saveResult({ encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints, mode === "prime", mode === "blueprint" && blueprint ? bpCode(blueprint) : null), mode, wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
-      track("lineup_complete", { wins: data.result.wins, grade: data.result.grade });
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") return; // superseded by a restart — ignore
-      setError("Couldn't simulate the season — tap Simulate to retry.");
-    } finally {
-      if (!ctrl.signal.aborted) setLoading(false);
-    }
-  }, [mode, seed, blueprint]);
-
-  // Factor Hunt prediction step: fetch the choice set (server-built — only {ask, choices} is on
-  // the wire, never the answer or the record), then hold the reveal until the player locks/skips.
-  // Any failure falls straight through to a normal reveal with no bonus — never blocks the game.
-  const beginFhPrediction = useCallback(async (r: Roster) => {
-    if (fhFetchingRef.current) return;
-    fhFetchingRef.current = true; setError(null);
-    // abortable: a Restart mid-fetch must not resurrect the old game's prediction dialog (success
-    // path) or fall through to a stale simulate() carrying the old mode/seed (failure path)
-    fhAbortRef.current?.abort();
-    const ctrl = new AbortController();
-    fhAbortRef.current = ctrl;
-    try {
-      const ids = SLOTS.map((s) => r[s]?.id);
-      const res = await fetch("/api/factorhunt/choices", {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids, seed }), signal: ctrl.signal,
-      });
-      if (!res.ok) throw new Error("choices failed");
-      const d = await res.json();
-      if (ctrl.signal.aborted) return; // restarted while the body was parsing — drop everything
-      if ((d?.ask === "worst" || d?.ask === "best") && Array.isArray(d?.choices)
-        && d.choices.length >= 2 && d.choices.every((x: unknown) => typeof x === "string")) {
-        setFhPick(null); setFhStep({ roster: r, ask: d.ask, choices: d.choices });
-        return;
-      }
-      throw new Error("bad choices");
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") return; // restarted — not a failure
-      if (ctrl.signal.aborted) return;
-      simulate(r, null); // graceful: reveal without a prediction, no bonus
-    } finally { fhFetchingRef.current = false; }
-  }, [seed, simulate]);
-
-  const lockFh = useCallback((choice: string | null) => {
-    if (!fhStep) return;
-    const r = fhStep.roster;
-    setFhPrediction(choice); setFhStep(null); setFhPick(null);
-    track("fh_predict", { locked: choice ? 1 : 0 });
-    simulate(r, choice);
-  }, [fhStep, simulate]);
+  }, [start, setBlueprint, setFhPrediction, setSgResult]);
 
   // Surgeon phase 2: post the trace to /api/surgeon/pool — the server replays it, diagnoses the
   // worst factor, and deals 3 targeted candidates with WHY each (never an after-value). Any failure
   // surfaces as an error with a retry; no offline fallback (the pool is a server computation).
-  const beginSurgeon = useCallback(async (r: Roster) => {
-    if (sgFetchingRef.current) return;
-    sgFetchingRef.current = true; setLoading(true); setError(null);
-    sgAbortRef.current?.abort();
-    const ctrl = new AbortController();
-    sgAbortRef.current = ctrl;
-    try {
-      const res = await fetch("/api/surgeon/pool", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ seed, trace: traceRef.current }), signal: ctrl.signal,
-      });
-      const d = await res.json().catch(() => null);
-      if (ctrl.signal.aborted) return;
-      if (res.status === 422) {
-        // degenerate roster: the engine found no factors / no legal replacement — only a redraft helps
-        setError("No legal replacement exists for this five — hit Restart and draft again.");
-        return;
-      }
-      if (!res.ok) throw new Error("pool failed");
-      if (!d?.diagnosis || !Array.isArray(d?.candidates) || d.candidates.length === 0) throw new Error("bad pool");
-      const drafted = SLOTS.map((s) => (r[s] ? { slot: s, player: r[s]! } : null)).filter(Boolean) as { slot: Slot; player: DraftCandidate }[];
-      setSgName(getName()); setSgInId(null); setSgOutId(null);
-      setSgPool({ diagnosis: d.diagnosis, before: d.before, candidates: d.candidates, roster: drafted });
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") return;
-      if (ctrl.signal.aborted) return;
-      setError("Couldn't read the diagnosis — tap Diagnose to retry.");
-    } finally { sgFetchingRef.current = false; if (!ctrl.signal.aborted) setLoading(false); }
-  }, [seed]);
-
-  // Surgeon submit = the reveal. The server recomputes the pool, rejects an off-pool swap,
-  // write-once locks the swap, and recomputes the delta itself — client values are never trusted.
-  const confirmSurgeon = useCallback(async () => {
-    if (!sgPool || !sgInId || !sgOutId || sgBusy) return;
-    setSgBusy(true); setError(null);
-    sgAbortRef.current?.abort();
-    const ctrl = new AbortController();
-    sgAbortRef.current = ctrl;
-    try {
-      const res = await fetch("/api/surgeon/submit", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ date: seed.replace("surgeon-", ""), trace: traceRef.current, uid: getUid(), name: sgName.trim(), outId: sgOutId, inId: sgInId }),
-        signal: ctrl.signal,
-      });
-      const d = await res.json();
-      if (ctrl.signal.aborted) return;
-      if (!res.ok) { setError(d?.error === "stale date" ? "Today's case just reset — start today's Surgeon to post." : d?.error ?? "submit failed"); return; }
-      if (sgName.trim()) persistName(sgName.trim());
-      const outIdx = (d.beforePlayers as Player[]).findIndex((p) => p.id === d.swap.outId);
-      // a server response whose locked swap doesn't match its own before-lineup should never
-      // happen — but an outIdx of -1 would crash SurgeonResult, so refuse it instead
-      if (outIdx < 0 || outIdx > 4) { setError("Result looked corrupted — tap Confirm swap to retry."); return; }
-      const full: SgResult = { view: d.view, delta: d.delta, card: d.card, diagnosis: d.diagnosis, before: d.before, beforePlayers: d.beforePlayers, after: d.after, afterPlayers: d.afterPlayers, outIdx };
-      setSgResult(full); setSgPool(null);
-      writeLastResult({ mode, seed, sg: full });
-      saveResult({ encoded: d.card, mode: "surgeon", wins: d.after.wins, losses: d.after.losses, grade: d.after.grade });
-      track("surgeon_submit", { delta: d.delta, rank: d.view?.you?.rank ?? 0 });
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") return;
-      if (ctrl.signal.aborted) return;
-      setError("Network error — tap Confirm swap to retry.");
-    } finally { if (!ctrl.signal.aborted) setSgBusy(false); }
-  }, [sgPool, sgInId, sgOutId, sgName, seed, mode, sgBusy]);
-
   // Mode fork at "five locked": Factor Hunt detours through the prediction step; Surgeon detours
   // through the diagnosis/swap step; everyone else simulates immediately (pre-FH behavior).
   const finishDraft = useCallback((r: Roster) => {
@@ -559,7 +415,7 @@ export default function Game() {
     const prev = document.activeElement as HTMLElement | null;
     pickemRef.current?.focus();
     return () => prev?.focus?.();
-  }, [showPickem]);
+  }, [showPickem, pickemRef]);
 
   // Factor Hunt prediction dialog focus management (same pattern).
   useEffect(() => {
@@ -567,7 +423,7 @@ export default function Game() {
     const prev = document.activeElement as HTMLElement | null;
     fhRef.current?.focus();
     return () => prev?.focus?.();
-  }, [fhStep]);
+  }, [fhStep, fhRef]);
 
   // Blueprint commit dialog focus management (same pattern).
   const showBpModal = mode === "blueprint" && !blueprint && !restoring;
@@ -576,7 +432,7 @@ export default function Game() {
     const prev = document.activeElement as HTMLElement | null;
     bpRef.current?.focus();
     return () => prev?.focus?.();
-  }, [showBpModal]);
+  }, [showBpModal, bpRef]);
 
   // Surgeon swap dialog focus management (same pattern).
   useEffect(() => {
@@ -584,30 +440,7 @@ export default function Game() {
     const prev = document.activeElement as HTMLElement | null;
     sgRef.current?.focus();
     return () => prev?.focus?.();
-  }, [sgPool]);
-
-  // Once the record is in, pull the crowd split (and your stored vote — e.g. a Daily replay
-  // from another device) for the crowd-vs-you strip. Best-effort: a 503 (Redis absent) or a
-  // network error just leaves the strip off / local-vote-only. Synthetic cold-restore seeds
-  // ("classic-restored" / "hoopiq-restored") pass pickemSeedOk but never carry votes — skip
-  // them so every cold restore doesn't burn a Redis read. (Real free-play seeds end in digits,
-  // so the suffix check can't collide.)
-  useEffect(() => {
-    if (!result || mode === "challenge" || !pickemSeedOk(seed) || seed.endsWith("-restored")) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch(`/api/pickem?seed=${encodeURIComponent(seed)}&uid=${encodeURIComponent(getUid())}`);
-        if (!r.ok || cancelled) return;
-        const d = await r.json();
-        if (cancelled) return;
-        setPickemCrowd({ y: Number(d?.y) || 0, n: Number(d?.n) || 0 });
-        const sv: PickemVote | null = d?.vote === "y" || d?.vote === "n" ? d.vote : null;
-        if (sv) setPickemVote((p) => p ?? sv);
-      } catch { /* crowd strip stays off */ }
-    })();
-    return () => { cancelled = true; };
-  }, [result, mode, seed]);
+  }, [sgPool, sgRef]);
 
   if (restoring) return <div className="mx-auto max-w-4xl px-4 py-24 text-center text-sm text-zinc-400 animate-pulse">Loading your result…</div>;
   if (!mode) {
@@ -768,19 +601,7 @@ export default function Game() {
       {/* mobile "choose position" sheet (82-0 parity) */}
       {(selPlayer || selSlot) && (
         <div ref={sheetRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Choose a position"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") { setSelPlayer(null); setSelSlot(null); return; }
-            if (e.key === "Tab") {
-              // aria-modal claims modality — actually trap Tab within the sheet's buttons.
-              // The container itself holds focus right after opening (tabIndex=-1), so it counts
-              // as "first" for Shift+Tab — otherwise focus would walk out the back of the dialog.
-              const f = sheetRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
-              if (!f || f.length === 0) return;
-              const first = f[0], last = f[f.length - 1];
-              if (e.shiftKey && (document.activeElement === first || document.activeElement === sheetRef.current)) { e.preventDefault(); last.focus(); }
-              else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-            }
-          }}
+          onKeyDown={(e) => buildFocusTrapHandler(sheetRef, () => { setSelPlayer(null); setSelSlot(null); })(e)}
           className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-700 bg-zinc-900/95 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] outline-none backdrop-blur lg:hidden">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-semibold text-orange-400" role="status" aria-live="polite">
@@ -808,539 +629,29 @@ export default function Game() {
       {/* Factor Hunt prediction — focus-trapped dialog between "five locked" and the reveal.
           Lock applies the ×1.05 board bonus if right; Escape or Skip reveals with no bonus. */}
       {fhStep && (
-        <div ref={fhRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Factor Hunt prediction"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") { lockFh(null); return; }
-            if (e.key === "Tab") {
-              const f = fhRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
-              if (!f || f.length === 0) return;
-              const first = f[0], last = f[f.length - 1];
-              // the container holds initial focus — treat it as "first" so Shift+Tab can't escape
-              if (e.shiftKey && (document.activeElement === first || document.activeElement === fhRef.current)) { e.preventDefault(); last.focus(); }
-              else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-            }
-          }}
-          className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
-          <div className="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
-            <div className="text-center text-xs font-black uppercase tracking-widest text-violet-400">🔮 Factor Hunt</div>
-            <p className="mt-2 text-center text-base font-semibold text-zinc-100">
-              {fhStep.ask === "worst"
-                ? "Before the reveal — which factor is hurting this five the most?"
-                : "Clean build, no weaknesses — which factor is helping the MOST?"}
-            </p>
-            <div className="mt-4 space-y-2" role="radiogroup" aria-label="Factor choices">
-              {fhStep.choices.map((c) => (
-                <button key={c} role="radio" aria-checked={fhPick === c} onClick={() => setFhPick(c)}
-                  className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
-                    fhPick === c ? "border-violet-400 bg-violet-500/15 text-violet-200" : "border-zinc-700 bg-zinc-950/60 text-zinc-300 hover:border-zinc-500"}`}>
-                  {c}
-                </button>
-              ))}
-            </div>
-            <button onClick={() => fhPick && lockFh(fhPick)} disabled={!fhPick}
-              className="mt-4 w-full rounded-xl bg-violet-500 py-3 text-base font-black text-black hover:bg-violet-400 disabled:opacity-40">
-              🔒 Lock prediction — ×1.05 if right
-            </button>
-            <button onClick={() => lockFh(null)} className="mt-2 w-full py-1 text-xs text-zinc-500 hover:text-zinc-300">
-              Skip — just show the result
-            </button>
-          </div>
-        </div>
+        <FhDialog fhStep={fhStep} fhPick={fhPick} setFhPick={setFhPick} lockFh={lockFh} dialogRef={fhRef} />
       )}
 
       {/* Pick'Em pre-draft vote — focus-trapped dialog (same a11y mechanics as the sheet above).
           One tap votes; ✕ or Escape skips AND remembers the skip preference. Never blocks: the
           draft continues the moment either happens. */}
       {showPickem && current && (
-        <div ref={pickemRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Pick'Em crowd vote"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") { skipPickem(); return; }
-            if (e.key === "Tab") {
-              const f = pickemRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
-              if (!f || f.length === 0) return;
-              const first = f[0], last = f[f.length - 1];
-              // the container holds initial focus — treat it as "first" so Shift+Tab can't escape
-              if (e.shiftKey && (document.activeElement === first || document.activeElement === pickemRef.current)) { e.preventDefault(); last.focus(); }
-              else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-            }
-          }}
-          className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
-          <div className="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-5 text-center shadow-2xl">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black uppercase tracking-widest text-orange-500">🗳️ Pick&apos;Em</span>
-              <button onClick={skipPickem} aria-label="Skip Pick'Em — won't ask again" title="Skip — won't ask again"
-                className="px-2 text-zinc-400 hover:text-zinc-200">✕</button>
-            </div>
-            {mode === "hoopiq" ? (
-              <div className="mt-3 text-lg font-black">🧠 Mystery roster</div>
-            ) : (
-              <div className="mt-3 flex items-center justify-center gap-2">
-                <span className="rounded-md px-2 py-1 text-sm font-black" style={{ background: teamColors(current.team).bg, color: teamColors(current.team).text }}>{current.team}</span>
-                <span className="rounded-md bg-violet-500/20 px-2 py-1 text-sm font-bold text-violet-300">{eraLabel(current.decade)}</span>
-              </div>
-            )}
-            <p className="mt-3 text-base font-semibold text-zinc-100">Will the best possible five from this roster win more than 60 games?</p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <button onClick={() => votePickem("y")} className="rounded-xl bg-green-500 py-3 text-base font-black text-black hover:bg-green-400">YES — 60+</button>
-              <button onClick={() => votePickem("n")} className="rounded-xl bg-red-500 py-3 text-base font-black text-black hover:bg-red-400">NO</button>
-            </div>
-            <p className="mt-3 text-[11px] text-zinc-500">One tap — the crowd&apos;s call settles with your result.</p>
-          </div>
-        </div>
+        <PickemOverlay current={current} mode={mode} dialogRef={pickemRef} onVote={votePickem} onSkip={skipPickem} />
       )}
 
       {/* Blueprint commitment — focus-trapped dialog gating the FIRST spin (commit before you see
           the reels). Confirm locks the objective for the game; Escape backs out to the mode picker. */}
       {showBpModal && (
-        <div ref={bpRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Blueprint commitment"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") { cancelBlueprint(); return; }
-            // radiogroup keyboard contract: arrows move the selection (Tab alone only walks focus)
-            if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End") {
-              e.preventDefault();
-              const i = BLUEPRINTS.findIndex((b) => b.key === bpPick);
-              const n = BLUEPRINTS.length;
-              // radiogroup contract: with nothing selected (i === -1), ArrowDown starts at the
-              // first option and ArrowUp at the LAST — the modulo alone lands one short on ArrowUp
-              const next = e.key === "Home" ? 0 : e.key === "End" ? n - 1
-                : e.key === "ArrowDown" ? (i + 1 + n) % n
-                : i === -1 ? n - 1 : (i - 1 + n) % n;
-              setBpPick(BLUEPRINTS[next].key);
-              bpRef.current?.querySelectorAll<HTMLElement>("[role=radio]")[next]?.focus();
-              return;
-            }
-            if (e.key === "Tab") {
-              const f = bpRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
-              if (!f || f.length === 0) return;
-              const first = f[0], last = f[f.length - 1];
-              // the container holds initial focus — treat it as "first" so Shift+Tab can't escape
-              if (e.shiftKey && (document.activeElement === first || document.activeElement === bpRef.current)) { e.preventDefault(); last.focus(); }
-              // the container (initial focus) is "first" for forward-Tab too — guard it so focus
-              // can't walk out the back before the first button on the very first Tab
-              else if (!e.shiftKey && (document.activeElement === last || document.activeElement === bpRef.current)) { e.preventDefault(); first.focus(); }
-            }
-          }}
-          className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
-          <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
-            <div className="text-center text-xs font-black uppercase tracking-widest text-cyan-400">📐 Blueprint</div>
-            <p className="mt-2 text-center text-base font-semibold text-zinc-100">Commit to an objective — before you see the reels.</p>
-            <p className="mt-1 text-center text-[11px] text-zinc-500">The engine grades your execution on that axis. Board score = wins × execution (×1.0–1.3).</p>
-            <div className="mt-4 space-y-2" role="radiogroup" aria-label="Blueprint choices">
-              {BLUEPRINTS.map((b) => (
-                <button key={b.key} role="radio" aria-checked={bpPick === b.key} onClick={() => setBpPick(b.key)}
-                  className={`w-full rounded-xl border px-4 py-2.5 text-left transition ${
-                    bpPick === b.key ? "border-cyan-400 bg-cyan-500/15" : "border-zinc-700 bg-zinc-950/60 hover:border-zinc-500"}`}>
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className={`text-sm font-bold ${bpPick === b.key ? "text-cyan-200" : "text-zinc-200"}`}>{b.emoji} {b.label}</span>
-                    <span className="shrink-0 text-[10px] tabular-nums text-zinc-500">A+ {b.lowerIsBetter ? "≤" : "≥"} {b.format(b.bands[0])}</span>
-                  </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-zinc-400">{b.desc}</span>
-                </button>
-              ))}
-            </div>
-            <button onClick={() => bpPick && commitBlueprint(bpPick)} disabled={!bpPick}
-              className="mt-4 w-full rounded-xl bg-cyan-500 py-3 text-base font-black text-black hover:bg-cyan-400 disabled:opacity-40">
-              🔒 Commit — spin the reels
-            </button>
-            <button onClick={cancelBlueprint} className="mt-2 w-full py-1 text-xs text-zinc-500 hover:text-zinc-300">
-              ← Back to all modes
-            </button>
-          </div>
-        </div>
+        <BlueprintDialog bpPick={bpPick} setBpPick={setBpPick} onCommit={commitBlueprint} onCancel={cancelBlueprint} dialogRef={bpRef} />
       )}
 
       {/* Surgeon phase 2 — focus-trapped "Replacement Pool" dialog (spec's anti-"rigged" labelling:
           each candidate shows WHY it was offered). Pick a candidate, then which of your five to drop
           (only slot-eligible targets are offered); confirm submits the swap (the reveal IS the submit). */}
       {sgPool && (
-        <div ref={sgRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Surgeon replacement pool"
-          onKeyDown={(e) => {
-            // dismiss must also ABORT an in-flight submit/pool fetch — otherwise a resolving
-            // submit re-renders the reveal over the draft board (and its error copy references
-            // a dialog that is no longer on screen)
-            if (e.key === "Escape") { sgAbortRef.current?.abort(); setSgBusy(false); setSgPool(null); return; }
-            // radiogroup keyboard contract: arrows rove WITHIN whichever group holds focus
-            if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Home" || e.key === "End") {
-              const group = (document.activeElement as HTMLElement | null)?.closest("[role=radiogroup]");
-              if (!group) return;
-              e.preventDefault();
-              const radios = [...group.querySelectorAll<HTMLElement>("[role=radio]:not([disabled])")];
-              if (!radios.length) return;
-              const i = radios.indexOf(document.activeElement as HTMLElement);
-              const n = radios.length;
-              const next = e.key === "Home" ? 0 : e.key === "End" ? n - 1
-                : e.key === "ArrowDown" ? (i + 1 + n) % n : (i - 1 + n) % n;
-              radios[next].focus(); radios[next].click();
-              return;
-            }
-            if (e.key === "Tab") {
-              const f = sgRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])");
-              if (!f || f.length === 0) return;
-              const first = f[0], last = f[f.length - 1];
-              if (e.shiftKey && (document.activeElement === first || document.activeElement === sgRef.current)) { e.preventDefault(); last.focus(); }
-              else if (!e.shiftKey && (document.activeElement === last || document.activeElement === sgRef.current)) { e.preventDefault(); first.focus(); }
-            }
-          }}
-          className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
-          <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
-            <div className="text-center text-xs font-black uppercase tracking-widest text-rose-400">🩺 Diagnosis</div>
-            <p className="mt-2 text-center text-base font-semibold text-zinc-100">
-              {sgPool.diagnosis.kind === "worst" ? "Your worst factor: " : "No real weaknesses — your weakest strength: "}
-              <span className="text-rose-300">{sgPool.diagnosis.label}</span>
-            </p>
-            <p className="mt-1 text-center text-[11px] text-zinc-500">
-              {sgPool.before.wins}-{sgPool.before.losses} before the fix · one swap, score = win delta
-            </p>
-
-            <div className="mt-4 text-[11px] font-bold uppercase tracking-wide text-zinc-500">Replacement pool — pick one</div>
-            <div className="mt-1.5 space-y-2" role="radiogroup" aria-label="Replacement candidates">
-              {sgPool.candidates.map((c) => (
-                <button key={c.id} role="radio" aria-checked={sgInId === c.id}
-                  onClick={() => { setSgInId(c.id); setSgOutId(null); }}
-                  className={`w-full rounded-xl border px-3 py-2 text-left transition ${
-                    sgInId === c.id ? "border-rose-400 bg-rose-500/15" : "border-zinc-700 bg-zinc-950/60 hover:border-zinc-500"}`}>
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className={`text-sm font-bold ${sgInId === c.id ? "text-rose-200" : "text-zinc-200"}`}>{displayName(c.name)}</span>
-                    <span className="shrink-0 text-[10px] text-zinc-500">{c.team} · {eraLabel(c.decade)}</span>
-                  </span>
-                  <span className="mt-0.5 block text-[11px] leading-snug text-emerald-400/90">{c.why}</span>
-                </button>
-              ))}
-            </div>
-
-            {sgInId && (() => {
-              const cand = sgPool.candidates.find((c) => c.id === sgInId)!;
-              // a candidate may only take the EXACT slot the drafted player occupies (server rule)
-              return (
-                <>
-                  <div role="status" aria-live="polite" className="mt-4 text-[11px] font-bold uppercase tracking-wide text-zinc-500">Swap out — pick the player {displayName(cand.name)} replaces</div>
-                  <div className="mt-1.5 grid grid-cols-1 gap-1.5" role="radiogroup" aria-label="Player to swap out">
-                    {sgPool.roster.map(({ slot, player }) => {
-                      const eligible = cand.eligible.includes(slot);
-                      return (
-                        // aria-disabled (not disabled) keeps ineligible targets discoverable to AT
-                        // users inside the radiogroup; the click guard makes them inert
-                        <button key={player.id} role="radio" aria-checked={sgOutId === player.id} aria-disabled={!eligible}
-                          onClick={() => eligible && setSgOutId(player.id)}
-                          className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-1.5 text-left text-sm transition ${
-                            sgOutId === player.id ? "border-red-400 bg-red-500/15 text-red-200"
-                              : eligible ? "border-zinc-700 bg-zinc-950/60 text-zinc-300 hover:border-zinc-500" : "border-zinc-900 bg-zinc-950/40 text-zinc-600"}`}>
-                          <span className="truncate font-semibold">{displayName(player.name)} <span className="text-[10px] font-normal text-zinc-500">at {slot}</span></span>
-                          <span className="shrink-0 text-[10px] text-zinc-500">{eligible ? `${cand.pos} fits ${slot}` : `can't play ${slot}`}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              );
-            })()}
-
-            <input value={sgName} onChange={(e) => setSgName(e.target.value)} maxLength={24} placeholder="Your name (for the board)"
-              className="mt-4 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-rose-500" />
-            {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
-            <button onClick={confirmSurgeon} disabled={!sgInId || !sgOutId || sgBusy}
-              className="mt-3 w-full rounded-xl bg-rose-500 py-3 text-base font-black text-black hover:bg-rose-400 disabled:opacity-40">
-              {sgBusy ? "Operating…" : "🔒 Confirm swap — reveal the delta"}
-            </button>
-            <button onClick={() => { sgAbortRef.current?.abort(); setSgBusy(false); setSgPool(null); }}
-              className="mt-2 w-full py-1 text-xs text-zinc-500 hover:text-zinc-300">
-              ← Back to the draft
-            </button>
-            <p className="mt-2 text-center text-[10px] text-zinc-500">One swap, locked on submit — the result reveals the answer.</p>
-          </div>
-        </div>
+        <SurgeonDialog sgPool={sgPool} sgInId={sgInId} setSgInId={setSgInId} sgOutId={sgOutId} setSgOutId={setSgOutId} sgName={sgName} setSgName={setSgName} sgBusy={sgBusy} error={error} confirmSurgeon={confirmSurgeon} dismissPool={dismissSgPool} dialogRef={sgRef} />
       )}
     </Shell>
   );
 }
-
-/* ---------- subcomponents ---------- */
-
-function Shell({ children, roundNum, mode, onRestart, showRestart }: {
-  children: React.ReactNode; roundNum: number; mode: Mode; onRestart: () => void; showRestart?: boolean;
-}) {
-  return (
-    <div className="mx-auto max-w-4xl px-4 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
-      <header className="mb-5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold capitalize text-zinc-300">{MODE_LABEL[mode]}</span>
-          <span className="text-sm text-zinc-500">Round {roundNum}/5</span>
-        </div>
-        {showRestart && (
-          <button onClick={onRestart} className="rounded-lg border border-zinc-700 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-500">↻ Restart</button>
-        )}
-      </header>
-      {children}
-    </div>
-  );
-}
-
-function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => void; onOpenChallenge: (challengeId: string) => void }) {
-  const modes: { id: Mode; emoji: string; title: string; desc: string }[] = [
-    { id: "daily", emoji: "📅", title: "Daily", desc: "Everyone gets the same spins today. Compare your record." },
-    { id: "classic", emoji: "💯", title: "Classic", desc: "Full stats visible — draft on what you can see." },
-    { id: "hoopiq", emoji: "🧠", title: "HoopIQ", desc: "Stats hidden — draft by memory, test your ball knowledge." },
-    { id: "factorhunt", emoji: "🔮", title: "Factor Hunt", desc: "Daily shared spins — predict WHY before the reveal for a ×1.05 bonus." },
-    { id: "prime", emoji: "⚡", title: "Prime Draft", desc: "No eras — every legend at his peak. Cross-era fives, fantasy simulation." },
-    { id: "blueprint", emoji: "📐", title: "Blueprint", desc: "Commit to a tactical objective before the spin — the engine grades your execution." },
-    { id: "surgeon", emoji: "🩺", title: "Surgeon", desc: "The engine diagnoses your worst factor. One swap to fix it — score is the win delta." },
-    { id: "challenge", emoji: "⚔️", title: "Challenge a Friend", desc: "Build a five, send a link. They draft the same teams — beat your record." },
-  ];
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-12 text-center">
-      <h1 className="font-display text-4xl tracking-tight sm:text-5xl">Pick your mode</h1>
-      <p className="mt-2 text-lg text-zinc-400">Build an all-time NBA starting five. Can you go undefeated?</p>
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {modes.map((m) => (
-          <button key={m.id} onClick={() => onPick(m.id)}
-            className="group rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-left transition hover:border-orange-500 hover:bg-zinc-800/60">
-            <div className="text-3xl">{m.emoji}</div>
-            <div className="mt-2 font-bold">{m.title}</div>
-            <div className="mt-1 text-sm text-zinc-400">{m.desc}</div>
-            <div className="mt-3 text-sm font-bold text-orange-500 group-hover:underline">Play →</div>
-          </button>
-        ))}
-      </div>
-      <ResultsHistory onOpenChallenge={onOpenChallenge} />
-      <p className="mt-8 text-xs text-zinc-600">Smarter engine: every team is scored by a model fit to 1,170 real NBA seasons — and it tells you <em>why</em>.</p>
-    </div>
-  );
-}
-
-function Reel({ kind, value, sub, color, locked, masked, spinning, prime }: {
-  kind: string; value: string; sub: string; color: "orange" | "violet"; locked?: boolean; masked?: boolean; spinning?: boolean; prime?: boolean;
-}) {
-  // Prime's era reel is fixed BY DESIGN, not a consumed re-spin — keep the reel's own violet and
-  // say what it is ("ALL ERAS"), never the amber "LOCKED" used when a re-spin freezes a reel.
-  const ring = prime ? "border-violet-500" : locked ? "border-amber-500" : color === "orange" ? "border-orange-500" : "border-violet-500";
-  const tag = prime ? "text-violet-400" : locked ? "text-amber-400" : color === "orange" ? "text-orange-500" : "text-violet-400";
-  return (
-    <div className={`relative w-28 rounded-xl border-2 ${ring} bg-zinc-900 px-3 py-2 text-center shadow-md`}>
-      <div className={`text-[10px] font-bold uppercase tracking-widest ${tag}`}>{prime ? "ALL ERAS" : locked ? "🔒 LOCKED" : kind}</div>
-      <div className="text-2xl font-black leading-tight">{masked ? "???" : value}</div>
-      <div className="truncate text-[10px] text-zinc-500">{masked ? "hidden" : sub}</div>
-      {/* announce the settled reel once (stay quiet while cycling and when the value is masked) */}
-      <span className="sr-only" aria-live="polite" aria-atomic="true">{spinning || masked ? "" : `${kind}: ${value}`}</span>
-    </div>
-  );
-}
-
-// Live usage-budget bar for the USAGE DISCIPLINE blueprint: total engine usage demand of the five
-// so far, against the A+ target (90), the grade line the spec names (95), and the engine's
-// overload budget (100). The per-candidate numbers ride the bp-* spin response (lib/data.ts).
-const USAGE_BAR_MAX = 130; // display scale — casual fives land ~120-140, so the bar visibly fills
-function UsageBar({ total }: { total: number }) {
-  const pct = Math.min(100, (total / USAGE_BAR_MAX) * 100);
-  const color = total <= 90 ? "bg-green-400/80" : total <= 95 ? "bg-lime-400/80" : total <= 100 ? "bg-amber-400/80" : "bg-red-400/80";
-  const mark = (v: number) => `${(v / USAGE_BAR_MAX) * 100}%`;
-  return (
-    <div className="mx-auto mt-3 w-full max-w-sm">
-      <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-        <span>⚖️ Usage budget</span>
-        <span className={`tabular-nums ${total <= 90 ? "text-green-400" : total <= 95 ? "text-lime-400" : total <= 100 ? "text-amber-400" : "text-red-400"}`}>
-          {total.toFixed(1)}% / A+ ≤90
-        </span>
-      </div>
-      <div className="relative h-2.5 overflow-hidden rounded-full bg-zinc-800" role="img"
-        aria-label={`Total usage demand ${total.toFixed(1)} percent — A+ at 90 or under, overload past 100`}>
-        <div className={`h-full ${color} transition-all`} style={{ width: `${pct}%` }} />
-        <div className="absolute inset-y-0 w-px bg-zinc-400/70" style={{ left: mark(95) }} title="A grade line (95)" />
-        <div className="absolute inset-y-0 w-px bg-red-400/70" style={{ left: mark(100) }} title="Engine overload budget (100)" />
-      </div>
-    </div>
-  );
-}
-
-function SkipBtn({ label, used, onClick, disabled }: { label: string; used: boolean; onClick: () => void; disabled?: boolean }) {
-  return (
-    <button onClick={onClick} disabled={used || disabled}
-      className={`rounded-full border px-3 py-1 font-semibold transition ${
-        used ? "border-zinc-800 text-zinc-700 line-through" : "border-zinc-700 text-zinc-300 hover:border-orange-500 hover:text-orange-400"}`}>
-      {label}{used ? " · used" : ""}
-    </button>
-  );
-}
-
-function Court({ roster, selSlot, isTarget, onSlot, maskColors }: {
-  roster: Roster; selSlot: Slot | null; isTarget: (s: Slot) => boolean; onSlot: (s: Slot) => void; maskColors?: boolean;
-}) {
-  return (
-    <div className="relative mx-auto aspect-[4/3.4] w-full max-w-sm overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-b from-[#14223b] to-[#0c1626] lg:sticky lg:top-4">
-      <svg viewBox="0 0 100 85" className="absolute inset-0 h-full w-full text-zinc-600/40" fill="none" stroke="currentColor" strokeWidth="0.6">
-        <rect x="2" y="2" width="96" height="81" rx="2" />
-        <rect x="38" y="2" width="24" height="30" />
-        <circle cx="50" cy="32" r="9" />
-        <path d="M10 2 A 40 40 0 0 0 90 2" />
-        <line x1="2" y1="2" x2="98" y2="2" />
-        <circle cx="50" cy="2" r="6" />
-      </svg>
-      {SLOTS.map((s) => {
-        const p = roster[s];
-        const target = isTarget(s);
-        const picked = selSlot === s;
-        const c = p ? (maskColors ? { bg: "#3f3f46", text: "#e4e4e7" } : teamColors(p.team)) : null;
-        return (
-          <button key={s} onClick={() => onSlot(s)} style={{ left: `${COURT[s].left}%`, top: `${COURT[s].top}%` }}
-            aria-label={p ? `${p.name} at ${s}${target ? ", swap target" : ""}` : `${s} slot${target ? ", eligible — tap to place" : " (empty)"}`}
-            className={`absolute -translate-x-1/2 -translate-y-1/2 transition ${target ? "animate-pulse" : ""}`}>
-            {p && c ? (
-              <span className={`flex h-14 w-14 flex-col items-center justify-center rounded-xl text-xs font-black leading-none shadow-lg ring-2 ${
-                  picked ? "ring-orange-400" : target ? "ring-orange-400" : "ring-white/20"}`}
-                style={{ background: c.bg, color: c.text }}>
-                <span>{initials(p.name)}</span>
-                <span className="mt-0.5 text-[8px] opacity-80">{s}</span>
-              </span>
-            ) : (
-              <span className={`flex h-14 w-14 items-center justify-center rounded-xl border-2 border-dashed text-sm font-bold ${
-                  target ? "border-orange-400 bg-orange-400/15 text-orange-300 ring-2 ring-orange-400" : "border-zinc-600/60 text-zinc-500"}`}>
-                {s}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-type SortKey = "fit" | "ppg" | "rpg" | "apg" | "az";
-function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect, showUsage }: {
-  spin: Spin; mode: Mode; selId: string | null; hintsLeft: number; onReveal: () => void;
-  canPlace: (c: DraftCandidate) => boolean; onSelect: (c: DraftCandidate) => void; showUsage?: boolean;
-}) {
-  const hideStats = mode === "hoopiq"; // HoopIQ hides stats — draft on memory
-  // Classic-style assist (Classic + Prime + Blueprint — Blueprint follows Classic's hint rules,
-  // hinted board rows carry the stamp): Daily/FH are hint-free competitions, HoopIQ is a memory test
-  const canHint = mode === "classic" || mode === "prime" || mode === "blueprint";
-  const [revealed, setRevealed] = useState(false); // spent a hint to reveal fit for THIS pick? resets on remount (each spin/round)
-  const showFit = revealed && canHint;
-  const [q, setQ] = useState("");
-  const [group, setGroup] = useState<"All" | "G" | "F" | "C">("All");
-  const [sort, setSort] = useState<SortKey>(showFit ? "fit" : hideStats ? "az" : "ppg");
-  // if Hints is switched off mid-spin while sorted by fit, fall back without resetting user state
-  const effSort: SortKey = sort === "fit" && !showFit ? (hideStats ? "az" : "ppg") : sort;
-
-  const list = useMemo(() => {
-    const inGroup = (c: DraftCandidate) =>
-      group === "All" ? true :
-      group === "G" ? c.eligible.some((p) => p === "PG" || p === "SG") :
-      group === "F" ? c.eligible.some((p) => p === "SF" || p === "PF") :
-      c.eligible.includes("C");
-    const out = spin.candidates.filter((c) => inGroup(c) && c.name.toLowerCase().includes(q.toLowerCase().trim()));
-    const key: Record<SortKey, (c: DraftCandidate) => number> = {
-      fit: (c) => -(c.fit?.delta ?? -99), ppg: (c) => -(c.pts ?? 0), rpg: (c) => -(c.trb ?? 0), apg: (c) => -(c.ast ?? 0), az: () => 0,
-    };
-    out.sort((a, b) => (effSort === "az" ? a.name.localeCompare(b.name) : key[effSort](a) - key[effSort](b)));
-    return out;
-  }, [spin, q, group, effSort]);
-
-  const c0 = teamColors(spin.team);
-  return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
-      <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 p-2.5">
-        {hideStats ? (
-          <span title="Team & era are hidden in HoopIQ — recognize the players" className="rounded-md bg-zinc-800 px-2 py-1 text-xs font-bold text-zinc-300">🧠 Mystery roster</span>
-        ) : (
-          <>
-            <span className="rounded-md px-2 py-1 text-xs font-black" style={{ background: c0.bg, color: c0.text }}>{spin.team}</span>
-            <span className="rounded-md bg-violet-500/20 px-2 py-1 text-xs font-bold text-violet-300">{eraLabel(spin.decade)}</span>
-          </>
-        )}
-        <div className="ml-auto flex gap-1">
-          {(["All", "G", "F", "C"] as const).map((g) => (
-            <button key={g} onClick={() => setGroup(g)}
-              className={`rounded-md px-2 py-1 text-xs font-semibold ${group === g ? "bg-orange-500 text-black" : "text-zinc-400 hover:text-zinc-200"}`}>{g}</button>
-          ))}
-        </div>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" aria-label="Search players"
-          className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 sm:w-36" />
-        {canHint && (revealed ? (
-          <span title="Fit grades revealed for this pick (cost 1 hint)" className="rounded-md bg-emerald-500/20 px-2 py-1.5 text-xs font-semibold text-emerald-300">
-            💡 Hints on
-          </span>
-        ) : hintsLeft > 0 ? (
-          <button onClick={() => { onReveal(); setRevealed(true); }} title={`Spend 1 hint to reveal the engine's fit grades for this pick — ${hintsLeft} left this game`}
-            className="rounded-md border border-zinc-700 px-2 py-1.5 text-xs font-semibold text-zinc-400 transition hover:border-emerald-600/60 hover:text-emerald-300">
-            💡 Hints · {hintsLeft} left
-          </button>
-        ) : (
-          <span title="You've used all your hints this game" className="rounded-md border border-zinc-800 px-2 py-1.5 text-xs font-semibold text-zinc-500">
-            💡 Hints used up
-          </span>
-        ))}
-        {!hideStats && (
-          <select value={effSort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort players"
-            className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-300 outline-none">
-            {showFit && <option value="fit">Best fit</option>}
-            <option value="ppg">PPG</option><option value="rpg">RPG</option><option value="apg">APG</option><option value="az">A–Z</option>
-          </select>
-        )}
-      </div>
-      <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-zinc-500">
-        <span>{list.length} player{list.length === 1 ? "" : "s"} available{hideStats ? " · stats hidden" : ""}</span>
-        {showFit && <span className="text-zinc-500">fit = net swing for <span className="text-zinc-400">your</span> roster</span>}
-      </div>
-      <div className="max-h-[420px] overflow-y-auto px-2 pb-2">
-        {list.map((c) => {
-          const sel = selId === c.id;
-          const fits = canPlace(c);
-          const showRowFit = showFit && fits && c.fit;
-          return (
-            <button key={c.id} onClick={() => onSelect(c)} aria-pressed={sel}
-              aria-label={`Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}${showUsage && c.usage != null ? `, ${Math.round(c.usage)} percent usage demand` : ""}${showRowFit ? `, fit ${c.fit!.delta > 0 ? "+" : ""}${c.fit!.delta}${c.fit!.adds.length ? ", adds " + c.fit!.adds.join(" and ") : ""}` : ""}`}
-              className={`mb-1.5 flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition ${
-                sel ? "border-orange-500 bg-orange-500/10" : showRowFit && c.fit!.best ? "border-emerald-600/50 bg-emerald-500/[0.06] hover:border-emerald-500" : fits ? "border-zinc-800 bg-zinc-950/60 hover:border-zinc-600" : "border-zinc-900 bg-zinc-950/40 opacity-55"}`}>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold">{c.name}</div>
-                <div className="text-[11px] text-zinc-500">
-                  {c.eligible.join(" · ")}
-                  {/* Prime pools span all eras — show each player's peak decade on the row */}
-                  {spin.decade === "PRIME" && <span className="ml-1 text-violet-400/80">· {eraLabel(c.decade)}</span>}
-                  {!fits && <span className="ml-1 text-zinc-500">· no open slot</span>}
-                </div>
-                {showRowFit && c.fit!.adds.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {c.fit!.adds.map((a) => (
-                      <span key={a} className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-400/90">+ {a}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {!hideStats && (
-                <div className="flex shrink-0 gap-2 text-center text-[11px] text-zinc-400">
-                  <Mini v={c.pts} k="PPG" /><Mini v={c.trb} k="RPG" /><Mini v={c.ast} k="APG" />
-                  {/* SPG/BPG hidden on mobile to make room for the fit column; defense shows via fit tags */}
-                  <Mini v={c.stl} k="SPG" className="hidden sm:block" /><Mini v={c.blk} k="BPG" className="hidden sm:block" />
-                  {/* USAGE DISCIPLINE drafts against a budget — the demand column IS the mechanic */}
-                  {showUsage && <Mini v={c.usage} k="USG%" />}
-                </div>
-              )}
-              {showRowFit && (
-                <div className="w-10 shrink-0 text-right">
-                  <div className={`text-sm font-bold tabular-nums ${fitColor(c.fit!)}`}>{c.fit!.delta > 0 ? "+" : ""}{c.fit!.delta}</div>
-                  <div className={`text-[8px] uppercase tracking-wide ${c.fit!.best ? "text-emerald-300" : "text-zinc-400"}`}>{c.fit!.best ? "★ fit" : "fit"}</div>
-                </div>
-              )}
-            </button>
-          );
-        })}
-        {list.length === 0 && <div className="py-8 text-center text-xs text-zinc-500">No players match.</div>}
-      </div>
-    </div>
-  );
-}
-
-// color the fit swing: green shades by tier when it helps, muted when it doesn't move the needle
-function fitColor(f: CandidateFit): string {
-  if (f.delta <= 0) return "text-zinc-500";
-  return f.tier === "elite" ? "text-emerald-300" : f.tier === "strong" ? "text-emerald-400" : f.tier === "solid" ? "text-emerald-500/80" : "text-zinc-400";
-}
-
-function Mini({ v, k, className }: { v: number | null | undefined; k: string; className?: string }) {
-  return (
-    <div className={`w-8 ${className ?? ""}`}>
-      <div className="font-semibold text-zinc-300 tabular-nums">{v == null ? "–" : v.toFixed(1)}</div>
-      <div className="text-[8px] uppercase tracking-wide text-zinc-500">{k}</div>
-    </div>
-  );
-}
+
