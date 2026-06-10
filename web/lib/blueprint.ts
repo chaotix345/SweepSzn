@@ -139,3 +139,4 @@ export interface BpRow {
 }
 export interface BpBoardRow extends BpRow { rank: number }
 export interface BpBoardView { date: string; bp: BlueprintKey | "all"; total: number; top: BpBoardRow[]; you?: BpBoardRow }
+
