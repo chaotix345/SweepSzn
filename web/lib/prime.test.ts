@@ -1,9 +1,7 @@
+import { describe, it, expect } from "vitest";
 import type { Player } from "./types";
 import { PRIME_MIN_PEOPLE, primeScore, peakVariant, buildPrimePools } from "./prime";
 import { encodeLineup, decodeShare } from "./share";
-
-let fail = 0;
-const assert = (c: boolean, m: string) => { if (!c) { console.error("FAIL:", m); fail++; } else console.log("ok:", m); };
 
 const mk = (over: Partial<Player>): Player => ({
   id: "x", name: "X", year: 2000, decade: "2000s", tier: "complete", team: "LAL", pos: "SF",
@@ -11,30 +9,51 @@ const mk = (over: Partial<Player>): Player => ({
 } as Player);
 
 // --- primeScore: position-weighted pts+ast+reb ---
-assert(primeScore(mk({ pos: "PG", pts: 20, ast: 10, trb: 4 })) === 20 + 15 + 3.2, "guard weights creation (1.5x ast)");
-assert(primeScore(mk({ pos: "C", pts: 20, ast: 4, trb: 12 })) === 20 + 3.2 + 16.8, "big weights the glass (1.4x reb)");
-assert(primeScore(mk({ pos: "SF", pts: 20, ast: 5, trb: 6 })) === 20 + 5.5 + 6.6, "wing balanced (1.1x both)");
-assert(primeScore(mk({ pos: "PG", pts: null, ast: null, trb: null })) === 0, "null stats -> 0");
-{
-  const guardLine = { pts: 18, ast: 9, trb: 3 };
-  assert(primeScore(mk({ pos: "PG", ...guardLine })) > primeScore(mk({ pos: "C", ...guardLine })), "same line scores higher at guard when assist-heavy");
-}
+describe("primeScore", () => {
+  it("guard weights creation (1.5x ast)", () => {
+    expect(primeScore(mk({ pos: "PG", pts: 20, ast: 10, trb: 4 }))).toBe(20 + 15 + 3.2);
+  });
+  it("big weights the glass (1.4x reb)", () => {
+    expect(primeScore(mk({ pos: "C", pts: 20, ast: 4, trb: 12 }))).toBe(20 + 3.2 + 16.8);
+  });
+  it("wing balanced (1.1x both)", () => {
+    expect(primeScore(mk({ pos: "SF", pts: 20, ast: 5, trb: 6 }))).toBe(20 + 5.5 + 6.6);
+  });
+  it("null stats -> 0", () => {
+    expect(primeScore(mk({ pos: "PG", pts: null, ast: null, trb: null }))).toBe(0);
+  });
+  it("same line scores higher at guard when assist-heavy", () => {
+    const guardLine = { pts: 18, ast: 9, trb: 3 };
+    expect(primeScore(mk({ pos: "PG", ...guardLine }))).toBeGreaterThan(primeScore(mk({ pos: "C", ...guardLine })));
+  });
+});
 
 // --- peakVariant: weighted max, deterministic tiebreaks ---
-{
-  const young = mk({ id: "kobe_1998", year: 1998, pos: "SG", pts: 15.4, ast: 2.5, trb: 3.1 });
-  const peak = mk({ id: "kobe_2006", year: 2006, pos: "SG", pts: 35.4, ast: 4.5, trb: 5.3 });
-  assert(peakVariant([young, peak]) === peak, "highest offensive contribution wins");
-  assert(peakVariant([peak, young]) === peak, "order-independent");
-}
-{
-  const a = mk({ id: "b_late", year: 2010, pos: "SF", pts: 20, ast: 5, trb: 5 });
-  const b = mk({ id: "a_early", year: 2005, pos: "SF", pts: 20, ast: 5, trb: 5 });
-  assert(peakVariant([a, b]) === a, "score tie -> later year wins");
-  const c = mk({ id: "aa_same", year: 2010, pos: "SF", pts: 20, ast: 5, trb: 5 });
-  assert(peakVariant([a, c]) === c, "score+year tie -> lexicographically smaller id (deterministic)");
-}
-assert(peakVariant([]) === null, "empty variants -> null");
+describe("peakVariant", () => {
+  it("highest offensive contribution wins", () => {
+    const young = mk({ id: "kobe_1998", year: 1998, pos: "SG", pts: 15.4, ast: 2.5, trb: 3.1 });
+    const peak = mk({ id: "kobe_2006", year: 2006, pos: "SG", pts: 35.4, ast: 4.5, trb: 5.3 });
+    expect(peakVariant([young, peak])).toBe(peak);
+  });
+  it("order-independent", () => {
+    const young = mk({ id: "kobe_1998", year: 1998, pos: "SG", pts: 15.4, ast: 2.5, trb: 3.1 });
+    const peak = mk({ id: "kobe_2006", year: 2006, pos: "SG", pts: 35.4, ast: 4.5, trb: 5.3 });
+    expect(peakVariant([peak, young])).toBe(peak);
+  });
+  it("score tie -> later year wins", () => {
+    const a = mk({ id: "b_late", year: 2010, pos: "SF", pts: 20, ast: 5, trb: 5 });
+    const b = mk({ id: "a_early", year: 2005, pos: "SF", pts: 20, ast: 5, trb: 5 });
+    expect(peakVariant([a, b])).toBe(a);
+  });
+  it("score+year tie -> lexicographically smaller id (deterministic)", () => {
+    const a = mk({ id: "b_late", year: 2010, pos: "SF", pts: 20, ast: 5, trb: 5 });
+    const c = mk({ id: "aa_same", year: 2010, pos: "SF", pts: 20, ast: 5, trb: 5 });
+    expect(peakVariant([a, c])).toBe(c);
+  });
+  it("empty variants -> null", () => {
+    expect(peakVariant([])).toBe(null);
+  });
+});
 
 // --- buildPrimePools: dedupe per person, exclude thin franchises, sort by peak_score ---
 const roster = (team: string, n: number, perPerson = 1): Player[] => {
@@ -50,42 +69,70 @@ const roster = (team: string, n: number, perPerson = 1): Player[] => {
   }
   return out;
 };
-{
-  const pools = buildPrimePools([...roster("LAL", 9, 2), ...roster("OKC", 7, 2)]);
-  assert(pools.teams.length === 1 && pools.teams[0] === "LAL", `franchise under ${PRIME_MIN_PEOPLE} people excluded (OKC=7)`);
-  const lal = pools.byTeam.get("LAL")!;
-  assert(lal.length === 9, "one entry per person_id (18 rows -> 9)");
-  assert(lal.every((p) => p.decade === "2000s"), "the peak variant survives (v1 has +5 pts)");
-  assert(lal.every((p, i, a) => i === 0 || (a[i - 1].peak_score ?? 0) >= (p.peak_score ?? 0)), "pool sorted by peak_score desc");
-}
-{
-  const pools = buildPrimePools(roster("BOS", 8, 1));
-  assert(pools.teams.includes("BOS"), "exactly 8 people qualifies");
-  const noPerson = [...roster("NYK", 7, 1), mk({ id: "nyk_solo", team: "NYK", pts: 5 })]; // person_id falls back to id
-  assert(buildPrimePools(noPerson).teams.includes("NYK"), "missing person_id falls back to id for distinctness");
-}
-assert(buildPrimePools([]).teams.length === 0, "no players -> no teams");
+
+describe("buildPrimePools", () => {
+  it(`franchise under ${PRIME_MIN_PEOPLE} people excluded (OKC=7)`, () => {
+    const pools = buildPrimePools([...roster("LAL", 9, 2), ...roster("OKC", 7, 2)]);
+    expect(pools.teams.length === 1 && pools.teams[0] === "LAL").toBe(true);
+  });
+  it("one entry per person_id (18 rows -> 9)", () => {
+    const pools = buildPrimePools([...roster("LAL", 9, 2), ...roster("OKC", 7, 2)]);
+    const lal = pools.byTeam.get("LAL")!;
+    expect(lal.length).toBe(9);
+  });
+  it("the peak variant survives (v1 has +5 pts)", () => {
+    const pools = buildPrimePools([...roster("LAL", 9, 2), ...roster("OKC", 7, 2)]);
+    const lal = pools.byTeam.get("LAL")!;
+    expect(lal.every((p) => p.decade === "2000s")).toBe(true);
+  });
+  it("pool sorted by peak_score desc", () => {
+    const pools = buildPrimePools([...roster("LAL", 9, 2), ...roster("OKC", 7, 2)]);
+    const lal = pools.byTeam.get("LAL")!;
+    expect(lal.every((p, i, a) => i === 0 || (a[i - 1].peak_score ?? 0) >= (p.peak_score ?? 0))).toBe(true);
+  });
+  it("exactly 8 people qualifies", () => {
+    const pools = buildPrimePools(roster("BOS", 8, 1));
+    expect(pools.teams.includes("BOS")).toBe(true);
+  });
+  it("missing person_id falls back to id for distinctness", () => {
+    const noPerson = [...roster("NYK", 7, 1), mk({ id: "nyk_solo", team: "NYK", pts: 5 })]; // person_id falls back to id
+    expect(buildPrimePools(noPerson).teams.includes("NYK")).toBe(true);
+  });
+  it("no players -> no teams", () => {
+    expect(buildPrimePools([]).teams.length).toBe(0);
+  });
+});
 
 // --- share codec: p~ prefix (the hinted-flag pattern) ---
-const IDS = ["a1", "b2", "c3", "d4", "e5"];
-assert(encodeLineup(IDS, false, true) === "p~a1,b2,c3,d4,e5", "prime flag prefixes p~");
-assert(encodeLineup(IDS, true, true) === "p~h~a1,b2,c3,d4,e5", "prime + hints stack");
-assert(encodeLineup(IDS, true) === "h~a1,b2,c3,d4,e5", "2-arg call unchanged (back-compat)");
-{
-  const d = decodeShare("p~h~a1,b2,c3,d4,e5");
-  assert(d.prime && d.hinted && d.ids.length === 5, "p~h~ decodes both flags");
-}
-{
-  const d = decodeShare("h~p~a1,b2,c3,d4,e5");
-  assert(d.prime && d.hinted, "flag order-independent");
-}
-{
-  const d = decodeShare("p~a1,b2,c3,d4,e5");
-  assert(d.prime && !d.hinted, "prime alone");
-  const r = decodeShare("a1,b2,c3,d4,e5");
-  assert(!r.prime && !r.hinted && r.ids.length === 5, "plain segment unchanged");
-}
-assert(!decodeShare("p~p~a1,b2").prime || decodeShare("p~p~a1,b2").ids[0] === "p~a1", "double p~ doesn't loop forever (second stays in id, later validation rejects)");
+describe("share codec", () => {
+  const IDS = ["a1", "b2", "c3", "d4", "e5"];
 
-console.log(fail ? `\n${fail} PRIME ASSERTION(S) FAILED` : "\nALL PRIME CHECKS PASSED");
-process.exit(fail ? 1 : 0);
+  it("prime flag prefixes p~", () => {
+    expect(encodeLineup(IDS, false, true)).toBe("p~a1,b2,c3,d4,e5");
+  });
+  it("prime + hints stack", () => {
+    expect(encodeLineup(IDS, true, true)).toBe("p~h~a1,b2,c3,d4,e5");
+  });
+  it("2-arg call unchanged (back-compat)", () => {
+    expect(encodeLineup(IDS, true)).toBe("h~a1,b2,c3,d4,e5");
+  });
+  it("p~h~ decodes both flags", () => {
+    const d = decodeShare("p~h~a1,b2,c3,d4,e5");
+    expect(d.prime && d.hinted && d.ids.length === 5).toBe(true);
+  });
+  it("flag order-independent", () => {
+    const d = decodeShare("h~p~a1,b2,c3,d4,e5");
+    expect(d.prime && d.hinted).toBe(true);
+  });
+  it("prime alone", () => {
+    const d = decodeShare("p~a1,b2,c3,d4,e5");
+    expect(d.prime && !d.hinted).toBe(true);
+  });
+  it("plain segment unchanged", () => {
+    const r = decodeShare("a1,b2,c3,d4,e5");
+    expect(!r.prime && !r.hinted && r.ids.length === 5).toBe(true);
+  });
+  it("double p~ doesn't loop forever (second stays in id, later validation rejects)", () => {
+    expect(!decodeShare("p~p~a1,b2").prime || decodeShare("p~p~a1,b2").ids[0] === "p~a1").toBe(true);
+  });
+});

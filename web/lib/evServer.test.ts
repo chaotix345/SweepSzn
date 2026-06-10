@@ -1,79 +1,117 @@
-import { parseEvBody, bump, EV_TTL, EV_ACTIVE_CAP } from "./evServer";
+import { describe, it, expect } from "vitest";
 import type { Redis } from "@upstash/redis";
-
-let fail = 0;
-const assert = (c: boolean, m: string) => { if (!c) { console.error("FAIL:", m); fail++; } else console.log("ok:", m); };
-
-function fakeRedis() {
-  const calls: string[] = [];
-  const store: Record<string, number> = {};
-  const sets: Record<string, Set<string>> = {};
-  const hashes: Record<string, Record<string, number>> = {};
-  const r = {
-    calls, store, sets, hashes,
-    incr: async (k: string) => { calls.push(`incr ${k}`); return (store[k] = (store[k] ?? 0) + 1); },
-    sadd: async (k: string, ...m: string[]) => { calls.push(`sadd ${k} ${m.join(",")}`); (sets[k] ??= new Set()); m.forEach(x => sets[k].add(x)); return m.length; },
-    hincrby: async (k: string, f: string, n: number) => { calls.push(`hincrby ${k} ${f} ${n}`); (hashes[k] ??= {}); return (hashes[k][f] = (hashes[k][f] ?? 0) + n); },
-    expire: async (k: string, s: number) => { calls.push(`expire ${k} ${s}`); return 1; },
-    scard: async (k: string) => sets[k]?.size ?? 0,
-  };
-  return r;
-}
+import { createRedisFake } from "@/test/redisFake";
+import { parseEvBody, bump, EV_TTL, EV_ACTIVE_CAP } from "./evServer";
 
 // --- parseEvBody ---
-assert(JSON.stringify(parseEvBody({ ev: "play", uid: "abcdefgh", mode: "daily" })) === JSON.stringify({ ev: "play", uid: "abcdefgh", mode: "daily" }), "valid play parsed");
-assert(JSON.stringify(parseEvBody({ ev: "share", uid: "abcdefgh" })) === JSON.stringify({ ev: "share", uid: "abcdefgh" }), "valid share parsed (no mode)");
-assert(parseEvBody({ ev: "complete" }) === null, "non-beacon stage rejected");
-assert(parseEvBody({ ev: "nope" }) === null, "unknown ev rejected");
-assert(parseEvBody("garbage") === null, "non-object rejected");
-assert(parseEvBody({ ev: "play", uid: "bad uid!" })?.uid === undefined, "malformed uid stripped");
-assert(parseEvBody({ ev: "play", uid: "abcdefgh", mode: "nope" })?.mode === undefined, "bad mode stripped");
-assert(parseEvBody({ ev: "share", uid: "abcdefgh", mode: "daily" })?.mode === undefined, "mode ignored for share");
+describe("parseEvBody", () => {
+  it("valid play parsed", () => {
+    expect(parseEvBody({ ev: "play", uid: "abcdefgh", mode: "daily" })).toStrictEqual({ ev: "play", uid: "abcdefgh", mode: "daily" });
+  });
 
-(async () => {
-  // --- bump: play with uid + mode ---
-  const r = fakeRedis();
-  await bump(r as unknown as Redis, "play", { uid: "abcdefgh", mode: "daily", day: "2026-6-9" });
-  assert(r.store["ev:play:2026-6-9"] === 1, "play counter incremented");
-  assert(r.hashes["ev:mode:2026-6-9"]?.daily === 1, "mode hash incremented");
-  assert(r.sets["ev:active:2026-6-9"]?.has("abcdefgh") === true, "uid added to active set");
-  assert(r.hashes["ev:totals"]?.play === 1, "totals.play incremented");
-  assert(r.calls.includes(`expire ev:play:2026-6-9 ${EV_TTL}`), "play key expired with EV_TTL");
-  assert(r.calls.includes(`expire ev:active:2026-6-9 ${EV_TTL}`), "active set expired with EV_TTL");
-  assert(!r.calls.some(c => c.startsWith("expire ev:totals")), "ev:totals is never expired (persistent)");
+  it("valid share parsed (no mode)", () => {
+    expect(parseEvBody({ ev: "share", uid: "abcdefgh" })).toStrictEqual({ ev: "share", uid: "abcdefgh" });
+  });
 
-  // --- bump: complete (server stage, no uid/mode) ---
-  const r2 = fakeRedis();
-  await bump(r2 as unknown as Redis, "complete", { day: "2026-6-9" });
-  assert(r2.store["ev:complete:2026-6-9"] === 1, "complete counter incremented");
-  assert(r2.hashes["ev:totals"]?.complete === 1, "totals.complete incremented");
-  assert(r2.sets["ev:active:2026-6-9"] === undefined, "complete does NOT touch active set");
-  assert(r2.hashes["ev:mode:2026-6-9"] === undefined, "complete does NOT touch mode hash");
+  it("non-beacon stage rejected", () => {
+    expect(parseEvBody({ ev: "complete" })).toBe(null);
+  });
 
-  // --- bump: submit with uid, no mode ---
-  const r3 = fakeRedis();
-  await bump(r3 as unknown as Redis, "submit", { uid: "abcdefgh", day: "2026-6-9" });
-  assert(r3.store["ev:submit:2026-6-9"] === 1, "submit counter incremented");
-  assert(r3.sets["ev:active:2026-6-9"]?.has("abcdefgh") === true, "submit adds uid to active set");
-  assert(r3.hashes["ev:mode:2026-6-9"] === undefined, "submit does NOT touch mode hash");
+  it("unknown ev rejected", () => {
+    expect(parseEvBody({ ev: "nope" })).toBe(null);
+  });
 
-  // --- bump: null redis no-ops ---
-  await bump(null, "play", { uid: "abcdefgh", day: "2026-6-9" });
-  assert(true, "null redis no-ops without throwing");
+  it("non-object rejected", () => {
+    expect(parseEvBody("garbage")).toBe(null);
+  });
 
-  // --- bump: throwing redis is swallowed ---
-  const thrower = { incr: async () => { throw new Error("boom"); }, sadd: async () => { throw new Error(); }, hincrby: async () => { throw new Error(); }, expire: async () => { throw new Error(); } };
-  let threw = false;
-  try { await bump(thrower as unknown as Redis, "complete", { day: "2026-6-9" }); } catch { threw = true; }
-  assert(!threw, "throwing redis is swallowed — bump never throws");
+  it("malformed uid stripped", () => {
+    expect(parseEvBody({ ev: "play", uid: "bad uid!" })?.uid).toBe(undefined);
+  });
 
-  // --- bump: active-set cap skips sadd once the set is full (memory-exhaustion guard) ---
-  const rCap = fakeRedis();
-  rCap.scard = async () => EV_ACTIVE_CAP; // pretend today's active set is already at the cap
-  await bump(rCap as unknown as Redis, "play", { uid: "abcdefgh", day: "2026-6-9" });
-  assert(rCap.store["ev:play:2026-6-9"] === 1, "counter still increments at the active-set cap");
-  assert(rCap.sets["ev:active:2026-6-9"] === undefined, "sadd skipped when active set is at the cap");
+  it("bad mode stripped", () => {
+    expect(parseEvBody({ ev: "play", uid: "abcdefgh", mode: "nope" })?.mode).toBe(undefined);
+  });
 
-  console.log(fail ? `\n${fail} ASSERTION(S) FAILED` : "\nALL EVSERVER CHECKS PASSED");
-  process.exit(fail ? 1 : 0);
-})();
+  it("mode ignored for share", () => {
+    expect(parseEvBody({ ev: "share", uid: "abcdefgh", mode: "daily" })?.mode).toBe(undefined);
+  });
+});
+
+// --- bump ---
+describe("bump", () => {
+  it("play with uid + mode: increments counters, sets, and expiries", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "play", { uid: "abcdefgh", mode: "daily", day: "2026-6-9" });
+
+    // play counter incremented
+    expect(Number(fake.strings.get("ev:play:2026-6-9"))).toBe(1);
+    // mode hash incremented
+    expect(Number(fake.hashes.get("ev:mode:2026-6-9")?.get("daily"))).toBe(1);
+    // uid added to active set
+    expect(fake.sets.get("ev:active:2026-6-9")?.has("abcdefgh")).toBe(true);
+    // totals.play incremented
+    expect(Number(fake.hashes.get("ev:totals")?.get("play"))).toBe(1);
+    // play key expired with EV_TTL
+    expect(fake.calls.includes(`expire ev:play:2026-6-9 ${EV_TTL}`)).toBe(true);
+    // active set expired with EV_TTL
+    expect(fake.calls.includes(`expire ev:active:2026-6-9 ${EV_TTL}`)).toBe(true);
+    // ev:totals is never expired (persistent)
+    expect(fake.calls.some(c => c.startsWith("expire ev:totals"))).toBe(false);
+  });
+
+  it("complete (server stage, no uid/mode): increments counter and totals only", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "complete", { day: "2026-6-9" });
+
+    // complete counter incremented
+    expect(Number(fake.strings.get("ev:complete:2026-6-9"))).toBe(1);
+    // totals.complete incremented
+    expect(Number(fake.hashes.get("ev:totals")?.get("complete"))).toBe(1);
+    // complete does NOT touch active set
+    expect(fake.sets.get("ev:active:2026-6-9")).toBe(undefined);
+    // complete does NOT touch mode hash
+    expect(fake.hashes.get("ev:mode:2026-6-9")).toBe(undefined);
+  });
+
+  it("submit with uid, no mode: increments counter and active set but not mode hash", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "submit", { uid: "abcdefgh", day: "2026-6-9" });
+
+    // submit counter incremented
+    expect(Number(fake.strings.get("ev:submit:2026-6-9"))).toBe(1);
+    // submit adds uid to active set
+    expect(fake.sets.get("ev:active:2026-6-9")?.has("abcdefgh")).toBe(true);
+    // submit does NOT touch mode hash
+    expect(fake.hashes.get("ev:mode:2026-6-9")).toBe(undefined);
+  });
+
+  it("null redis no-ops without throwing", async () => {
+    await bump(null, "play", { uid: "abcdefgh", day: "2026-6-9" });
+    expect(true).toBe(true);
+  });
+
+  it("throwing redis is swallowed — bump never throws", async () => {
+    const thrower = {
+      incr: async () => { throw new Error("boom"); },
+      sadd: async () => { throw new Error(); },
+      hincrby: async () => { throw new Error(); },
+      expire: async () => { throw new Error(); },
+    };
+    let threw = false;
+    try { await bump(thrower as unknown as Redis, "complete", { day: "2026-6-9" }); } catch { threw = true; }
+    expect(threw).toBe(false);
+  });
+
+  it("active-set cap skips sadd once the set is full (memory-exhaustion guard)", async () => {
+    const fake = createRedisFake();
+    // pretend today's active set is already at the cap
+    fake.scard = async () => EV_ACTIVE_CAP;
+    await bump(fake as unknown as Redis, "play", { uid: "abcdefgh", day: "2026-6-9" });
+
+    // counter still increments at the active-set cap
+    expect(Number(fake.strings.get("ev:play:2026-6-9"))).toBe(1);
+    // sadd skipped when active set is at the cap
+    expect(fake.sets.get("ev:active:2026-6-9")).toBe(undefined);
+  });
+});
