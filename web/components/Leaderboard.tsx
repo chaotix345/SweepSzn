@@ -113,7 +113,8 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
       if (r.status === 503) { setEnabled(false); return; }
       const v = await r.json();
       if (r.ok) { recordDailyDone(date); setStreak(getStreak()); setView(v); setSubmitted(true); setReload((n) => n + 1); track("daily_claim", { rank: v?.you?.rank ?? 0 }); }
-    } catch { /* ignore */ } finally { setBusy(false); }
+      // surfaced (was a silent swallow): a network miss here lost the claim AND the streak credit with no feedback
+    } catch { setErr("network error"); } finally { setBusy(false); }
   }, [refresh, date, name, trace, readOnly, usedHints]);
 
   // the sharer's current standing on the active tab (if they're on the board)

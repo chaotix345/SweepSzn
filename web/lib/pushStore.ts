@@ -2,6 +2,7 @@ import "server-only";
 import { createHash } from "crypto";
 import webpush from "web-push";
 import { redis, TTL } from "./redis";
+import { logError } from "./log";
 import { notificationText, type PushSub } from "./notify";
 import type { Notif } from "./types";
 
@@ -61,23 +62,35 @@ export async function removeSubscription(uid: string, endpoint: string): Promise
   try { await redis.hdel(keyPush(uid), field(endpoint)); } catch { /* best-effort */ }
 }
 
-// Fan a notification out to all of a uid's devices. No-op when push or redis is unavailable, or the
-// uid has no subscriptions. Capped at PUSH_SUB_CAP. Dead endpoints (404/410 Gone) are pruned. Never throws.
-export async function sendPushToUid(uid: string, n: Notif): Promise<void> {
-  if (!redis || !configureVapid()) return;
+// Fan an arbitrary {title, body, url} payload out to all of a uid's devices (the sw.js push
+// handler's exact shape). No-op when push or redis is unavailable; capped at PUSH_SUB_CAP; dead
+// endpoints (404/410 Gone) are pruned. Never throws. Returns whether at least one device was
+// targeted (so a cron can count real sends). Used by the challenge notification below and the
+// streak-saver cron.
+export async function sendRawPushToUid(uid: string, payload: { title: string; body: string; url: string }): Promise<boolean> {
+  if (!redis || !configureVapid()) return false;
   try {
     const subs = (await redis.hgetall<Record<string, PushSub>>(keyPush(uid))) ?? {};
     const entries = Object.entries(subs).slice(0, PUSH_SUB_CAP);
-    if (!entries.length) return;
-    const { title, body } = notificationText(n);
-    const payload = JSON.stringify({ title, body, url: `/play?own=${n.challengeId}` });
+    if (!entries.length) return false;
+    const body = JSON.stringify(payload);
     await Promise.all(entries.map(async ([f, sub]) => {
       try {
-        await webpush.sendNotification(sub, payload);
+        await webpush.sendNotification(sub, body);
       } catch (err) {
         const code = (err as { statusCode?: number }).statusCode;
         if (code === 404 || code === 410) { try { await redis!.hdel(keyPush(uid), f); } catch { /* ignore */ } }
       }
     }));
-  } catch { /* push must never break the caller */ }
+    return true;
+  } catch (err) {
+    logError("push.send", err); // never the uid — it's a bearer token
+    return false;
+  }
+}
+
+// Fan a challenge notification out to all of a uid's devices. Never throws.
+export async function sendPushToUid(uid: string, n: Notif): Promise<void> {
+  const { title, body } = notificationText(n);
+  await sendRawPushToUid(uid, { title, body, url: `/play?own=${n.challengeId}` });
 }

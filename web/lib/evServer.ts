@@ -1,5 +1,6 @@
 import type { Redis } from "@upstash/redis";
 import { dayUTC } from "./day";
+import { logError } from "./log";
 
 // Owned funnel-counter writer. Five stages; play/share also arrive via the /api/ev beacon.
 // All writes are best-effort: this module must NEVER throw or block a user-facing route.
@@ -54,7 +55,7 @@ export async function bump(
         await redis.pipeline().sadd(activeKey, opts.uid).expire(activeKey, EV_TTL).exec();
       }
     }
-  } catch {
-    /* analytics must never break the calling route */
+  } catch (err) {
+    logError("ev.bump", err, { stage }); // analytics must never break the calling route
   }
 }
