@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { enableRedisEnv, freshFake, ctx, req } from "@/test/routeHarness";
+import { enableRedisEnv, freshFake, ctx, req, exhaustRateLimit } from "@/test/routeHarness";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -172,5 +172,12 @@ describe("POST /api/ev", () => {
       const modeVal = ctx.redis!.hashes.get(`ev:mode:${day}`)?.get(mode);
       expect(Number(modeVal)).toBe(1);
     }
+  });
+
+  it("silently drops (204, no write) once the per-IP bucket is exhausted — the beacon contract never exposes outcomes", async () => {
+    exhaustRateLimit("rl:ev:9.9.9.9", 60);
+    const res = await POST(req("/api/ev", { body: { ev: "play", uid: "user-abc00099", mode: "daily" }, ip: "9.9.9.9" }));
+    expect(res.status).toBe(204);
+    expect(ctx.redis!.strings.has(`ev:play:${dayUTC()}`)).toBe(false);
   });
 });

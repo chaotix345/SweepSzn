@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { enableRedisEnv, freshFake, ctx, authEnv, req, readJson } from "@/test/routeHarness";
+import { enableRedisEnv, freshFake, ctx, authEnv, req, readJson, exhaustRateLimit } from "@/test/routeHarness";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -136,6 +136,16 @@ describe("POST /api/auth/google", () => {
       // JWKS fetch will fail (or verification fails) → 401
       expect(status).toBe(401);
       expect(body).toMatchObject({ error: "invalid token" });
+    });
+
+    it("429 once the per-IP bucket is exhausted (bounds JWKS-verify work per IP)", async () => {
+      authEnv();
+      exhaustRateLimit("rl:google:9.9.9.9", 10);
+      const { status, body } = await readJson(
+        await POST(req("/api/auth/google", { method: "POST", body: { credential: "tok" }, headers: goodHeaders, ip: "9.9.9.9" })),
+      );
+      expect(status).toBe(429);
+      expect(body).toMatchObject({ error: "too many requests" });
     });
   });
 });

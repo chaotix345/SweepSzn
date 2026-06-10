@@ -254,10 +254,10 @@ describe("non-redis-gated routes: expected behavior without Redis env", () => {
     expect(body).toMatchObject({ user: null });
   });
 
-  // auth/signout has no gate — it clears the session cookie. Not redis-gated.
-  it("POST /api/auth/signout → not gated (always 200)", async () => {
+  // auth/signout has no redis gate — it clears the session cookie. CSRF header still required.
+  it("POST /api/auth/signout → not gated (200 with CSRF header)", async () => {
     const { status, body } = await readJson(
-      await authSignoutPOST(),
+      await authSignoutPOST(req("/api/auth/signout", { method: "POST", headers: { "x-requested-with": "fetch" } })),
     );
     expect(status).toBe(200);
     expect(body).toMatchObject({ ok: true });

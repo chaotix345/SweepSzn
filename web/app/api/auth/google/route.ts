@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { isAuthEnabled, authedUid, signSession, verifyNonce, sha256hex, NONCE_COOKIE } from "@/lib/auth";
 import { setSessionCookie } from "@/lib/authServer";
-import { redis } from "@/lib/redis";
+import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
 
 export const runtime = "nodejs";
@@ -20,6 +20,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "bad content-type" }, { status: 415 });
   if (req.headers.get("x-requested-with") !== "fetch")
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  // sign-ins are rare per-user; 10/min/IP bounds JWKS-verify work and session minting per IP
+  if (!(await rateLimit(`rl:google:${ipOf(req)}`, 10, 60))) {
+    return NextResponse.json({ error: "too many requests" }, { status: 429 });
+  }
 
   const body = (await req.json().catch(() => ({}))) ?? {};
   const { credential, anonUid } = body;

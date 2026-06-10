@@ -192,4 +192,18 @@ describe("command surface semantics", () => {
     expect(await fake.del("s", "nope")).toBe(1);
     expect(await fake.scard("s")).toBe(0);
   });
+
+  it("expire NX sets a TTL only when the key has none (the rate-limit fixed window)", async () => {
+    const fake = createRedisFake();
+    await fake.incr("rl:x");
+    // first NX expire sets the window
+    expect(await fake.expire("rl:x", 60, "nx")).toBe(1);
+    expect(fake.ttls.get("rl:x")).toBe(60);
+    // a later NX expire must NOT extend it
+    expect(await fake.expire("rl:x", 999, "nx")).toBe(0);
+    expect(fake.ttls.get("rl:x")).toBe(60);
+    // plain expire still refreshes (used by board TTL keep-alive)
+    expect(await fake.expire("rl:x", 999)).toBe(1);
+    expect(fake.ttls.get("rl:x")).toBe(999);
+  });
 });

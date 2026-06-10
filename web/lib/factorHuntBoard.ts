@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { redis, isRedisEnabled, TTL, readSortedRows } from "./redis";
+import { KEEP_BEST_ROW_LUA } from "./score";
 import type { FhRow, FhBoardRow, FhBoardView } from "./factorHunt";
 
 // Factor Hunt daily board (Upstash sorted set + meta hash, lb:fh:* — new keys only).
@@ -36,14 +37,15 @@ export async function getFhLeaderboard(date: string, uid?: string): Promise<FhBo
 export async function submitFhScore(date: string, row: FhRow, sortScore: number): Promise<FhBoardView | null> {
   if (!redis) return null;
   if (!Number.isFinite(sortScore)) return getFhLeaderboard(date, row.uid);
-  const prev = await redis.zscore(keyZ(date), row.uid);
-  // keep-best: score AND meta only move together when this run beats the stored one
-  if (prev == null || sortScore > Number(prev)) {
-    await redis.zadd(keyZ(date), { score: sortScore, member: row.uid });
-    await redis.hset(keyH(date), { [row.uid]: row });
-    await redis.expire(keyZ(date), TTL);
-    await redis.expire(keyH(date), TTL);
-  }
+  // atomic keep-best (shared KEEP_BEST_ROW_LUA): score and meta move together, so a two-tab race
+  // can no longer install a worse run's meta under the better score. The script refreshes TTLs on
+  // write; refresh on the no-improve path too so a repeat submit keeps the day's keys alive.
+  const written = (await redis.eval(
+    KEEP_BEST_ROW_LUA,
+    [keyZ(date), keyH(date)],
+    [row.uid, sortScore, JSON.stringify(row), TTL],
+  )) as number;
+  if (!written) await redis.pipeline().expire(keyZ(date), TTL).expire(keyH(date), TTL).exec();
   return getFhLeaderboard(date, row.uid);
 }
 
