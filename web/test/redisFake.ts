@@ -1,5 +1,6 @@
 import { KEEP_BEST_LUA } from "@/lib/score";
 import { PICKEM_VOTE_LUA } from "@/lib/pickem";
+import { BP_KEEP_BEST_LUA } from "@/lib/blueprintLua";
 
 // In-memory stand-in for @upstash/redis covering the command surface this codebase uses.
 // Mirrors the real client's JSON auto-(de)serialization: strings are stored raw, everything
@@ -88,6 +89,21 @@ export function createRedisFake() {
     }
     rawExpire(weekZ, Number(args[4]));
     return [1, delta, Math.floor(ww), Math.floor(aw)];
+  }
+
+  // BP_KEEP_BEST_LUA (lib/blueprint.ts): atomic per-board keep-best — compare, score, meta row,
+  // and TTLs move together so the zset score and the meta hash can never diverge.
+  function bpKeepBest(keys: string[], args: (string | number)[]): number {
+    const [zK, hK] = keys;
+    const uid = String(args[0]);
+    const sortScore = Number(args[1]);
+    const prev = zsets.get(zK)?.get(uid) ?? null;
+    if (prev != null && prev >= sortScore) return 0;
+    zset(zK).set(uid, sortScore);
+    hash(hK).set(uid, String(args[2]));
+    rawExpire(zK, Number(args[3]));
+    rawExpire(hK, Number(args[3]));
+    return 1;
   }
 
   // PICKEM_VOTE_LUA (lib/pickem.ts): claim voter slot, bump matching counter, read back both counts.
@@ -241,6 +257,7 @@ export function createRedisFake() {
       log("eval", keys.join(","), args.join(","));
       if (script === KEEP_BEST_LUA) return deepDe(keepBest(keys, args));
       if (script === PICKEM_VOTE_LUA) return deepDe(pickemVote(keys, args));
+      if (script === BP_KEEP_BEST_LUA) return bpKeepBest(keys, args);
       throw new Error("redisFake.eval: unknown script — add its semantics here before using it in tests");
     },
 

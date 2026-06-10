@@ -897,8 +897,11 @@ export default function Game() {
               e.preventDefault();
               const i = BLUEPRINTS.findIndex((b) => b.key === bpPick);
               const n = BLUEPRINTS.length;
+              // radiogroup contract: with nothing selected (i === -1), ArrowDown starts at the
+              // first option and ArrowUp at the LAST — the modulo alone lands one short on ArrowUp
               const next = e.key === "Home" ? 0 : e.key === "End" ? n - 1
-                : e.key === "ArrowDown" ? (i + 1 + n) % n : (i - 1 + n) % n;
+                : e.key === "ArrowDown" ? (i + 1 + n) % n
+                : i === -1 ? n - 1 : (i - 1 + n) % n;
               setBpPick(BLUEPRINTS[next].key);
               bpRef.current?.querySelectorAll<HTMLElement>("[role=radio]")[next]?.focus();
               return;
@@ -1127,8 +1130,8 @@ function UsageBar({ total }: { total: number }) {
     <div className="mx-auto mt-3 w-full max-w-sm">
       <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wide text-zinc-500">
         <span>⚖️ Usage budget</span>
-        <span className={`tabular-nums ${total <= 95 ? "text-green-400" : total <= 100 ? "text-amber-400" : "text-red-400"}`}>
-          {total.toFixed(1)}% / target &lt;95
+        <span className={`tabular-nums ${total <= 90 ? "text-green-400" : total <= 95 ? "text-lime-400" : total <= 100 ? "text-amber-400" : "text-red-400"}`}>
+          {total.toFixed(1)}% / A+ ≤90
         </span>
       </div>
       <div className="relative h-2.5 overflow-hidden rounded-full bg-zinc-800" role="img"

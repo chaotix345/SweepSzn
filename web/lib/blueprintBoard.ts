@@ -1,5 +1,6 @@
 import "server-only";
 import { redis, isRedisEnabled, TTL, readSortedRows } from "./redis";
+import { BP_KEEP_BEST_LUA } from "./blueprintLua";
 import type { BlueprintKey, BpRow, BpBoardRow, BpBoardView } from "./blueprint";
 
 // Blueprint daily boards (Upstash sorted set + meta hash per blueprint, lb:bp:* — new keys only).
@@ -35,19 +36,17 @@ export async function getBpLeaderboard(date: string, bp: BlueprintKey | "all", u
   return { date, bp, total, top, you };
 }
 
-// keep-best on one board: score AND meta only move together when this run beats the stored one
+// keep-best on one board: compare + score + meta + TTLs run as ONE Lua script, so the sorted-set
+// score and the meta row always move together — a non-atomic zadd{gt}+hset let a concurrent
+// lower-scoring submit (e.g. a different blueprint racing onto the combined board) install its
+// meta (wrong bp chip, wrong lineup link) under the winner's score.
 async function keepBest(date: string, bp: string, row: BpRow, sortScore: number): Promise<void> {
   if (!redis) return;
-  const prev = await redis.zscore(keyZ(date, bp), row.uid);
-  if (prev == null || sortScore > Number(prev)) {
-    // gt:true makes the score update server-side monotonic, so two concurrent same-uid submits
-    // (double-tap/retry) can never regress the rank — the read-then-write guard above is not
-    // atomic. The meta hset still races, but only display fields (name) can briefly lag.
-    await redis.zadd(keyZ(date, bp), { gt: true }, { score: sortScore, member: row.uid });
-    await redis.hset(keyH(date, bp), { [row.uid]: row });
-    await redis.expire(keyZ(date, bp), TTL);
-    await redis.expire(keyH(date, bp), TTL);
-  }
+  await redis.eval(
+    BP_KEEP_BEST_LUA,
+    [keyZ(date, bp), keyH(date, bp)],
+    [row.uid, sortScore, JSON.stringify(row), TTL],
+  );
 }
 
 // One submit lands on two boards: its own blueprint's, and the combined board (where the row
