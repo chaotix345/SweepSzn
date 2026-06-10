@@ -301,6 +301,9 @@ export default function Game() {
       });
       if (!res.ok) throw new Error("evaluate failed");
       const data = await res.json();
+      // abort() can't interrupt the body parse once the response has landed — re-check before
+      // committing, or a Restart racing the parse would stamp the OLD game's result onto the new one
+      if (ctrl.signal.aborted) return;
       const full = { result: data.result, players: data.players as Player[], trace: [...traceRef.current], usedHints: hintsUsedRef.current > 0 };
       setResult(full);
       // Persist so the result survives a refresh (full object, incl. trace) and shows under "Your
@@ -567,11 +570,13 @@ export default function Game() {
           onKeyDown={(e) => {
             if (e.key === "Escape") { setSelPlayer(null); setSelSlot(null); return; }
             if (e.key === "Tab") {
-              // aria-modal claims modality — actually trap Tab within the sheet's buttons
+              // aria-modal claims modality — actually trap Tab within the sheet's buttons.
+              // The container itself holds focus right after opening (tabIndex=-1), so it counts
+              // as "first" for Shift+Tab — otherwise focus would walk out the back of the dialog.
               const f = sheetRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
               if (!f || f.length === 0) return;
               const first = f[0], last = f[f.length - 1];
-              if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+              if (e.shiftKey && (document.activeElement === first || document.activeElement === sheetRef.current)) { e.preventDefault(); last.focus(); }
               else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
             }
           }}
@@ -652,7 +657,8 @@ export default function Game() {
               const f = pickemRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
               if (!f || f.length === 0) return;
               const first = f[0], last = f[f.length - 1];
-              if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+              // the container holds initial focus — treat it as "first" so Shift+Tab can't escape
+              if (e.shiftKey && (document.activeElement === first || document.activeElement === pickemRef.current)) { e.preventDefault(); last.focus(); }
               else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
             }
           }}
