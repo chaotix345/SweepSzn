@@ -520,8 +520,8 @@ export default function Game() {
       {/* reels */}
       <div className="flex flex-wrap items-center justify-center gap-3">
         <Reel kind="TEAM" value={reel.team} sub={teamName(reel.team)} color="orange" locked={lockedReel === "team"} masked={reelMasked(lockedReel === "team")} spinning={spinning || !current} />
-        <Reel kind="ERA" value={reel.era} sub={mode === "prime" ? "all eras · peak form" : "decade"} color="violet"
-          locked={mode === "prime" || lockedReel === "era"} masked={reelMasked(lockedReel === "era")} spinning={mode !== "prime" && (spinning || !current)} />
+        <Reel kind="ERA" value={reel.era} sub={mode === "prime" ? "peak form" : "decade"} color="violet" prime={mode === "prime"}
+          locked={mode !== "prime" && lockedReel === "era"} masked={reelMasked(lockedReel === "era")} spinning={mode !== "prime" && (spinning || !current)} />
         {!current && (
           <button onClick={spin} disabled={spinning}
             className="rounded-xl bg-orange-500 px-7 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400 disabled:opacity-50">
@@ -531,6 +531,9 @@ export default function Game() {
       </div>
       {hideIQ && (
         <p className="mt-2 text-center text-[11px] text-zinc-500">🧠 Team &amp; era hidden — draft by recognizing the players.</p>
+      )}
+      {mode === "prime" && (
+        <p className="mt-2 text-center text-[11px] text-zinc-500">⚡ Fantasy simulation, not historical — every legend at his peak, any era.</p>
       )}
       {(current || spinning) && (
         <div className="mt-2 flex justify-center gap-2 text-xs">
@@ -766,14 +769,16 @@ function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => void; on
   );
 }
 
-function Reel({ kind, value, sub, color, locked, masked, spinning }: {
-  kind: string; value: string; sub: string; color: "orange" | "violet"; locked?: boolean; masked?: boolean; spinning?: boolean;
+function Reel({ kind, value, sub, color, locked, masked, spinning, prime }: {
+  kind: string; value: string; sub: string; color: "orange" | "violet"; locked?: boolean; masked?: boolean; spinning?: boolean; prime?: boolean;
 }) {
-  const ring = locked ? "border-amber-500" : color === "orange" ? "border-orange-500" : "border-violet-500";
-  const tag = locked ? "text-amber-400" : color === "orange" ? "text-orange-500" : "text-violet-400";
+  // Prime's era reel is fixed BY DESIGN, not a consumed re-spin — keep the reel's own violet and
+  // say what it is ("ALL ERAS"), never the amber "LOCKED" used when a re-spin freezes a reel.
+  const ring = prime ? "border-violet-500" : locked ? "border-amber-500" : color === "orange" ? "border-orange-500" : "border-violet-500";
+  const tag = prime ? "text-violet-400" : locked ? "text-amber-400" : color === "orange" ? "text-orange-500" : "text-violet-400";
   return (
     <div className={`relative w-28 rounded-xl border-2 ${ring} bg-zinc-900 px-3 py-2 text-center shadow-md`}>
-      <div className={`text-[10px] font-bold uppercase tracking-widest ${tag}`}>{locked ? "🔒 LOCKED" : kind}</div>
+      <div className={`text-[10px] font-bold uppercase tracking-widest ${tag}`}>{prime ? "ALL ERAS" : locked ? "🔒 LOCKED" : kind}</div>
       <div className="text-2xl font-black leading-tight">{masked ? "???" : value}</div>
       <div className="truncate text-[10px] text-zinc-500">{masked ? "hidden" : sub}</div>
       {/* announce the settled reel once (stay quiet while cycling and when the value is masked) */}

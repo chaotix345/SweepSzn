@@ -26,11 +26,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = loadLineup(lineup);
   // Per-lineup pages are noindex: they're shareable permalinks, not search content.
   if (!data) return { title: "SweepSzn — all-time NBA lineup", robots: { index: false } };
-  const { result, players } = data;
+  const { result, players, prime } = data;
   const names = players.map((p) => displayName(p.name)).join(", ");
   const net = `${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`;
-  const title = `${result.wins}-${result.losses} (${result.grade}) — ${names} · SweepSzn`;
-  const description = `${names} project to ${result.wins}-${result.losses} (${result.label}) — Net ${net}. Can you build a better all-time five?`;
+  const title = `${result.wins}-${result.losses} (${result.grade}) — ${names} · SweepSzn${prime ? " Prime" : ""}`;
+  const description = prime
+    ? `${names} — a cross-era PRIME five (every legend at his peak) projecting ${result.wins}-${result.losses} (${result.label}) — Net ${net}. Fantasy simulation. Can you build a better one?`
+    : `${names} project to ${result.wins}-${result.losses} (${result.label}) — Net ${net}. Can you build a better all-time five?`;
   return {
     title,
     description,
@@ -54,7 +56,9 @@ export default async function SharedResult({ params }: Props) {
         <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared prime={data.prime} />
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">
-        engine calibrated to real NBA team-seasons
+        {data.prime
+          ? "fantasy simulation, not historical — every legend at his peak"
+          : "engine calibrated to real NBA team-seasons"}
       </footer>
     </main>
   );
