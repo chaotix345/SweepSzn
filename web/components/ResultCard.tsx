@@ -12,6 +12,8 @@ import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
 
 // Crowd snapshot + your vote (and, same-session only, the spun team/era the vote was about).
 type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
+// Factor Hunt verdict: the locked pre-reveal prediction vs. the engine's actual top factor.
+type FactorHuntProp = { prediction: string; answer: string; correct: boolean };
 
 const GRADE_COLOR: Record<string, string> = {
   S: "text-gold", "A+": "text-gold", A: "text-green-400",
@@ -20,9 +22,9 @@ const GRADE_COLOR: Record<string, string> = {
 const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1));
 
 export default function ResultCard({
-  result, players, slots, mode, onReset, shared, usedHints, pickem,
+  result, players, slots, mode, onReset, shared, usedHints, pickem, factorHunt,
 }: {
-  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp;
+  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp;
 }) {
   const factors = factorViews(result);
   // split by the value's sign (what actually helped/hurt), not the engine's fixed label —
@@ -56,6 +58,15 @@ export default function ResultCard({
         {usedHints && (
           <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300/90"
             title="You used the engine's fit hints while drafting this five">💡 Hints used</div>
+        )}
+        {factorHunt && (
+          <div className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+              factorHunt.correct ? "bg-violet-500/15 text-violet-300" : "bg-zinc-700/40 text-zinc-400"}`}
+            title={factorHunt.correct ? "Your pre-reveal prediction matched the engine's verdict" : "Your pre-reveal prediction missed"}>
+            {factorHunt.correct
+              ? <>🔮 Called it: {factorHunt.answer} · ×1.05 board bonus</>
+              : <>🔮 You said {factorHunt.prediction} — it was {factorHunt.answer}</>}
+          </div>
         )}
         <p className="mx-auto mt-3 max-w-md text-sm text-zinc-400">{headline(result)}</p>
         <div className="mt-4 flex justify-center gap-2 text-sm">

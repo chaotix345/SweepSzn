@@ -14,14 +14,17 @@ import { newChallengeId, challengeSeed } from "@/lib/challenge";
 import { encodeLineup, decodeShare } from "@/lib/share";
 import { saveResult, writeLastResult, readLastResult } from "@/lib/resultHistory";
 import { pickemSeedOk, getPickemSkip, setPickemSkip, getLocalVote, setLocalVote, type PickemVote } from "@/lib/pickem";
+import { buildFhChoices } from "@/lib/factorHunt";
+import FhLeaderboard from "@/components/FhLeaderboard";
 
-type Mode = "daily" | "classic" | "hoopiq" | "challenge";
+type Mode = "daily" | "classic" | "hoopiq" | "challenge" | "factorhunt";
 type Roster = Record<Slot, DraftCandidate | null>;
 const EMPTY: Roster = { PG: null, SG: null, SF: null, PF: null, C: null };
 interface Spin { team: string; decade: string; candidates: DraftCandidate[] }
 type SpinOpts = { lockedTeam?: string; lockedDecade?: string; excludeTeam?: string; excludeDecade?: string; salt?: number };
-// The full current result kept in localStorage for a same-session refresh (carries the draft trace).
-type LastResult = { mode: Mode; seed: string; result: { result: LineupResult; players: Player[]; trace: DraftStep[]; usedHints: boolean } };
+// The full current result kept in localStorage for a same-session refresh (carries the draft trace
+// plus, for Factor Hunt, the locked prediction so the verdict chip survives a refresh).
+type LastResult = { mode: Mode; seed: string; result: { result: LineupResult; players: Player[]; trace: DraftStep[]; usedHints: boolean }; fh?: string | null };
 
 // court slot positions (% of the half-court panel; basket at top)
 const COURT: Record<Slot, { left: number; top: number }> = {
@@ -75,6 +78,12 @@ export default function Game() {
   const [pickemCrowd, setPickemCrowd] = useState<{ y: number; n: number } | null>(null);
   const [pickemSubject, setPickemSubject] = useState<string | null>(null); // "the 1970s Knicks" — captured at vote time for share copy
   const pickemRef = useRef<HTMLDivElement>(null);                       // vote overlay dialog
+  // Factor Hunt: prediction step between "five locked" and the reveal.
+  const [fhStep, setFhStep] = useState<{ roster: Roster; ask: "worst" | "best"; choices: string[] } | null>(null);
+  const [fhPick, setFhPick] = useState<string | null>(null);            // highlighted choice (not yet locked)
+  const [fhPrediction, setFhPrediction] = useState<string | null>(null); // locked choice (null = skipped)
+  const fhFetchingRef = useRef(false);                                  // de-dupes the choices fetch
+  const fhRef = useRef<HTMLDivElement>(null);                           // prediction dialog
 
   // Spend a hint to reveal fit grades for the current pick. Charges on reveal (not on placement), so
   // there is no way to peek and then dodge the cost. No-op once the per-game budget is spent.
@@ -102,7 +111,8 @@ export default function Game() {
       crole = challenge?.role ?? "create";
       s = challenge?.seed ?? challengeSeed(cid); // a converted/legacy challenge replays its own carried seed
     } else {
-      s = m === "daily" ? `daily-${todaySeed()}` : `${m}-${rand()}`;
+      // daily + factorhunt share one deterministic seed per UTC day; free-play modes roll fresh
+      s = m === "daily" ? `daily-${todaySeed()}` : m === "factorhunt" ? `fh-${todaySeed()}` : `${m}-${rand()}`;
     }
     setChallengeId(cid); setChallengeRole(crole); setSeed(s);
     setRoster(EMPTY); setCurrent(null); setResult(null); setError(null); setLoading(false);
@@ -111,6 +121,7 @@ export default function Game() {
     traceRef.current = []; roundRespinsRef.current = []; setConvertedId(null);
     hintsUsedRef.current = 0; setHintsUsed(0);
     setPickemVote(null); setPickemDismissed(false); setPickemCrowd(null); setPickemSubject(null);
+    setFhStep(null); setFhPick(null); setFhPrediction(null); fhFetchingRef.current = false;
     setOwnerId(null);
     // a new game owns the URL — drop any restore params so a later refresh won't resurrect an old screen
     try {
@@ -165,13 +176,13 @@ export default function Game() {
 
         const enc = params.get("r");
         const m = params.get("m") as Mode | null;
-        if (enc && (m === "daily" || m === "classic" || m === "hoopiq")) {
+        if (enc && (m === "daily" || m === "classic" || m === "hoopiq" || m === "factorhunt")) {
           setRestoring(true);
           // same-session full restore: keeps the draft trace the Daily board needs to submit
           const last = readLastResult<LastResult>();
           if (last && last.mode === m && last.result && encodeLineup(last.result.players.map((p) => p.id), last.result.usedHints) === enc) {
             if (cancelled) return;
-            setMode(m); setSeed(last.seed); setResult(last.result); setRestoring(false); return;
+            setMode(m); setSeed(last.seed); setResult(last.result); setFhPrediction(last.fh ?? null); setRestoring(false); return;
           }
           // cold restore (other device / cleared storage): rebuild from the five's ids. No trace, so the
           // Daily leaderboard renders read-only (still shows your standing, just no re-submit).
@@ -182,11 +193,11 @@ export default function Game() {
             if (!res.ok) throw new Error("evaluate failed");
             const data = await res.json();
             if (cancelled) return;
-            // daily boards are per-date — use the date carried in the URL so a cold restore shows the
-            // result's own day (read-only), not today's empty board. Fall back to today if absent/bad.
+            // daily/FH boards are per-date — use the date carried in the URL so a cold restore shows
+            // the result's own day (read-only), not today's empty board. Fall back to today if absent/bad.
             const d = params.get("d");
             const dailyDate = d && /^\d{4}-\d{1,2}-\d{1,2}$/.test(d) ? d : todaySeed();
-            setMode(m); setSeed(m === "daily" ? `daily-${dailyDate}` : `${m}-restored`);
+            setMode(m); setSeed(m === "daily" ? `daily-${dailyDate}` : m === "factorhunt" ? `fh-${dailyDate}` : `${m}-restored`);
             setResult({ result: data.result, players: data.players, trace: [], usedHints: hinted });
           } catch { /* leave on the mode picker */ }
           finally { if (!cancelled) setRestoring(false); }
@@ -204,8 +215,10 @@ export default function Game() {
       const u = new URL(window.location.href);
       u.searchParams.set("r", encodeLineup(result.players.map((p) => p.id), result.usedHints));
       u.searchParams.set("m", mode);
-      // daily boards are per-date — carry the date so a cold restore shows the right day's board, not today's
-      if (mode === "daily") u.searchParams.set("d", seed.replace("daily-", "")); else u.searchParams.delete("d");
+      // daily/FH boards are per-date — carry the date so a cold restore shows the right day's board, not today's
+      if (mode === "daily") u.searchParams.set("d", seed.replace("daily-", ""));
+      else if (mode === "factorhunt") u.searchParams.set("d", seed.replace("fh-", ""));
+      else u.searchParams.delete("d");
       u.searchParams.delete("c"); u.searchParams.delete("own");
       window.history.replaceState(null, "", u.pathname + u.search + u.hash);
     } catch { /* no history API */ }
@@ -276,7 +289,7 @@ export default function Game() {
     runSpin({ lockedTeam: current.team, excludeDecade: current.decade, salt: ++saltRef.current }, "team");
   }, [skips.era, current, runSpin]);
 
-  const simulate = useCallback(async (r: Roster) => {
+  const simulate = useCallback(async (r: Roster, fhPred: string | null = null) => {
     abortSimRef.current?.abort();
     const ctrl = new AbortController();
     abortSimRef.current = ctrl;
@@ -292,7 +305,7 @@ export default function Game() {
       setResult(full);
       // Persist so the result survives a refresh (full object, incl. trace) and shows under "Your
       // results". A challenge entry is upgraded with its challengeId later, when the link is created.
-      writeLastResult({ mode, seed, result: full });
+      writeLastResult({ mode, seed, result: full, fh: fhPred });
       if (mode) saveResult({ encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints), mode, wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
       track("lineup_complete", { wins: data.result.wins, grade: data.result.grade });
     } catch (e) {
@@ -303,14 +316,53 @@ export default function Game() {
     }
   }, [mode, seed]);
 
+  // Factor Hunt prediction step: fetch the choice set (server-built — only {ask, choices} is on
+  // the wire, never the answer or the record), then hold the reveal until the player locks/skips.
+  // Any failure falls straight through to a normal reveal with no bonus — never blocks the game.
+  const beginFhPrediction = useCallback(async (r: Roster) => {
+    if (fhFetchingRef.current) return;
+    fhFetchingRef.current = true; setError(null);
+    try {
+      const ids = SLOTS.map((s) => r[s]?.id);
+      const res = await fetch("/api/factorhunt/choices", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids, seed }),
+      });
+      if (!res.ok) throw new Error("choices failed");
+      const d = await res.json();
+      if ((d?.ask === "worst" || d?.ask === "best") && Array.isArray(d?.choices)
+        && d.choices.length >= 2 && d.choices.every((x: unknown) => typeof x === "string")) {
+        setFhPick(null); setFhStep({ roster: r, ask: d.ask, choices: d.choices });
+        return;
+      }
+      throw new Error("bad choices");
+    } catch {
+      simulate(r, null); // graceful: reveal without a prediction, no bonus
+    } finally { fhFetchingRef.current = false; }
+  }, [seed, simulate]);
+
+  const lockFh = useCallback((choice: string | null) => {
+    if (!fhStep) return;
+    const r = fhStep.roster;
+    setFhPrediction(choice); setFhStep(null); setFhPick(null);
+    track("fh_predict", { locked: choice ? 1 : 0 });
+    simulate(r, choice);
+  }, [fhStep, simulate]);
+
+  // Mode fork at "five locked": Factor Hunt detours through the prediction step; everyone else
+  // simulates immediately (the pre-FH behavior, byte-for-byte).
+  const finishDraft = useCallback((r: Roster) => {
+    if (mode === "factorhunt") beginFhPrediction(r);
+    else simulate(r);
+  }, [mode, beginFhPrediction, simulate]);
+
   const place = useCallback((slot: Slot) => {
     if (!selPlayer || roster[slot] || !selPlayer.eligible.includes(slot)) return;
     traceRef.current.push({ slot, pickedId: selPlayer.id, respins: [...roundRespinsRef.current] });
     roundRespinsRef.current = [];
     const next = { ...roster, [slot]: selPlayer };
     setRoster(next); setSelPlayer(null); setCurrent(null); setLockedReel(null);
-    if (SLOTS.every((s) => next[s])) simulate(next);
-  }, [selPlayer, roster, simulate]);
+    if (SLOTS.every((s) => next[s])) finishDraft(next);
+  }, [selPlayer, roster, finishDraft]);
 
   const canSwap = useCallback((a: Slot, b: Slot) => {
     if (a === b) return false;
@@ -352,6 +404,14 @@ export default function Game() {
     return () => prev?.focus?.();
   }, [showPickem]);
 
+  // Factor Hunt prediction dialog focus management (same pattern).
+  useEffect(() => {
+    if (!fhStep) return;
+    const prev = document.activeElement as HTMLElement | null;
+    fhRef.current?.focus();
+    return () => prev?.focus?.();
+  }, [fhStep]);
+
   // Once the record is in, pull the crowd split (and your stored vote — e.g. a Daily replay
   // from another device) for the crowd-vs-you strip. Best-effort: a 503 (Redis absent) or a
   // network error just leaves the strip off / local-vote-only.
@@ -389,15 +449,25 @@ export default function Game() {
   const pickemView = mode !== "challenge" && (effPickemVote || pickemCrowd)
     ? { y: pickemCrowd?.y ?? 0, n: pickemCrowd?.n ?? 0, vote: effPickemVote, subject: pickemSubject }
     : undefined;
+  // Factor Hunt verdict chip: recompute the answer from the revealed factors (same pure helper
+  // the server verifies with, so the chip and the board bonus can never disagree).
+  const fhView = (() => {
+    if (mode !== "factorhunt" || !result || !fhPrediction) return undefined;
+    const c = buildFhChoices(result.result.factors, seed);
+    return c ? { prediction: fhPrediction, answer: c.answer, correct: fhPrediction === c.answer } : undefined;
+  })();
   if (result) return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
-      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={mode} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} />
+      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={mode === "factorhunt" ? "Factor Hunt" : mode} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
+      {mode === "factorhunt" && <FhLeaderboard date={seed.replace("fh-", "")} trace={result.trace} prediction={fhPrediction} readOnly={result.trace.length === 0} />}
       {mode === "challenge" && challengeId && challengeRole && (
         <ChallengeResult id={challengeId} role={challengeRole} seed={seed} usedHints={false} result={result.result} players={result.players}
           trace={result.trace} onCreateOwn={() => start("challenge")} />
       )}
-      {mode !== "challenge" && (convertedId ? (
+      {/* FH seeds can't convert to H2H challenges (the challenge store only accepts daily/classic/
+          hoopiq game seeds), so the convert CTA is hidden there rather than 400ing on click. */}
+      {mode !== "challenge" && mode !== "factorhunt" && (convertedId ? (
         // Convert THIS finished five into a real H2H challenge in place, carrying the original seed:
         // the friend drafts the same teams/eras and tries to beat this exact record — no re-draft.
         <ChallengeResult id={convertedId} role="create" seed={seed} usedHints={result.usedHints}
@@ -456,8 +526,10 @@ export default function Game() {
               {allFilled ? (
                 <>
                   <p className="mb-3 text-sm text-zinc-400">Your starting five is set.</p>
-                  <button onClick={() => simulate(roster)} disabled={loading}
-                    className="rounded-xl bg-green-500 px-6 py-2.5 font-bold text-black hover:bg-green-400 disabled:opacity-50">Simulate Season</button>
+                  <button onClick={() => finishDraft(roster)} disabled={loading}
+                    className="rounded-xl bg-green-500 px-6 py-2.5 font-bold text-black hover:bg-green-400 disabled:opacity-50">
+                    {mode === "factorhunt" ? "Lock Five → Predict" : "Simulate Season"}
+                  </button>
                 </>
               ) : (
                 <p className="text-sm text-zinc-500">{filled === 0 ? "Spin to draft your first player." : `Spin for round ${roundNum} of 5.`}</p>
@@ -527,6 +599,48 @@ export default function Game() {
         </div>
       )}
 
+      {/* Factor Hunt prediction — focus-trapped dialog between "five locked" and the reveal.
+          Lock applies the ×1.05 board bonus if right; Escape or Skip reveals with no bonus. */}
+      {fhStep && (
+        <div ref={fhRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Factor Hunt prediction"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { lockFh(null); return; }
+            if (e.key === "Tab") {
+              const f = fhRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
+              if (!f || f.length === 0) return;
+              const first = f[0], last = f[f.length - 1];
+              if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+              else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+            }
+          }}
+          className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
+            <div className="text-center text-xs font-black uppercase tracking-widest text-violet-400">🔮 Factor Hunt</div>
+            <p className="mt-2 text-center text-base font-semibold text-zinc-100">
+              {fhStep.ask === "worst"
+                ? "Before the reveal — which factor is hurting this five the most?"
+                : "Clean build, no weaknesses — which factor is helping the MOST?"}
+            </p>
+            <div className="mt-4 space-y-2" role="radiogroup" aria-label="Factor choices">
+              {fhStep.choices.map((c) => (
+                <button key={c} role="radio" aria-checked={fhPick === c} onClick={() => setFhPick(c)}
+                  className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
+                    fhPick === c ? "border-violet-400 bg-violet-500/15 text-violet-200" : "border-zinc-700 bg-zinc-950/60 text-zinc-300 hover:border-zinc-500"}`}>
+                  {c}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => fhPick && lockFh(fhPick)} disabled={!fhPick}
+              className="mt-4 w-full rounded-xl bg-violet-500 py-3 text-base font-black text-black hover:bg-violet-400 disabled:opacity-40">
+              🔒 Lock prediction — ×1.05 if right
+            </button>
+            <button onClick={() => lockFh(null)} className="mt-2 w-full py-1 text-xs text-zinc-500 hover:text-zinc-300">
+              Skip — just show the result
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Pick'Em pre-draft vote — focus-trapped dialog (same a11y mechanics as the sheet above).
           One tap votes; ✕ or Escape skips AND remembers the skip preference. Never blocks: the
           draft continues the moment either happens. */}
@@ -579,7 +693,7 @@ function Shell({ children, roundNum, mode, onRestart, showRestart }: {
     <div className="mx-auto max-w-4xl px-4 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
       <header className="mb-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold capitalize text-zinc-300">{mode}</span>
+          <span className="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold capitalize text-zinc-300">{mode === "factorhunt" ? "Factor Hunt" : mode}</span>
           <span className="text-sm text-zinc-500">Round {roundNum}/5</span>
         </div>
         {showRestart && (
@@ -596,13 +710,14 @@ function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => void; on
     { id: "daily", emoji: "📅", title: "Daily", desc: "Everyone gets the same spins today. Compare your record." },
     { id: "classic", emoji: "💯", title: "Classic", desc: "Full stats visible — draft on what you can see." },
     { id: "hoopiq", emoji: "🧠", title: "HoopIQ", desc: "Stats hidden — draft by memory, test your ball knowledge." },
+    { id: "factorhunt", emoji: "🔮", title: "Factor Hunt", desc: "Daily shared spins — predict WHY before the reveal for a ×1.05 bonus." },
     { id: "challenge", emoji: "⚔️", title: "Challenge a Friend", desc: "Build a five, send a link. They draft the same teams — beat your record." },
   ];
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 text-center">
       <h1 className="font-display text-4xl tracking-tight sm:text-5xl">Pick your mode</h1>
       <p className="mt-2 text-lg text-zinc-400">Build an all-time NBA starting five. Can you go undefeated?</p>
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {modes.map((m) => (
           <button key={m.id} onClick={() => onPick(m.id)}
             className="group rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-left transition hover:border-orange-500 hover:bg-zinc-800/60">
