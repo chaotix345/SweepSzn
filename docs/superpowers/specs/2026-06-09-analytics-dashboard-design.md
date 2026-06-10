@@ -1,3 +1,5 @@
+> **HISTORICAL (frozen 2026-06):** decision-record only — conventions here may be superseded. Current: tests are Vitest via `npm test`; see `web/AGENTS.md`.
+
 # Analytics / Insights Dashboard — Design Spec
 
 Date: 2026-06-09

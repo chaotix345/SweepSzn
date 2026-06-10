@@ -1,3 +1,5 @@
+> **HISTORICAL (frozen 2026-06):** decision-record only — conventions here may be superseded. Current: tests are Vitest via `npm test`; see `web/AGENTS.md`.
+
 <!-- Generated 2026-06-10 by a multi-agent brainstorm workflow (3 design lenses -> merge/rank). Decision-ready; modes are NOT built. -->
 
 # SweepSzn New Game Modes — Decision-Ready Proposal

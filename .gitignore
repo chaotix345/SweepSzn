@@ -14,8 +14,20 @@ data/raw/
 
 # local tool state / scratch / research artifacts
 .gstack/
+.claude/
+.playwright-mcp/
 research/shots/
 *.log
+
+# generated brand exports (web/scripts/export-logo.mjs) + QA screenshot artifacts
+logo/
+web/_notifshot.png
+web/scripts/hint-qa/
+web/scripts/hint-qa2/
+web/scripts/marketing-shots/
+web/scripts/prod-verify/
+# local scratch (superseded by tracked search_best.ts / rank.ts)
+web/scripts/best_team.mjs
 
 # os / editor / secrets
 .DS_Store

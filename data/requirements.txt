@@ -1,0 +1,5 @@
+# Offline pipeline deps, pinned to the versions that produced the committed dataset (2026-06).
+# pip install -r data/requirements.txt
+pandas==2.3.1
+numpy==2.3.2
+lxml==6.0.2

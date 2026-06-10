@@ -1,6 +1,6 @@
-# scripts/ — Manual E2E Harnesses
+# scripts/ — Manual E2E Harnesses + Ops Tools
 
-These four harnesses run against a live deployment (or local dev server) and are **not** part of `npm test` / Vitest. They are manually invoked, env-gated, and skip cleanly with exit 0 when the required env vars are absent.
+The four e2e harnesses run against a live deployment (or local dev server) and are **not** part of `npm test` / Vitest. They are manually invoked, env-gated, and skip cleanly with exit 0 when the required env vars are absent. Ops/recovery tools are documented at the bottom.
 
 ---
 
@@ -15,16 +15,16 @@ These four harnesses run against a live deployment (or local dev server) and are
 
 **Required env vars:**
 - `BASE` — URL of the running server to test (e.g. `http://localhost:3000` or a deployed URL)
-- The server must have `AUTH_SECRET` (and Google OAuth creds for the Google route) configured
-- Skips cleanly if absent: `skipped: BASE is not set`
+- `AUTH_SECRET` — must equal the **target server's** secret (the harness mints session cookies with it). Fails loudly if `BASE` is set but `AUTH_SECRET` is not.
+- Skips cleanly if `BASE` is absent: `skipped: BASE is not set`
 
 **How to run:**
 ```
 # local dev server must be running with full auth env configured
-BASE=http://localhost:3000 npx tsx scripts/auth_e2e.ts
+BASE=http://localhost:3000 AUTH_SECRET=<server's secret> npx tsx scripts/auth_e2e.ts
 
 # or against a deployed URL
-BASE=https://your-deployment.vercel.app npx tsx scripts/auth_e2e.ts
+BASE=https://your-deployment.vercel.app AUTH_SECRET=<prod secret> npx tsx scripts/auth_e2e.ts
 ```
 
 **Expected output:**
@@ -41,7 +41,7 @@ ok: POST /api/auth/signout -> 200
 ALL AUTH E2E CHECKS PASSED
 ```
 
-**Notes:** Uses a throwaway `AUTH_SECRET` if none is set in env. No cleanup needed (stateless HTTP checks).
+**Notes:** No cleanup needed (stateless HTTP checks).
 
 ---
 
@@ -186,3 +186,29 @@ ALL NOTIFICATION PROD E2E CHECKS PASSED
 - They are **not** wired into `npm test` and will not run in CI automatically.
 - Each harness prints `ok:` for passing assertions and `FAIL:` for failures, then a summary line.
 - Run with `npx tsx` (no compile step needed).
+
+---
+
+## Ops / recovery tools (env-gated, parameterized — never hardcode UIDs or secrets here)
+
+### backfill.ts
+Backfills a pre-feature daily-best into the weekly + all-time boards, matching `submitScoreAuthed`'s
+writes. Idempotent (skips if an entry exists). Skips cleanly unless all vars are set:
+```
+UPSTASH_REDIS_REST_URL=… UPSTASH_REDIS_REST_TOKEN=… \
+BF_UID=<uid> BF_NAME=<display name> BF_WINS=<int> BF_WEEK=2026-W24 npx tsx scripts/backfill.ts
+```
+
+### prod_check.ts
+Read-only standing check: a user's daily/weekly/all-time scores + board cardinalities against
+whatever DB the env creds point at. Skips cleanly unless all vars are set:
+```
+UPSTASH_REDIS_REST_URL=… UPSTASH_REDIS_REST_TOKEN=… \
+PC_DAY=lb:2026-6-8 PC_WEEK=2026-W24 PC_UID=<uid> npx tsx scripts/prod_check.ts
+```
+
+### export-logo.mjs
+Regenerates the brand PNG exports into `<repo>/logo/` (gitignored). `sharp` is not a project dep:
+```
+npm i --no-save sharp && node scripts/export-logo.mjs
+```
