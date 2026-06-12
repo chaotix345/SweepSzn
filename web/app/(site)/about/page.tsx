@@ -15,11 +15,11 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Can you really go 82-0?",
-    a: "Yes — an undefeated season is achievable, but the engine makes it brutally hard. You need a genuinely balanced two-way five, not five ball-dominant scorers. Going 82-0 is the whole challenge.",
+    a: "Nobody has. The best five ever found projects 80-2 — better than the 73-9 Warriors, the best real season in NBA history — and it takes a genuinely balanced two-way five, not five ball-dominant scorers. The chase is the whole challenge.",
   },
   {
     q: "How accurate is the engine?",
-    a: "Every coefficient is fit to 1,170 real NBA team-seasons (1985–2025) across 24,687 player-seasons, with out-of-sample accuracy of about 6.07 wins RMSE in year-grouped cross-validation. Wins come from a Pythagorean expectation. It is calibrated to history, not hand-tuned.",
+    a: "Every coefficient is fit to 1,170 real NBA team-seasons (1985–2025) across 24,687 player-seasons, with out-of-sample accuracy of about 5.6 wins RMSE against luck-adjusted Pythagorean win totals in year-grouped cross-validation (6.1 against raw win totals, which carry roughly 2.4 wins of close-game luck). Wins come from a Pythagorean expectation. It is calibrated to history, not hand-tuned.",
   },
   {
     q: "Why is it different from other lineup tools?",

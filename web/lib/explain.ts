@@ -1,4 +1,5 @@
 import type { LineupResult, PlayerBreakdown, Player } from "./types";
+import { DEFAULT_COEFFICIENTS } from "./engine";
 
 // Pure presentation helpers for the result card. NO engine math here — these only turn the
 // engine's already-computed numbers into plain English (the thing 82-0 never does).
@@ -8,6 +9,7 @@ export interface FactorView {
   value: number;
   kind: "good" | "bad";
   blurb: string;
+  winsEst?: number;
 }
 
 // Map an engine factor to a one-line explanation of WHY it moves the rating.
@@ -21,8 +23,9 @@ export function factorBlurb(label: string, value = 0): string {
     : "Cramped floor — not enough shooting, so the paint stays clogged.";
   if (l.startsWith("no interior size")) return "No real big — the lineup concedes the rim, the post, and the defensive glass to anyone with size.";
   if (l.startsWith("thin interior size")) return "Undersized inside — limited rim protection and rebounding against bigger frontlines.";
-  if (l.startsWith("no rim protection")) return "No real shot-blocker inside — opponents convert at the rim and you allow more points.";
   if (l.startsWith("no perimeter defender")) return "No on-ball stopper on the wing — opposing guards get downhill too easily.";
+  if (l.startsWith("thin perimeter defense")) return "Light on perimeter stoppers — partial credit for borderline defenders, but guards still get downhill.";
+  if (l.startsWith("era adjustment")) return "Pre-1985 stars are discounted for the thinner league they dominated — this is the estimated cost of translating them to the modern game.";
   return "Contribution to the team rating.";
 }
 
@@ -31,6 +34,39 @@ const plain = (label: string) => label.replace(/\s*\(.*\)\s*$/, "").toLowerCase(
 
 export function factorViews(result: LineupResult): FactorView[] {
   return result.factors.map((f) => ({ ...f, blurb: factorBlurb(f.label, f.value) }));
+}
+
+export interface ContribRow { id: string; name: string; offPts: number; defPts: number; }
+
+// Per-player contribution to the team rating, in the same points the factor card shows
+// (impact × the fitted scale — tethered to the engine default exactly like lib/blueprint.ts).
+// This is what answers "why is Star offense only 13?" when a defensive anchor's negative
+// offensive impact silently drags the sum.
+const r1 = (x: number) => Math.round(x * 10) / 10;
+export function playerContribRows(breakdowns: PlayerBreakdown[]): ContribRow[] {
+  const c = DEFAULT_COEFFICIENTS;
+  return breakdowns.map((b) => ({ id: b.id, name: b.name, offPts: r1(c.offScale * b.off), defPts: r1(c.defScale * b.def) }));
+}
+
+export interface HistoryAnchor { team: string; record: string; season: string; hook: string; }
+
+// Real-team reference points per win band — every record verified against Basketball-Reference.
+// Anchoring a simulated record to a famous real season is the single strongest "this number is
+// real basketball" signal for a casual fan. No anchor below 42 wins: the card says an average
+// NBA team wins 41 instead.
+const ANCHORS: { min: number; a: HistoryAnchor }[] = [
+  { min: 73, a: { team: "Warriors", record: "73-9", season: "2015-16", hook: "the best regular season in NBA history" } },
+  { min: 69, a: { team: "Bulls", record: "72-10", season: "1995-96", hook: "MJ's greatest team" } },
+  { min: 65, a: { team: "Heat", record: "66-16", season: "2012-13", hook: "27-game win streak" } },
+  { min: 60, a: { team: "Celtics", record: "64-18", season: "2023-24", hook: "won the championship" } },
+  { min: 55, a: { team: "Spurs", record: "58-24", season: "2012-13", hook: "made the Finals" } },
+  { min: 50, a: { team: "Nuggets", record: "53-29", season: "2022-23", hook: "won the title" } },
+  { min: 47, a: { team: "Rockets", record: "47-35", season: "1994-95", hook: "won the title as a 6 seed" } },
+  { min: 42, a: { team: "Lakers", record: "43-39", season: "2022-23", hook: "made the conference finals" } },
+];
+export function historyAnchor(wins: number): HistoryAnchor | null {
+  const hit = ANCHORS.find((x) => wins >= x.min);
+  return hit ? hit.a : null;
 }
 
 export interface RoleView { role: string; blurb: string; }
@@ -106,7 +142,12 @@ export function headline(result: LineupResult): string {
     : net >= -2 ? "A roughly average lineup"
     : "A flawed lineup";
   const topHurt = hurts[0];
-  if (topHurt && net < 12) return `${lead} — its biggest drag is ${plain(topHurt.label)}.`;
+  if (topHurt && net < 12) {
+    // quantify the drag when the engine priced it (exact counterfactual wins)
+    const w = topHurt.winsEst != null ? -topHurt.winsEst : 0;
+    const cost = w >= 1 ? `, costing ~${w} win${w === 1 ? "" : "s"}` : "";
+    return `${lead} — its biggest drag is ${plain(topHurt.label)}${cost}.`;
+  }
   const topHelp = helps[0];
   return topHelp ? `${lead}, carried by ${plain(topHelp.label)}.` : `${lead}.`;
 }

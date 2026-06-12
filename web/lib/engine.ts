@@ -6,7 +6,7 @@ export const DEFAULT_COEFFICIENTS: Coefficients = {
   drtgBase: 107.595,
   offScale: 0.6178,
   defScale: 0.742,
-  pythK: 14,
+  pythK: 13.75,
   zCap: 3.3,
   eraStrength: { floor: 0.85, gamma: 0.7, startYear: 1950, fullYear: 1985 },
   offModel: { intercept: 0.4328, pts: 1.058, ast: 0.6331, ts: 0.9088 },
@@ -16,7 +16,9 @@ export const DEFAULT_COEFFICIENTS: Coefficients = {
   dwsShrinkK: 40,
   leagueDwsMean: 0.02037,
   usgModel: { intercept: 21.2311, pts: 3.0339, ast: -0.4904 },
-  usageBudget: 100,
+  // 110 (was 100): the median real top-5 sums ~107.5% usage, so 100 penalized 91.7% of REAL
+  // teams — fantasy-regime penalties must be ~0 in-distribution. See calibrate.py USAGE_BUDGET.
+  usageBudget: 110,
   overloadGamma: 0.22,
   spacing: { perShooter: 0.987, diminish: 0.55, noneFloor: -3, baseline: 1.6 },
   rim: { blkLo: 0.4, blkSpan: 1.4, trbProxyLo: 0.8, trbProxySpan: 1.6 },
@@ -85,10 +87,15 @@ export function playerImpact(p: Player, c: Coefficients = DEFAULT_COEFFICIENTS) 
 }
 
 export function playerFeatures(p: Player, c: Coefficients = DEFAULT_COEFFICIENTS) {
+  const rimScore = playerRimScore(p, c);
+  const perimPos = p.pos === "PG" || p.pos === "SG" || p.pos === "SF" || p.pos === "G";
   return {
     off: offValue(p, c), def: defValue(p, c), usage: usageDemand(p, c), shoot: shooterUnit(p),
-    rim: playerRimScore(p, c) >= 0.5, modern: p.year >= 1980,
-    perim: (p.pos === "PG" || p.pos === "SG" || p.pos === "SF" || p.pos === "G") && zget(p, "stl") >= 0.6,
+    // rim/perim booleans are display thresholds (hints, roles); rimScore/perimScore are the
+    // CONTINUOUS values lineupTerms actually sums — exported so harnesses match the engine exactly.
+    rim: rimScore >= 0.5, rimScore, modern: p.year >= 1980,
+    perim: perimPos && zget(p, "stl") >= 0.6,
+    perimScore: perimPos ? clamp((zget(p, "stl") - 0.2) / 0.8, 0, 1) : 0,
   };
 }
 
@@ -130,7 +137,8 @@ function isRimProtector(p: Player, c: Coefficients): boolean {
 
 // Win-total -> grade/label. These are display constants matched to 82-0's grade boundaries
 // (S>=80, A+>=72, A>=62, B>=57, C>=50, D>=40); the Pythagorean win math above is unchanged.
-const WIN_GRADES = [
+// Exported for the result card's grade ladder (UI reads the boundaries, never redefines them).
+export const WIN_GRADES = [
   { min: 80, grade: "S", label: "PERFECT" },
   { min: 72, grade: "A+", label: "HISTORIC" },
   { min: 62, grade: "A", label: "DYNASTY" },
@@ -142,13 +150,17 @@ const WIN_GRADES = [
 
 // Shared lineup-construction math (used by both evaluateLineup and quickScore).
 function lineupTerms(lineup: Player[], c: Coefficients) {
-  let sumOff = 0, sumDef = 0, totalUsage = 0, shooterUnits = 0, perim = 0, rim = 0;
+  let sumOff = 0, sumDef = 0, totalUsage = 0, shooterUnits = 0, perimScore = 0, rim = 0;
   let anyModern = false;
   for (const p of lineup) {
     sumOff += offValue(p, c); sumDef += defValue(p, c); totalUsage += usageDemand(p, c);
     shooterUnits += shooterUnit(p);
     rim = Math.max(rim, playerRimScore(p, c));
-    if ((p.pos === "PG" || p.pos === "SG" || p.pos === "SF" || p.pos === "G") && zget(p, "stl") >= 0.6) perim++;
+    // continuous perimeter-defense credit: 0 at stl z<=0.2, full at z>=1.0. The old binary gate
+    // (z>=0.6 counts, else nothing) was a ~3-pt cliff between z=0.59 and z=0.61 — and gameable,
+    // since coefficients.json is public. Credit accumulates across defenders.
+    if (p.pos === "PG" || p.pos === "SG" || p.pos === "SF" || p.pos === "G")
+      perimScore += clamp((zget(p, "stl") - 0.2) / 0.8, 0, 1);
     if (p.year >= 1980) anyModern = true;
   }
   const overloadPenalty = c.overloadGamma * Math.max(0, totalUsage - c.usageBudget);
@@ -158,11 +170,11 @@ function lineupTerms(lineup: Player[], c: Coefficients) {
   // and the defensive glass — the combined cost of zero size. Continuous in the best big's quality,
   // and CV-safe because every real NBA top-5 has at least one big (so it is ~0 in-distribution).
   const rimAdj = c.noRimPenalty * (1 - rim);
-  const perimAdj = perim >= 1 ? 0 : c.thinPerimeterPenalty;
+  const perimAdj = c.thinPerimeterPenalty * clamp(1 - perimScore, 0, 1);
 
   const ortg = c.ortgBase + c.offScale * sumOff + spacing - overloadPenalty;
   const drtg = c.drtgBase - c.defScale * sumDef + rimAdj + perimAdj;
-  return { sumOff, sumDef, totalUsage, shooterUnits, perim, rim, spacing, overloadPenalty, rimAdj, perimAdj, ortg, drtg };
+  return { sumOff, sumDef, totalUsage, shooterUnits, perimScore, rim, spacing, overloadPenalty, rimAdj, perimAdj, ortg, drtg };
 }
 
 function winsFrom(ortg: number, drtg: number, k: number) {
@@ -189,13 +201,38 @@ export function evaluateLineup(lineup: Player[], coeff: Coefficients = DEFAULT_C
   const { winPct, wins } = winsFrom(t.ortg, t.drtg, c.pythK);
   const g = WIN_GRADES.find((x) => wins >= x.min) || WIN_GRADES[WIN_GRADES.length - 1];
 
+  // Era adjustment: isolate the cost ALREADY embedded in off/def by the eraStrength multiplier,
+  // so pre-1985 lineups see why they rate lower. Display-only — ortg/drtg/wins are untouched
+  // (off = raw*s, so raw - off = off*(1/s - 1); split per side for the counterfactual below).
+  let eraOffLoss = 0, eraDefLoss = 0;
+  for (let i = 0; i < lineup.length; i++) {
+    const s = eraStrength(lineup[i].year, c);
+    if (s < 1) {
+      eraOffLoss += c.offScale * pb[i].off * (1 / s - 1);
+      eraDefLoss += c.defScale * pb[i].def * (1 / s - 1);
+    }
+  }
+  const eraLoss = eraOffLoss + eraDefLoss;
+
+  // Exact win-equivalent of a factor for THIS lineup: wins as-is minus wins with the factor
+  // removed (dOrtg/dDrtg applied), through the same Pythagorean curve. Honest at the extremes
+  // where a linear wins-per-point constant overstates (the curve flattens near 70+ wins).
+  const winsNow = wins;
+  const winsEst = (dOrtg: number, dDrtg: number) => winsNow - winsFrom(t.ortg + dOrtg, t.drtg + dDrtg, c.pythK).wins;
+
   const factors: LineupResult["factors"] = [];
   factors.push({ label: "Star offense", value: round1(c.offScale * t.sumOff), kind: "good" });
   factors.push({ label: "Star defense", value: round1(c.defScale * t.sumDef), kind: "good" });
-  if (t.overloadPenalty > 0.2) factors.push({ label: `Usage overload (${Math.round(t.totalUsage)}% demand)`, value: -round1(t.overloadPenalty), kind: "bad" });
-  if (Math.abs(t.spacing) > 0.2) factors.push({ label: `Spacing (${t.shooterUnits.toFixed(1)} shooters)`, value: round1(t.spacing), kind: t.spacing > 0 ? "good" : "bad" });
-  if (t.rimAdj > 0.2) factors.push({ label: t.rim > 0 ? "Thin interior size" : "No interior size", value: -round1(t.rimAdj), kind: "bad" });
-  if (t.perimAdj > 0) factors.push({ label: "No perimeter defender", value: -t.perimAdj, kind: "bad" });
+  if (t.overloadPenalty > 0.2) factors.push({ label: `Usage overload (${Math.round(t.totalUsage)}% demand)`, value: -round1(t.overloadPenalty), kind: "bad",
+    winsEst: winsEst(t.overloadPenalty, 0) });
+  if (Math.abs(t.spacing) > 0.2) factors.push({ label: `Spacing (${t.shooterUnits.toFixed(1)} shooters)`, value: round1(t.spacing), kind: t.spacing > 0 ? "good" : "bad",
+    winsEst: winsEst(-t.spacing, 0) });
+  if (t.rimAdj > 0.2) factors.push({ label: t.rim > 0 ? "Thin interior size" : "No interior size", value: -round1(t.rimAdj), kind: "bad",
+    winsEst: winsEst(0, -t.rimAdj) });
+  if (t.perimAdj > 0.2) factors.push({ label: t.perimScore > 0 ? "Thin perimeter defense" : "No perimeter defender", value: -round1(t.perimAdj), kind: "bad",
+    winsEst: winsEst(0, -t.perimAdj) });
+  if (eraLoss > 0.5) factors.push({ label: "Era adjustment", value: -round1(eraLoss), kind: "bad",
+    winsEst: winsEst(eraOffLoss, -eraDefLoss) });
   factors.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
 
   const notes: string[] = [];

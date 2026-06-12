@@ -3,7 +3,7 @@
   "drtgBase": 107.595,
   "offScale": 0.6178,
   "defScale": 0.742,
-  "pythK": 14.0,
+  "pythK": 13.75,
   "zCap": 3.3,
   "eraStrength": {
     "floor": 0.85,
@@ -42,7 +42,7 @@
     "pts": 3.0339,
     "ast": -0.4904
   },
-  "usageBudget": 100,
+  "usageBudget": 110,
   "overloadGamma": 0.22,
   "spacing": {
     "perShooter": 0.987,
@@ -62,14 +62,16 @@
     "team_seasons": 1170,
     "off_r2": 0.423,
     "def_r2": 0.429,
-    "in_sample_wins_rmse": 6.06,
-    "cv_wins_rmse": 6.069,
-    "cv_wins_rmse_with_box": 6.416,
+    "cv_target": "pythag_wins(k=14)",
+    "in_sample_wins_rmse": 5.55,
+    "cv_wins_rmse": 5.565,
+    "cv_wins_rmse_vs_actual": 6.071,
+    "cv_wins_rmse_with_box": 5.894,
     "zoff_r2": 0.609,
     "zdef_r2_legacy": 0.233,
     "zdef_r2_est": 0.153,
     "zusg_r2": 0.343,
-    "gamma_fit": -0.0173,
+    "gamma_fit": -0.0216,
     "spacing_fit": 0.987,
     "box_team_terms_help_cv": false
   }

@@ -110,7 +110,7 @@ Both baselines **equal** (an average lineup → NetRtg 0 → 41 wins). Per-playe
 Win% = ORtg^k / (ORtg^k + DRtg^k)        k ≈ 14   (Basketball-Reference; Morey's 13.91 equivalent)
 Wins = round(82 * Win%)
 ```
-Cross-check: `wins ≈ 41 + 2.7 * NetRtg` (real NBA regression). The curve asymptotes near the extremes, so **82-0 is achievable but brutally hard** — it requires a near-optimal, well-fit, era-spanning roster, which keeps the hook alive while forcing real roster-building. Calibrate so only a near-perfect lineup crosses ~80.
+Cross-check: `wins ≈ 41 + 2.7 * NetRtg` (real NBA regression). The curve asymptotes near the extremes, so **82-0 is achievable but brutally hard** — it requires a near-optimal, well-fit, era-spanning roster, which keeps the hook alive while forcing real roster-building. Calibrate so only a near-perfect lineup crosses ~80. *(Superseded by §13: the verified ceiling is 80-2 — nobody reaches 82-0; the product copy uses the chase framing.)*
 
 ### Step 7 — Breakdown card (the best product idea)
 Show W-L, ORtg/DRtg/NetRtg, the top 3 things helping and top 2 hurting, in plain English ("No rim protection: +4 points allowed/100"), plus a confidence note when a player's defense is estimated. This is the share asset and the trust builder.
@@ -172,12 +172,12 @@ The lineup still enforces one real person. Once any LeBron variant is drafted, a
 
 The engine is fit to **1,170 real NBA team-seasons** (1985–2025) and **24,687 player-seasons**. Honest findings, including the limits:
 
-- **Team mapping:** `ORtg = 104.4 + 0.618·ΣOBPM(top5)`, `DRtg = 107.6 − 0.742·ΣDBPM(top5)`, wins via Pythagorean **k = 14.0** (the fit independently recovered the canonical NBA exponent). R² ≈ 0.42/0.43 per side, wins RMSE ≈ 6. The ceiling is real: a 5-starter feature can't capture bench/coaching/health, and I deliberately don't use bench data the game can't provide.
+- **Team mapping:** `ORtg = 104.4 + 0.618·ΣOBPM(top5)`, `DRtg = 107.6 − 0.742·ΣDBPM(top5)`, wins via Pythagorean **k = 14.0** (the fit independently recovered the canonical NBA exponent). R² ≈ 0.42/0.43 per side, wins RMSE ≈ 6. *(§13: k refit to 13.75 against the luck-free pythag-wins target; CV 5.565 / 6.071 vs actual.)* The ceiling is real: a 5-starter feature can't capture bench/coaching/health, and I deliberately don't use bench data the game can't provide.
 - **Pre-1974 offense** (z-scores → OBPM, features available pre-1974): **R² = 0.61.** Old-era offense is defensible.
 - **Pre-1974 defense** (rebounds + position → DBPM): **R² = 0.04 — near useless.** Box-score defense before steals/blocks is essentially unknowable. Adding **Defensive Win Shares** (which uses team-defense context) lifted it to **R² = 0.23**, which rescues anchors like Russell (now the engine's #1 defender) without inventing reputation. Still flagged as estimated.
 - **Usage-overload γ:** tried to fit it from real teams and the slope came back **negative** — real teams never stack five ball-dominant stars, so the data can't justify a penalty in-range. The shipped **γ = 0.22** (`overloadGamma` in `coefficients.json`, hand-set override of the unusable fit) is therefore a **documented fantasy-regime heuristic** (finite ball / usage-curve logic), not a data fit. This is the one knob that is reasoned rather than regressed, by necessity.
 
-**Validation (calibrated engine):** consensus panel ranks sensibly (modern two-way superteam 79 > GOAT-balanced 74 > … > 5-PG chaos 68 > 5-centers 63 > role-players 55 > pure-scorers 53); every degenerate max-stat stack (PPG/REB/AST/USG) lands ≤ the balanced GOAT team; hill-climb optimum is a sane elite roster at 79-3 (82-0 is brutal). Top-25-by-impact and top-defender lists track basketball consensus (Russell top-3 defender). Reproduce with `web/scripts/validate.ts` and `rank.ts`.
+**Validation (calibrated engine):** consensus panel ranks sensibly (modern two-way superteam 79 > GOAT-balanced 74 > … > 5-PG chaos 68 > 5-centers 63 > role-players 55 > pure-scorers 53); every degenerate max-stat stack (PPG/REB/AST/USG) lands ≤ the balanced GOAT team; hill-climb optimum is a sane elite roster at 79-3 (82-0 is brutal). *(§13: 80-2 after the budget fix — `scripts/search_best.ts`, person-deduped.)* Top-25-by-impact and top-defender lists track basketball consensus (Russell top-3 defender). Reproduce with `web/scripts/validate.ts` and `rank.ts`.
 
 ---
 
@@ -185,7 +185,7 @@ The engine is fit to **1,170 real NBA team-seasons** (1985–2025) and **24,687 
 
 A second calibration pass tightened **realism and face validity** without disturbing the (already near-optimal) real-team fit. The guiding finding, verified by experiment:
 
-> **The ΣOBPM/ΣDBPM core is at the accuracy ceiling for a 5-starter feature set (~6.0 wins RMSE).** Adding richer fitted team features (turnovers, off/def rebounding, usage concentration) does **not** lower held-out error — they're already inside BPM, and a 5-man feature can't see bench/coaching/health. We confirmed this with a **year-grouped 10-fold cross-validation**: the core scores **6.07** wins RMSE out-of-sample; adding TOV+ORB+DRB to the regression *raised* it to 6.42. So those terms were **rejected**, and `coefficients.json._meta.cv_wins_rmse` now reports the honest out-of-sample number.
+> **The ΣOBPM/ΣDBPM core is at the accuracy ceiling for a 5-starter feature set (~6.0 wins RMSE).** Adding richer fitted team features (turnovers, off/def rebounding, usage concentration) does **not** lower held-out error — they're already inside BPM, and a 5-man feature can't see bench/coaching/health. We confirmed this with a **year-grouped 10-fold cross-validation**: the core scores **6.07** wins RMSE out-of-sample; adding TOV+ORB+DRB to the regression *raised* it to 6.42. *(§13: CV now targets luck-free pythag wins — 5.565, with 6.071 vs actual still reported.)* So those terms were **rejected**, and `coefficients.json._meta.cv_wins_rmse` now reports the honest out-of-sample number.
 
 That splits "accuracy" cleanly into two regimes, and the engine treats them differently:
 
@@ -229,3 +229,54 @@ their standing. Don't ship anon UIDs in URLs or logs.
 `data/820_player_meta.json` (one-time export — see `data/gen_820_meta.mjs`). There is **no ongoing
 sync**: if 82-0.com changes its pool, we owe it nothing. All other modes, scoring, and data decisions
 are free to diverge. Don't re-run the meta generator or re-litigate parity per feature.
+
+---
+
+## 13. Realism & explanation pass (2026-06) — budget fix, peak smoothing, luck-free CV, win-cost factors
+
+A full audit (5 probe agents + adversarial verification) found the record itself was mostly
+defensible — the shock came from one calibration inconsistency plus an explanation vacuum. Engine
+changes (supersede the specific numbers in §10–11 where they conflict):
+
+1. **usageBudget 100 → 110.** Five league-average players sum to exactly 100% usage, and real
+   top-5-by-MP season-USG sums run hotter (1985–2025, n=1170: p50=107.5, p75=111.8, p90=116.7,
+   max=141.5) — so the old budget penalized **91.7% of real teams**, violating §11's own rule that
+   OOD heuristics be ≈0 in-distribution (which is also why `gamma_fit` came back negative: the
+   regression had absorbed the average cost into the intercept). At 110 the median real team pays
+   zero while a five-ball-hog stack (~165% demand) still pays ~12 pts of ORtg. Gamma stays 0.22
+   (hand-set; the fit remains unidentifiable from real teams — see §10).
+2. **Continuous perimeter credit.** The binary `stl z ≥ 0.6` gate was a ~3-pt cliff between
+   z=0.59 and z=0.61, and gameable (coefficients are public). Now each perimeter player adds
+   `clamp((stlZ − 0.2)/0.8, 0, 1)` of credit and the penalty scales with the shortfall.
+   `playerFeatures` exports the continuous `rimScore`/`perimScore` so harnesses can't drift.
+3. **3-yr peak smoothing for elite cards** (`build_dataset.py`). Peak selection is a MAX over
+   seasons, which preferentially selects upward noise (within-player OBPM sd ≈ 1.2). Cards with
+   peak OBPM > 4 (DBPM > 3.5 for the defense side) and 3+ seasons of 40+ G with that team blend
+   0.5 peak / 0.3 prior / 0.2 next, same team only. 2016 Curry 10.3 → 8.95, 2003 McGrady
+   9.8 → 8.34, 1994 McMillan DBPM 5.5 → 4.68 (softens §11's documented quirk); sustained peaks
+   (2024 Jokić) are untouched. Raw values ship alongside as `raw_obpm`/`raw_dbpm`. Calibration
+   inputs keep ACTUAL season values — smoothing is a predict-time estimate of card ability, so
+   the fit (and CV) are unchanged. Pool identity (82-0 parity) is byte-identical.
+4. **Luck-free CV target** (`calibrate.py`). Actual wins carry ~2.4 wins of close-game luck vs
+   the same team's own Pythagorean expectation; the k grid-search and `cv_wins_rmse` now measure
+   against pythag-expected wins (k=14 target definition). Result: **k = 13.75**, CV **5.565**
+   (vs-actual 6.071 still reported in `_meta.cv_wins_rmse_vs_actual` — matching the old 6.069,
+   i.e. the coefficients did not move; this is metric cleaning, not accuracy inflation).
+5. **Era adjustment is now a factor.** The eraStrength cost already embedded in off/def is
+   isolated and pushed as a quantified "Era adjustment" line when > 0.5 pts (display-only;
+   ortg/drtg/wins unchanged by construction).
+6. **Per-factor exact win costs.** Every penalty/bonus factor carries `winsEst`: wins as-is minus
+   wins with that factor removed, through the real Pythagorean curve for THAT lineup — honest at
+   the extremes where a linear 2.7-wins-per-point constant overstates. Star offense/defense are
+   level terms (the rating itself), so they get per-player contribution rows instead.
+
+Explanation layer (the shock-reduction half): result-card anchor to a B-R-verified real season
+per win band ("comparable to the 66-16 Heat (2012-13)"), ±wins vs the 41-win average, grade
+ladder with next-grade nudge, per-player off/def contribution disclosures (the Gobert-drags-
+"Star offense" confusion killer), "Top X% today" pill from the daily submit response, the usage
+budget bar in every stats-visible mode (usage is intrinsic public player data, not a seed-relative
+hint — §12 unaffected; HoopIQ stays blind), anchor-aware share copy + OG footer, and honest
+ceiling copy: **the best five ever found projects 80-2** (`scripts/search_best.ts`, now
+person-deduped and exact to the engine), so "82-0 achievable" copy was replaced with the chase
+framing. Factor Hunt's label list and Surgeon's need mapping ("Era adjustment" → modern-era star,
+"Thin perimeter defense" → perimeter stopper) were extended to cover the new factors.

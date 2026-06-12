@@ -238,3 +238,76 @@ describe("ResultCard — grade/verdict render branches", () => {
     expect(bar).toBeNull();
   });
 });
+
+// NOTE: this suite has no auto-cleanup between tests, so every assertion is scoped to the
+// fresh render's container (document-global queries hit earlier tests' accumulated cards).
+describe("ResultCard — context & explanation layer", () => {
+  it("anchors the record to a famous real team for the win band", () => {
+    const { container } = renderCard(); // wins=55 → 58-24 Spurs (2012-13)
+    expect(container.textContent).toMatch(/Comparable to the 58-24 Spurs \(2012-13\)/i);
+  });
+
+  it("frames the record against the 41-win NBA average", () => {
+    const { container } = renderCard(); // 55 - 41 = +14
+    expect(container.textContent).toMatch(/\+14 wins above the 41-win NBA average/i);
+  });
+
+  it("uses singular 'win' at exactly one above the average", () => {
+    const { container } = renderCard({ result: makeResult({ wins: 42, losses: 40, grade: "C", label: "Playoff team" }) });
+    expect(container.textContent).toMatch(/\+1 win above the 41-win NBA average/i);
+    expect(container.textContent).not.toMatch(/\+1 wins above/i);
+  });
+
+  it("below 42 wins: no anchor, framed below average instead", () => {
+    const { container } = renderCard({ result: makeResult({ wins: 30, losses: 52, grade: "D", label: "Lottery team" }) });
+    expect(container.textContent).not.toMatch(/Comparable to/i);
+    expect(container.textContent).toMatch(/11 wins below the 41-win NBA average/i);
+  });
+
+  it("notes the verified engine ceiling on elite results", () => {
+    const { container } = renderCard({ result: makeResult({ wins: 74, losses: 8, grade: "A+", label: "HISTORIC" }) });
+    expect(container.textContent).toMatch(/best five ever found projects 80-2/i);
+  });
+
+  it("renders the grade ladder with a next-grade hint when close", () => {
+    const { container } = renderCard(); // wins=55: next boundary is B at 57 → "2 wins from B"
+    expect(container.textContent).toMatch(/2 wins from B/i);
+  });
+
+  it("annotates priced factors with their exact win cost", () => {
+    const { container } = renderCard({
+      result: makeResult({
+        factors: [
+          { label: "Star offense", value: 5.1, kind: "good" },
+          { label: "Usage overload (150% demand)", value: -8.8, kind: "bad", winsEst: -4 },
+        ],
+      }),
+    });
+    expect(container.textContent).toMatch(/~-4 wins/);
+  });
+
+  it("expands Star offense into per-player impact rows", () => {
+    const { container } = renderCard();
+    expect(container.textContent).toMatch(/Per-player impact/i);
+    // Player PG: off 3.5 × 0.6178 = +2.2 on the offense disclosure
+    expect(container.textContent).toContain("+2.2");
+    // the not-a-career-grade caveat is present
+    expect(container.textContent).toMatch(/not a career grade/i);
+  });
+
+  it("shows the leaderboard percentile pill for top-half daily ranks", () => {
+    const { container } = renderCard({ lbRank: { rank: 7, total: 100 } });
+    expect(container.textContent).toMatch(/Top 7% today/i);
+  });
+
+  it("falls back to plain rank for bottom-half results", () => {
+    const { container } = renderCard({ lbRank: { rank: 80, total: 100 } });
+    expect(container.textContent).toMatch(/#80 of 100 today/i);
+  });
+
+  it("hides the percentile pill on tiny boards", () => {
+    const { container } = renderCard({ lbRank: { rank: 1, total: 5 } });
+    expect(container.textContent).not.toMatch(/% today/i);
+    expect(container.textContent).not.toMatch(/of 5 today/i);
+  });
+});

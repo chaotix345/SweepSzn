@@ -12,6 +12,9 @@ export const FH_BONUS = 1.05; // cosmetic display multiplier on the FH board —
 
 // Canonical labels for every factor the engine can emit (engine.ts factors.push sites).
 // Decoys are sampled from here, minus whatever the lineup actually surfaced.
+// NOTE: growing this list reshuffles decoy sampling for that day's seeds, so a prediction locked
+// before a deploy can fail choices-validation on a submit after it (one transient mid-day window
+// per addition; the lock simply reads as a skip). Accepted — keep additions to engine releases.
 export const FH_FACTOR_LABELS = [
   "Star offense",
   "Star defense",
@@ -19,7 +22,9 @@ export const FH_FACTOR_LABELS = [
   "Spacing",
   "Thin interior size",
   "No interior size",
+  "Thin perimeter defense",
   "No perimeter defender",
+  "Era adjustment",
 ] as const;
 
 // "Usage overload (156% demand)" -> "Usage overload" (same strip rule as explain.ts, case kept)

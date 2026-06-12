@@ -1,6 +1,6 @@
 import type { LineupResult, Player } from "./types";
 import { SLOTS, teamColors, initials, eraLabel, displayName } from "./teams";
-import { headline } from "./explain";
+import { headline, historyAnchor } from "./explain";
 import type { RankCard } from "./rankShare";
 import { pickemVerdict, type PickemView } from "./pickem";
 
@@ -77,6 +77,7 @@ export type OgBlueprint = { label: string; grade: string };
 export function resultOgElement(result: LineupResult, players: Player[], hinted = false, pickem?: PickemView, prime = false, blueprint?: OgBlueprint) {
   const grade = GRADE_HEX[result.grade] ?? "#e4e4e7";
   const net = `${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`;
+  const anchor = historyAnchor(result.wins);
   // Render the strip first so the record size and the strip can never disagree (a truthy pickem
   // whose strip returns null must NOT shrink the record).
   const strip = pickem ? pickemStrip(result, pickem) : null;
@@ -115,6 +116,12 @@ export function resultOgElement(result: LineupResult, players: Player[], hinted 
           <div style={{ display: "flex", marginTop: 12, fontSize: 26, color: "#a1a1aa" }}>
             Net {net} · ORtg {result.ortg.toFixed(1)} · DRtg {result.drtg.toFixed(1)}
           </div>
+          {/* no fontStyle:italic — satori has no italic variant loaded and would silently upright it */}
+          {anchor && (
+            <div style={{ display: "flex", marginTop: 8, fontSize: 24, color: "#d4d4d8" }}>
+              comparable to the {anchor.record} {anchor.team} ({anchor.season})
+            </div>
+          )}
         </div>
       </div>
 

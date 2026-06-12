@@ -19,7 +19,7 @@ export default function LandingSection() {
           Can you go 82-0?
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-base text-zinc-400">
-          {"Draft an all-time NBA starting five — spin a team reel and an era reel, pick your five, and let the engine find every hole in your lineup. Going undefeated is achievable. It's also brutally hard."}
+          {"Draft an all-time NBA starting five — spin a team reel and an era reel, pick your five, and let the engine find every hole in your lineup. Nobody has gone 82-0. The best five ever found projects 80-2."}
         </p>
         <div className="mt-6 flex justify-center">
           <a

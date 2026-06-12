@@ -9,6 +9,22 @@ type F = LineupResult["factors"];
 const f = (label: string, value: number, kind: "good" | "bad" = value >= 0 ? "good" : "bad") => ({ label, value, kind });
 
 describe("factorHunt", () => {
+  // --- label coverage: FH_FACTOR_LABELS must contain every label engine.ts can emit ---
+  describe("FH_FACTOR_LABELS coverage", () => {
+    it("includes every canonical label the engine can emit", () => {
+      // factors.push sites in lib/engine.ts evaluateLineup — keep in lockstep
+      const ENGINE_EMITS = [
+        "Star offense", "Star defense", "Usage overload", "Spacing",
+        "Thin interior size", "No interior size",
+        "Thin perimeter defense", "No perimeter defender",
+        "Era adjustment",
+      ];
+      for (const l of ENGINE_EMITS) {
+        expect((FH_FACTOR_LABELS as readonly string[]).includes(l), `missing: ${l}`).toBe(true);
+      }
+    });
+  });
+
   // --- canonicalization ---
   describe("canonicalFactor", () => {
     it("parenthetical stripped", () => {

@@ -16,7 +16,7 @@ import { useBlueprint } from "@/components/game/useBlueprint";
 import { BlueprintDialog } from "@/components/game/BlueprintDialog";
 import { useSurgeon, type SgResult } from "@/components/game/useSurgeon";
 import { SurgeonDialog } from "@/components/game/SurgeonDialog";
-import type { DraftCandidate, DraftStep, LineupResult, Player, Slot } from "@/lib/types";
+import type { DraftCandidate, DraftStep, LeaderboardView, LineupResult, Player, Slot } from "@/lib/types";
 import { SLOTS, FRANCHISES, DECADES, teamName, displayName, eraLabel } from "@/lib/teams";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
@@ -67,6 +67,7 @@ export default function Game() {
   const [selSlot, setSelSlot] = useState<Slot | null>(null);
   const [skips, setSkips] = useState({ team: false, era: false });
   const [result, setResult] = useState<{ result: LineupResult; players: Player[]; trace: DraftStep[]; usedHints: boolean } | null>(null);
+  const [lbView, setLbView] = useState<LeaderboardView | null>(null); // daily standing for the result-card pill
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [challengeRole, setChallengeRole] = useState<"create" | "respond" | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null); // viewing a challenge I created (restored from URL or opened from "Your results")
@@ -258,7 +259,7 @@ export default function Game() {
       s = m === "daily" ? `daily-${todaySeed()}` : m === "factorhunt" ? `fh-${todaySeed()}` : m === "blueprint" ? `bp-${todaySeed()}` : m === "surgeon" ? `surgeon-${todaySeed()}` : `${m}-${rand()}`;
     }
     setChallengeId(cid); setChallengeRole(crole); setSeed(s);
-    setRoster(EMPTY); setCurrent(null); setResult(null); setError(null); setLoading(false);
+    setRoster(EMPTY); setCurrent(null); setResult(null); setLbView(null); setError(null); setLoading(false);
     setSelPlayer(null); setSelSlot(null); setSkips({ team: false, era: false });
     setReel({ team: "ATL", era: m === "prime" ? "PRIME" : "60's" }); setLockedReel(null); saltRef.current = 0;
     traceRef.current = []; roundRespinsRef.current = []; setConvertedId(null);
@@ -480,8 +481,9 @@ export default function Game() {
   );
   if (result) return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
-      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView} />
-      {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
+      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView}
+        lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} />
+      {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} onView={setLbView} />}
       {mode === "factorhunt" && <FhLeaderboard date={seed.replace("fh-", "")} trace={result.trace} prediction={fhPrediction} readOnly={result.trace.length === 0} />}
       {mode === "blueprint" && blueprint && <BpLeaderboard date={seed.replace("bp-", "")} trace={result.trace} blueprint={blueprint} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
       {mode === "challenge" && challengeId && challengeRole && (
@@ -512,6 +514,13 @@ export default function Game() {
   const canPlaceAny = current ? current.candidates.some((c) => openSlots.some((s) => c.eligible.includes(s))) : true;
   const hideIQ = mode === "hoopiq";
   const reelMasked = (locked: boolean) => hideIQ && !(spinning && !locked);
+  // Live usage budget: always on for USAGE DISCIPLINE (its grade axis), and in every other
+  // stats-visible mode once two players are placed — overload is the single biggest penalty on
+  // elite drafts, and feeling the budget fill BEFORE the reveal beats learning it after.
+  // HoopIQ stays bar-free (its premise is drafting blind). Usage is intrinsic public player data,
+  // not a seed-relative hint, so competitive seeds are unaffected (DESIGN.md §12).
+  const discBar = mode === "blueprint" && blueprint === "discipline";
+  const showUsageBar = discBar || (!hideIQ && drafted.length >= 2);
 
   return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart={filled > 0 || !!current}>
@@ -539,8 +548,9 @@ export default function Game() {
       {mode === "surgeon" && (
         <p className="mt-2 text-center text-[11px] text-rose-400/80">🩺 Draft five — then the engine diagnoses your worst factor and deals one fix.</p>
       )}
-      {/* USAGE DISCIPLINE drafts to a non-obvious budget — the live bar is the spec's fix */}
-      {mode === "blueprint" && blueprint === "discipline" && <UsageBar total={drafted.reduce((a, c) => a + (c.usage ?? 0), 0)} />}
+      {/* USAGE DISCIPLINE drafts to a non-obvious budget — the live bar is the spec's fix.
+          Everywhere else the bar pre-explains the engine's dominant penalty (see showUsageBar). */}
+      {showUsageBar && <UsageBar total={drafted.reduce((a, c) => a + (c.usage ?? 0), 0)} discipline={discBar} />}
       {(current || spinning) && (
         <div className="mt-2 flex justify-center gap-2 text-xs">
           <SkipBtn label="↻ Re-spin Team" used={skips.team} onClick={reSpinTeam} disabled={spinning} />

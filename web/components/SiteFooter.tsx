@@ -4,7 +4,7 @@ import Link from "next/link";
 const STATS: [string, string][] = [
   ["24,687", "player-seasons"],
   ["1,170", "NBA team-seasons"],
-  ["6.07", "win RMSE (out-of-sample)"],
+  ["5.6", "win RMSE (out-of-sample, luck-adjusted)"],
 ];
 
 export default function SiteFooter() {

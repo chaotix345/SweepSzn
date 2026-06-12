@@ -15,7 +15,8 @@ const SEO_COPY =
   "SweepSzn is a browser-based all-time NBA lineup simulator where you draft a five-player starting " +
   "five by spinning a franchise reel and a decade reel, then simulate a full 82-game NBA season. " +
   "The simulation engine is calibrated to 1,170 real NBA team-seasons (1985–2025) across 24,687 " +
-  "player-seasons, with out-of-sample accuracy of 6.07 wins RMSE in year-grouped cross-validation. " +
+  "player-seasons, with out-of-sample accuracy of about 5.6 wins RMSE against luck-adjusted " +
+  "Pythagorean win totals in year-grouped cross-validation (6.1 against raw win totals). " +
   "Unlike lineup tools that simply add up box-score averages, SweepSzn models finite possessions and " +
   "usage overload (too many ball-dominant stars costs wins), era normalization via per-season " +
   "z-scores (so Wilt Chamberlain's pace-inflated 1962 numbers are not compared directly to modern " +
@@ -31,7 +32,8 @@ const SEO_COPY =
   "and Surgeon mode diagnoses your lineup's worst factor and gives you one targeted swap to fix it. " +
   "You can also challenge a friend to the same spins. Every result generates a unique shareable " +
   "permalink and result card. The goal: can you build an all-time NBA five that goes 82-0, " +
-  "undefeated over a full season? It is achievable, but the engine makes it brutally honest.";
+  "undefeated over a full season? Nobody has — the best five ever found projects 80-2, better than " +
+  "the 73-9 Warriors, and the engine is brutally honest about why.";
 
 const jsonLd = {
   "@context": "https://schema.org",

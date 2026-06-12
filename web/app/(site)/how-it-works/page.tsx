@@ -143,14 +143,15 @@ export default function HowItWorks() {
         <p className="mt-3 text-sm text-zinc-400">
           Every coefficient is fit to real history — <strong className="text-zinc-200">1,170 NBA team-seasons</strong> (1985–2025)
           across <strong className="text-zinc-200">24,687 player-seasons</strong> — not hand-tuned. Out-of-sample accuracy is
-          <strong className="text-zinc-200"> 6.07 wins RMSE</strong> in year-grouped cross-validation, and wins come from a
+          <strong className="text-zinc-200"> 5.6 wins RMSE</strong> against luck-adjusted Pythagorean win totals in year-grouped
+          cross-validation (6.1 against raw win totals, which carry ~2.4 wins of close-game luck), and wins come from a
           Pythagorean expectation (exponent k ≈ 14). The proof it&apos;s honest: stack five ball-dominant scorers and a box-score
           adder calls them historic at 74-8; SweepSzn knows one ball can&apos;t feed them all.
         </p>
         <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t border-zinc-800 pt-5">
           <Stat n="24,687" label="player-seasons" />
           <Stat n="1,170" label="NBA team-seasons" />
-          <Stat n="6.07" label="win RMSE (out-of-sample)" />
+          <Stat n="5.6" label="win RMSE (out-of-sample, luck-adjusted)" />
           <Stat n="k ≈ 14" label="Pythagorean exponent" />
         </div>
       </section>

@@ -261,6 +261,42 @@ def build():
         comp = (zz.get("pts") or 0)*0.5 + (zz.get("ast") or 0)*0.3 + (zz.get("trb") or 0)*0.2
         return comp * (mp * g) / 1000.0
 
+    # ---- 3-yr peak-window smoothing for elite cards (anti single-season-noise) ----
+    # Peak selection takes a MAX over seasons, which preferentially selects upward noise: a
+    # transcendent outlier year (2016 Curry OBPM 10.3; within-player OBPM sd ~1.2) gets treated
+    # as durable ability. For ELITE peaks only -- where max-selection bias is strongest -- blend
+    # the peak season's OBPM/DBPM with SAME-TEAM adjacent seasons (0.5 peak / 0.3 prior /
+    # 0.2 next, weights renormalized when a neighbor is missing or <40 G). Gated per side
+    # (OBPM > 4.0, DBPM > 3.5) and requiring 3+ seasons of 40+ G with that team, so short-stint
+    # cards and ordinary peaks are untouched. Display box stats stay the raw peak season (card
+    # identity); only the engine's impact inputs are smoothed, with the raw value kept alongside.
+    # Real-team calibration inputs (team_rotations.json) keep ACTUAL season values: the fit maps
+    # actual OBPM to actual results; smoothing is a predict-time estimate of card ability.
+    season_idx = {}
+    seasons_40g = dd(int)
+    for r in team_rows:
+        season_idx[(r["name"], r["team"], r["year"])] = r
+        if (r["g"] or 0) >= 40:
+            seasons_40g[(r["name"], r["team"])] += 1
+
+    SMOOTH_W = [(0, 0.5), (-1, 0.3), (1, 0.2)]
+    MAX_SHRINK = 1.5  # ~1.25x the within-player OBPM sd: smoothing corrects peak NOISE, so the
+                      # correction is bounded at noise scale — a genuine MVP season next to a much
+                      # weaker year (role change, injury comeback) can't be dragged below peak-1.5.
+    def smooth_stat(best, key, gate):
+        v = best.get(key)
+        if not ok(v) or float(v) <= gate: return None
+        if (best.get("g") or 0) < 40: return None
+        if seasons_40g[(best["name"], best["team"])] < 3: return None
+        parts = []
+        for dy, w in SMOOTH_W:
+            r = best if dy == 0 else season_idx.get((best["name"], best["team"], best["year"] + dy))
+            if r is None or (r.get("g") or 0) < 40 or not ok(r.get(key)): continue
+            parts.append((float(r[key]), w))
+        if len(parts) < 2: return None  # no usable neighbor -> leave the raw peak
+        tot = sum(w for _, w in parts)
+        return round(max(sum(val * w for val, w in parts) / tot, float(v) - MAX_SHRINK), 4)
+
     pool = []
     for (name, team, decade), seasons in by_variant.items():
         cand = [s for s in seasons if (s["g"] or 0) >= QUAL_G and ((s["mp"] or 99) >= QUAL_MP)]
@@ -268,6 +304,12 @@ def build():
             continue  # never a rotation-level player -> not in the draftable pool
         best = max(cand, key=peak_score)
         best = dict(best)
+        so = smooth_stat(best, "obpm", 4.0)
+        sdb = smooth_stat(best, "dbpm", 3.5)
+        if so is not None:
+            best["raw_obpm"] = best["obpm"]; best["obpm"] = so
+        if sdb is not None:
+            best["raw_dbpm"] = best["dbpm"]; best["dbpm"] = sdb
         person = slug(name)
         best["person_id"] = person
         best["id"] = f"{person}_{slug(team)}_{slug(decade)}_{best['year']}"
