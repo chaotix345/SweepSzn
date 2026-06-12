@@ -11,6 +11,7 @@ import {
   flushAfter,
 } from "@/test/routeHarness";
 import type { Player, LineupResult, Coefficients, DraftStep } from "@/lib/types";
+import { buildFhChoices } from "@/lib/factorHunt";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -47,9 +48,7 @@ const P_C   = mkP("centerech15", "C", 0.5, 2.0);
 
 // Synthetic result with a known single-negative factor so we fully control choices.
 // ANSWER_LABEL = the canonical label of the only negative factor → it is the "worst" answer.
-// DECOY_LABEL  = a FH_FACTOR_LABELS entry absent from this lineup → it ends up as a decoy.
 const ANSWER_LABEL = "No perimeter defender";
-const DECOY_LABEL  = "Spacing";
 
 const syntheticResult: LineupResult = {
   ortg: 112, drtg: 108, netRtg: 4.0, wins: 55, losses: 27, winPct: 0.67,
@@ -92,6 +91,11 @@ const { POST } = await import("@/app/api/factorhunt/submit/route");
 
 const NOW = new Date();
 const DATE = `${NOW.getUTCFullYear()}-${NOW.getUTCMonth() + 1}-${NOW.getUTCDate()}`;
+
+// DECOY_LABEL = a wrong-but-offered choice. Derived from the SAME buildFhChoices call the route
+// makes (decoy sampling shuffles over FH_FACTOR_LABELS, so a hardcoded label breaks whenever
+// that list grows — it did when the engine gained Era adjustment / Thin perimeter defense).
+const DECOY_LABEL = buildFhChoices(syntheticResult.factors, `fh-${DATE}`)!.choices.find((c) => c !== ANSWER_LABEL)!;
 
 // Valid trace for the fixture world: one pick per slot in draft order, no respins.
 const VALID_TRACE: DraftStep[] = [

@@ -95,6 +95,22 @@ describe("surgeon pool building (deterministic, exclusions, eligibility, WHY cop
     expect(lowPool.length).toBe(3);
     expect(lowPool.every((c) => c.stat.includes("USG"))).toBe(true);
   });
+
+  it("pool: modern need deals undiscounted-era impact first", () => {
+    const eraOffered = [
+      ...offered,
+      mk("old_star", "C", { year: 1962, decade: "1960s", tier: "partial", obpm: 6, dbpm: 4 }),
+      mk("modern_star", "PF", { year: 2020, decade: "2020s", obpm: 5, dbpm: 2 }),
+    ];
+    const modPool = buildSurgeonPool(lineup, eraOffered, "modern");
+    expect(modPool[0].id).toBe("modern_star");
+    expect(modPool[0].why).toContain("modern-era");
+  });
+});
+
+describe("surgeon needs for the new engine factors", () => {
+  it("need: thin perimeter -> perim", () => expect(needOf("Thin perimeter defense")).toBe("perim"));
+  it("need: era adjustment -> modern", () => expect(needOf("Era adjustment")).toBe("modern"));
 });
 
 describe("surgeon score encoding (delta can be negative)", () => {

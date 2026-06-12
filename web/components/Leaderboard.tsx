@@ -23,10 +23,14 @@ const hhmmss = (ms: number) => {
 // game that straddled midnight so we can warn before the submit 400s with a cryptic "stale date".
 const serverDate = dayUTC;
 
-export default function Leaderboard({ date, trace, usedHints = false, readOnly = false }: { date: string; trace: DraftStep[]; usedHints?: boolean; readOnly?: boolean }) {
+export default function Leaderboard({ date, trace, usedHints = false, readOnly = false, onView }: { date: string; trace: DraftStep[]; usedHints?: boolean; readOnly?: boolean; onView?: (v: LeaderboardView | null) => void }) {
   const { user, refresh, signOut } = useSession();
   const [tab, setTab] = useState<Tab>("daily");
   const [view, setView] = useState<LeaderboardView | null>(null);
+
+  // mirror the daily board state up to the parent (the result card's rank pill) — fires on the
+  // initial fetch, on submit, and on claim, so the pill always shows the freshest standing
+  useEffect(() => { onView?.(view); }, [view, onView]);
   const [agg, setAgg] = useState<Partial<Record<Tab, AggBoardView | null>>>({});
   const [enabled, setEnabled] = useState(true);
   const [anonUid, setAnonUid] = useState("");

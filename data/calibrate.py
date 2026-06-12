@@ -33,6 +33,18 @@ sys.stdout.reconfigure(encoding="utf-8")
 ZCAP = 3.3              # cap |z| at the modern-era ceiling (empirical max z_pts ~3.2-3.5 in deep leagues)
 DWS_SHRINK_K = 40       # Bayesian shrinkage strength for pre-1974 DWS/g toward the league mean
 DEF_EST_CAP = 5.5       # ceiling for estimated DBPM (max real DBPM in the 1974+ training data)
+# Usage budget for the fantasy-regime overload penalty. The fit (gamma_fit below) proves the data
+# cannot price overload in-range, so the penalty must be ~0 for real teams (DESIGN.md SS11) and only
+# fire on degenerate stacks. Real top-5-by-MP season-USG sums (1985-2025, n=1170): p50=107.5,
+# p75=111.8, p90=116.7, max=141.5 -- at the old budget of 100, 91.7% of real teams were penalized,
+# contradicting the design intent. 110 puts the median real team at zero penalty while a
+# five-ball-hog stack (sumUSG ~165) still pays ~12 pts of ORtg.
+USAGE_BUDGET = 110
+# Canonical Pythagorean exponent used to define the LUCK-FREE wins target (B-R's 13.91 ~= 14).
+# Actual wins carry ~2.4 wins of mean-absolute close-game luck vs the same team's own expectation;
+# measuring CV against pythag-expected wins removes that noise from the metric. The fitted bestk
+# below maps PREDICTED ratings to this target (it need not equal 14 a priori).
+PYTH_TARGET_K = 14.0
 
 aps = json.load(open("data/out/all_player_seasons.json", encoding="utf-8"))
 team_seasons = json.load(open("data/out/team_seasons.json", encoding="utf-8"))
@@ -165,7 +177,10 @@ for ts in team_seasons:
     orbs = [p.get("orb") for p in top5 if p.get("orb") is not None]
     drbs = [p.get("drb") for p in top5 if p.get("drb") is not None]
     rows.append({"year": y, "sumOff": sumOff, "sumDef": sumDef, "ortg": ts["ortg"], "drtg": ts["drtg"],
-                 "w82": 82 * ts["w"]/(ts["w"]+l), "su": su,
+                 "w82": 82 * ts["w"]/(ts["w"]+l),
+                 # luck-free wins target: the team's own Pythagorean expectation from its ACTUAL ratings
+                 "wpyth": 82 * ts["ortg"]**PYTH_TARGET_K / (ts["ortg"]**PYTH_TARGET_K + ts["drtg"]**PYTH_TARGET_K),
+                 "su": su,
                  "sumUsg": sum(usgs) if len(usgs) == 5 else None,
                  "sumTov": sum(tovs) if len(tovs) == 5 else None,
                  "sumOrb": sum(orbs) if len(orbs) == 5 else None,
@@ -174,7 +189,8 @@ for ts in team_seasons:
 print(f"\n=== team calibration (n={len(rows)} team-seasons, 1985-2025) ===")
 sO = np.array([r["sumOff"] for r in rows]); sD = np.array([r["sumDef"] for r in rows])
 oR = np.array([r["ortg"] for r in rows]); dR = np.array([r["drtg"] for r in rows])
-W = np.array([r["w82"] for r in rows]); YR = np.array([r["year"] for r in rows])
+W = np.array([r["w82"] for r in rows]); WP = np.array([r["wpyth"] for r in rows])
+YR = np.array([r["year"] for r in rows])
 
 def lin(x, y):
     A = np.vstack([x, np.ones_like(x)]).T
@@ -199,25 +215,28 @@ print(f"\nspacing fit: ORtg_resid = {spInt:.3f} + {spSlope:.3f}*shooterUnits  ->
 # ---- usage-overload gamma (cannot be fit; documented heuristic) ----
 have_usg = [r for r in rows if r["sumUsg"] is not None]
 res = np.array([r["ortg"] - (ortgBase + offScale*r["sumOff"]) for r in have_usg])
-over = np.array([max(0.0, r["sumUsg"] - 100.0) for r in have_usg])
+over = np.array([max(0.0, r["sumUsg"] - USAGE_BUDGET) for r in have_usg])
 slope = np.linalg.lstsq(np.vstack([over, np.ones_like(over)]).T, res, rcond=None)[0][0] if over.std() > 0 else 0.0
 gamma_fit = -float(slope)
-print(f"usage-overload fit slope -> gamma_fit={gamma_fit:.4f} (negative: real teams never stack 5 ball-stars; using heuristic 0.22)")
+print(f"usage-overload fit slope -> gamma_fit={gamma_fit:.4f} (real teams never stack 5 ball-stars; using heuristic 0.22 above budget {USAGE_BUDGET})")
 gamma = 0.22
 
-# ---- Pythagorean k (end-to-end) ----
+# ---- Pythagorean k (end-to-end, vs the luck-free pythag-wins target) ----
 pO = ortgBase + offScale*sO; pD = drtgBase - defScale*sD
 bestk, beste = 14.0, 1e9
 for k in np.arange(8, 20.01, 0.25):
-    wp = pO**k/(pO**k+pD**k); e = math.sqrt(np.mean((82*wp - W)**2))
+    wp = pO**k/(pO**k+pD**k); e = math.sqrt(np.mean((82*wp - WP)**2))
     if e < beste: beste, bestk = e, float(k)
-print(f"Pythagorean k={bestk}  in-sample wins RMSE={beste:.2f}")
+assert 13.0 <= bestk <= 15.0, f"Pythagorean k={bestk} outside sane range [13,15] -- target definition regressed?"
+print(f"Pythagorean k={bestk}  in-sample RMSE vs pythag-wins target={beste:.2f}")
 
 # ---- honest YEAR-GROUPED 10-fold CV (no season leaks across folds) ----
-def cv_wins(extra_off=None, extra_def=None):
+def cv_wins(extra_off=None, extra_def=None, target=None):
     """10-fold CV grouped by season. extra_* are lists of row-keys added to the OLS design.
+    target: wins array to measure against (default: luck-free pythag wins WP; pass W for actual).
     Uses the SAME fixed Pythagorean k=bestk the engine deploys (re-fitting k per fold would make
     the reported error optimistic vs the shipped fixed-k model)."""
+    T = WP if target is None else target
     years = sorted(set(YR)); rngp = np.random.default_rng(7)
     yperm = rngp.permutation(years); folds = np.array_split(yperm, 10)
     errs = []
@@ -231,18 +250,20 @@ def cv_wins(extra_off=None, extra_def=None):
         wo = np.linalg.lstsq(Ao[tr], oR[tr], rcond=None)[0]; po = Ao @ wo
         wd = np.linalg.lstsq(Ad[tr], dR[tr], rcond=None)[0]; pd_ = Ad @ wd
         wp = po[te]**bestk/(po[te]**bestk+pd_[te]**bestk)
-        errs += list(82*wp - W[te])
+        errs += list(82*wp - T[te])
     return math.sqrt(np.mean(np.array(errs)**2))
 
 cv_base = cv_wins()
+cv_base_actual = cv_wins(target=W)
 print(f"\n=== honest out-of-sample accuracy (year-grouped 10-fold CV) ===")
-print(f"  core (ΣOBPM/ΣDBPM):            wins RMSE={cv_base:.3f}")
+print(f"  core (ΣOBPM/ΣDBPM) vs pythag-wins target: RMSE={cv_base:.3f}")
+print(f"  core (ΣOBPM/ΣDBPM) vs ACTUAL wins:        RMSE={cv_base_actual:.3f}  (includes ~2.4 wins of close-game luck)")
 # diagnostic: do TOV/ORB (ORtg) and DRB (DRtg) improve held-out accuracy? (spoiler: no -- they're in BPM already)
 have_box = [r for r in rows if r["sumTov"] is not None and r["sumOrb"] is not None and r["sumDrb"] is not None]
 cv_box = None
 if len(have_box) > 800:
     cv_box = cv_wins(extra_off=["sumTov", "sumOrb"], extra_def=["sumDrb"])
-    print(f"  + TOV+ORB (off), DRB (def):    wins RMSE={cv_box:.3f}  (delta {cv_box-cv_base:+.3f}; kept only if <= -0.02)")
+    print(f"  + TOV+ORB (off), DRB (def):    RMSE={cv_box:.3f}  (delta {cv_box-cv_base:+.3f}; kept only if <= -0.02)")
     keep_box = (cv_base - cv_box) >= 0.02
 else:
     keep_box = False
@@ -260,7 +281,9 @@ coeff = {
   "defModelEst": {k: round(v, 4) for k, v in defModelEst.items()},    # engine pre-1974 defense path
   "defEstCap": DEF_EST_CAP, "dwsShrinkK": DWS_SHRINK_K, "leagueDwsMean": round(LEAGUE_DWS_MEAN, 5),
   "usgModel": {k: round(v, 4) for k, v in usgModel.items()},
-  "usageBudget": 100, "overloadGamma": round(gamma, 3),
+  # budget 110 (was 100): median real top-5 sumUSG is 107.5, so the old budget penalized 91.7% of
+  # real teams -- see USAGE_BUDGET comment at top. The penalty now fires only on genuine stacks.
+  "usageBudget": USAGE_BUDGET, "overloadGamma": round(gamma, 3),
   "spacing": {"perShooter": round(per_shooter_fit, 3), "diminish": 0.55, "noneFloor": -3.0, "baseline": 1.6},
   # continuous rim protection: best big's blk z maps 0..1 over [blkLo, blkLo+blkSpan]; penalty = noRimPenalty*(1-rimScore)
   "rim": {"blkLo": 0.4, "blkSpan": 1.4, "trbProxyLo": 0.8, "trbProxySpan": 1.6},
@@ -269,7 +292,11 @@ coeff = {
   # small-ball teams (both have meanTrbZ ~0; see the DRB CV diagnostic above), so size is carried here.
   "noRimPenalty": 7.0, "thinPerimeterPenalty": 3.0,
   "_meta": {"team_seasons": len(rows), "off_r2": round(r2o, 3), "def_r2": round(r2d, 3),
+            # cv_wins_rmse measures against the LUCK-FREE pythag-wins target (k=PYTH_TARGET_K);
+            # cv_wins_rmse_vs_actual is the same model vs raw season wins (incl. close-game luck).
+            "cv_target": f"pythag_wins(k={PYTH_TARGET_K:g})",
             "in_sample_wins_rmse": round(beste, 2), "cv_wins_rmse": round(cv_base, 3),
+            "cv_wins_rmse_vs_actual": round(cv_base_actual, 3),
             "cv_wins_rmse_with_box": round(cv_box, 3) if cv_box is not None else None,
             "zoff_r2": round(offR2, 3), "zdef_r2_legacy": round(defR2, 3), "zdef_r2_est": round(defEstR2, 3),
             "zusg_r2": round(usgR2, 3), "gamma_fit": round(gamma_fit, 4), "spacing_fit": round(per_shooter_fit, 3),

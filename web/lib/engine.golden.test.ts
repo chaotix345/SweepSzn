@@ -1,6 +1,10 @@
 // Golden-master snapshot of evaluateLineup using real player ids from players.json and the
 // committed coefficients.json merged over DEFAULT_COEFFICIENTS (exactly as lib/data.ts does).
 // Any change to coefficients or scoring math will break this file loudly.
+//
+// Last regenerated for the 2026-06 realism pass: usageBudget 100->110 (penalty is fantasy-regime
+// only), 3-yr peak smoothing on elite cards, pythK refit to 13.75 vs the luck-free pythag-wins
+// target, continuous perimeter credit, and the new Era adjustment display factor.
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
@@ -76,7 +80,7 @@ const SHOOTING_LINEUP = lineup(
   "lebron_james_mia_2010s_2013",
 );
 
-// 6. All-center — rim presence maxed, no perimeter defenders (no stl z ≥ 0.6 from guards)
+// 6. All-center — rim presence maxed, no perimeter defenders (no PG/SG/SF at all)
 const ALL_CENTER = lineup(
   "nikola_joki_den_2020s_2024",
   "david_robinson_sas_1990s_1994",
@@ -126,29 +130,29 @@ const MODERN_BALANCED = lineup(
 describe("engine golden master — evaluateLineup with committed coefficients.json", () => {
 
   // 1. Modern dynasty
-  // ortg=121.2, drtg=99.4, netRtg=21.8, winPct=0.941 (rounded per engine round1/round3)
+  // ortg=121.7, drtg=99.4, netRtg=22.2, winPct=0.941 (rounded per engine round1/round3)
   describe("modernDynasty", () => {
     const r = evaluateLineup(MODERN_DYNASTY, COEFF);
     it("wins", () => expect(r.wins).toBe(77));
     it("losses", () => expect(r.losses).toBe(5));
-    it("ortg", () => expect(r.ortg).toBe(121.2));
+    it("ortg", () => expect(r.ortg).toBe(121.7));
     it("drtg", () => expect(r.drtg).toBe(99.4));
-    it("netRtg", () => expect(r.netRtg).toBe(21.8));
+    it("netRtg", () => expect(r.netRtg).toBe(22.2));
     it("winPct", () => expect(r.winPct).toBe(0.941));
     it("grade is A+ or S (wins=77)", () => expect(["S", "A+"].includes(r.grade)).toBe(true));
     it("has player breakdowns for all 5", () => expect(r.players).toHaveLength(5));
   });
 
   // 2. Pre-1974-heavy (estimated defense, era-discounted)
-  // ortg=111.5, drtg=95.7, netRtg=15.8, winPct=0.894
+  // ortg=113.3, drtg=95.7, netRtg=17.6, winPct=0.911
   describe("pre74Heavy", () => {
     const r = evaluateLineup(PRE74_HEAVY, COEFF);
-    it("wins", () => expect(r.wins).toBe(73));
-    it("losses", () => expect(r.losses).toBe(9));
-    it("ortg", () => expect(r.ortg).toBe(111.5));
+    it("wins", () => expect(r.wins).toBe(75));
+    it("losses", () => expect(r.losses).toBe(7));
+    it("ortg", () => expect(r.ortg).toBe(113.3));
     it("drtg", () => expect(r.drtg).toBe(95.7));
-    it("netRtg", () => expect(r.netRtg).toBe(15.8));
-    it("winPct", () => expect(r.winPct).toBe(0.894));
+    it("netRtg", () => expect(r.netRtg).toBe(17.6));
+    it("winPct", () => expect(r.winPct).toBe(0.911));
     // pre-1985 note is attached when lineup has members with year < fullYear
     it("has era-discount note for pre-1985 players", () => {
       expect(r.notes.some((n) => /pre-1985/i.test(n) || /era.adjust/i.test(n))).toBe(true);
@@ -157,19 +161,25 @@ describe("engine golden master — evaluateLineup with committed coefficients.js
     it("has estimated-defense note", () => {
       expect(r.notes.some((n) => /estimated/i.test(n) || /pre-1974/i.test(n))).toBe(true);
     });
+    // the embedded era discount is also surfaced as a quantified factor
+    it("has a quantified Era adjustment factor", () => {
+      const f = r.factors.find((x) => /era adjustment/i.test(x.label));
+      expect(f).toBeDefined();
+      expect(f!.value).toBeLessThan(0);
+    });
   });
 
   // 3. All-PG (usage overload)
-  // ortg=118.3, drtg=107.8, netRtg=10.4, winPct=0.785
+  // ortg=117.9, drtg=107.8, netRtg=10.1, winPct=0.773
   describe("allPG (usage overload)", () => {
     const r = evaluateLineup(ALL_PG, COEFF);
-    it("wins", () => expect(r.wins).toBe(64));
-    it("losses", () => expect(r.losses).toBe(18));
-    it("ortg", () => expect(r.ortg).toBe(118.3));
+    it("wins", () => expect(r.wins).toBe(63));
+    it("losses", () => expect(r.losses).toBe(19));
+    it("ortg", () => expect(r.ortg).toBe(117.9));
     it("drtg", () => expect(r.drtg).toBe(107.8));
-    it("netRtg", () => expect(r.netRtg).toBe(10.4));
-    it("winPct", () => expect(r.winPct).toBe(0.785));
-    // overload factor should appear (totalUsage=173.4, budget=100, penalty=16.1)
+    it("netRtg", () => expect(r.netRtg).toBe(10.1));
+    it("winPct", () => expect(r.winPct).toBe(0.773));
+    // overload factor should appear (totalUsage=173.4, budget=110, penalty=13.9)
     it("includes usage overload factor", () => {
       expect(r.factors.some((f) => /overload/i.test(f.label) && f.kind === "bad")).toBe(true);
     });
@@ -178,41 +188,41 @@ describe("engine golden master — evaluateLineup with committed coefficients.js
   });
 
   // 4. GOAT era
-  // ortg=114.3, drtg=99.6, netRtg=14.7, winPct=0.873
+  // ortg=115.8, drtg=99.6, netRtg=16.1, winPct=0.887
   describe("goatEra", () => {
     const r = evaluateLineup(GOAT_ERA, COEFF);
-    it("wins", () => expect(r.wins).toBe(72));
-    it("losses", () => expect(r.losses).toBe(10));
-    it("ortg", () => expect(r.ortg).toBe(114.3));
+    it("wins", () => expect(r.wins).toBe(73));
+    it("losses", () => expect(r.losses).toBe(9));
+    it("ortg", () => expect(r.ortg).toBe(115.8));
     it("drtg", () => expect(r.drtg).toBe(99.6));
-    it("netRtg", () => expect(r.netRtg).toBe(14.7));
-    it("winPct", () => expect(r.winPct).toBe(0.873));
-    it("grade A+ (wins=72)", () => expect(r.grade).toBe("A+"));
+    it("netRtg", () => expect(r.netRtg).toBe(16.1));
+    it("winPct", () => expect(r.winPct).toBe(0.887));
+    it("grade A+ (wins=73)", () => expect(r.grade).toBe("A+"));
   });
 
   // 5. Shooting lineup
-  // ortg=120.0, drtg=105.4, netRtg=14.6, winPct=0.860
+  // ortg=119.9, drtg=105.4, netRtg=14.6, winPct=0.856
   describe("shootingLineup", () => {
     const r = evaluateLineup(SHOOTING_LINEUP, COEFF);
-    it("wins", () => expect(r.wins).toBe(71));
-    it("losses", () => expect(r.losses).toBe(11));
-    it("ortg", () => expect(r.ortg).toBe(120));
+    it("wins", () => expect(r.wins).toBe(70));
+    it("losses", () => expect(r.losses).toBe(12));
+    it("ortg", () => expect(r.ortg).toBe(119.9));
     it("drtg", () => expect(r.drtg).toBe(105.4));
     it("netRtg", () => expect(r.netRtg).toBe(14.6));
-    it("winPct", () => expect(r.winPct).toBe(0.86));
+    it("winPct", () => expect(r.winPct).toBe(0.856));
   });
 
   // 6. All-center
-  // ortg=112.8, drtg=97.2, netRtg=15.6, winPct=0.889
+  // ortg=114.3, drtg=97.6, netRtg=16.7, winPct=0.898
   describe("allCenter", () => {
     const r = evaluateLineup(ALL_CENTER, COEFF);
-    it("wins", () => expect(r.wins).toBe(73));
-    it("losses", () => expect(r.losses).toBe(9));
-    it("ortg", () => expect(r.ortg).toBe(112.8));
-    it("drtg", () => expect(r.drtg).toBe(97.2));
-    it("netRtg", () => expect(r.netRtg).toBe(15.6));
-    it("winPct", () => expect(r.winPct).toBe(0.889));
-    // no-perimeter-defender penalty expected (all centers, no guard stl z >= 0.6)
+    it("wins", () => expect(r.wins).toBe(74));
+    it("losses", () => expect(r.losses).toBe(8));
+    it("ortg", () => expect(r.ortg).toBe(114.3));
+    it("drtg", () => expect(r.drtg).toBe(97.6));
+    it("netRtg", () => expect(r.netRtg).toBe(16.7));
+    it("winPct", () => expect(r.winPct).toBe(0.898));
+    // no-perimeter-defender penalty expected (all bigs — perimScore is exactly 0)
     it("includes thin-perimeter or no-perimeter factor", () => {
       expect(r.factors.some((f) => /perimeter/i.test(f.label) && f.kind === "bad")).toBe(true);
     });
@@ -224,15 +234,15 @@ describe("engine golden master — evaluateLineup with committed coefficients.js
   });
 
   // 7. Pure pre-1974
-  // ortg=107.9, drtg=95.3, netRtg=12.5, winPct=0.849
+  // ortg=110.1, drtg=95.3, netRtg=14.7, winPct=0.878
   describe("allPre74", () => {
     const r = evaluateLineup(ALL_PRE74, COEFF);
-    it("wins", () => expect(r.wins).toBe(70));
-    it("losses", () => expect(r.losses).toBe(12));
-    it("ortg", () => expect(r.ortg).toBe(107.9));
+    it("wins", () => expect(r.wins).toBe(72));
+    it("losses", () => expect(r.losses).toBe(10));
+    it("ortg", () => expect(r.ortg).toBe(110.1));
     it("drtg", () => expect(r.drtg).toBe(95.3));
-    it("netRtg", () => expect(r.netRtg).toBe(12.5));
-    it("winPct", () => expect(r.winPct).toBe(0.849));
+    it("netRtg", () => expect(r.netRtg).toBe(14.7));
+    it("winPct", () => expect(r.winPct).toBe(0.878));
     // spacing is zero (all pre-1980, shooterUnit returns 0 for year < 1980)
     it("spacing factor absent (all pre-3pt era)", () => {
       const spacingFactor = r.factors.find((f) => /spacing/i.test(f.label));
@@ -241,47 +251,52 @@ describe("engine golden master — evaluateLineup with committed coefficients.js
     it("has estimated-defense note", () => {
       expect(r.notes.some((n) => /estimated/i.test(n))).toBe(true);
     });
+    it("has a quantified Era adjustment factor (everyone is discounted)", () => {
+      const f = r.factors.find((x) => /era adjustment/i.test(x.label));
+      expect(f).toBeDefined();
+      expect(f!.value).toBeLessThan(0);
+    });
   });
 
   // 8. Stat stuffer
-  // ortg=109.2, drtg=101.8, netRtg=7.4, winPct=0.728
+  // ortg=108.9, drtg=101.8, netRtg=7.1, winPct=0.716
   describe("statStuffer", () => {
     const r = evaluateLineup(STAT_STUFFER, COEFF);
-    it("wins", () => expect(r.wins).toBe(60));
-    it("losses", () => expect(r.losses).toBe(22));
-    it("ortg", () => expect(r.ortg).toBe(109.2));
+    it("wins", () => expect(r.wins).toBe(59));
+    it("losses", () => expect(r.losses).toBe(23));
+    it("ortg", () => expect(r.ortg).toBe(108.9));
     it("drtg", () => expect(r.drtg).toBe(101.8));
-    it("netRtg", () => expect(r.netRtg).toBe(7.4));
-    it("winPct", () => expect(r.winPct).toBe(0.728));
+    it("netRtg", () => expect(r.netRtg).toBe(7.1));
+    it("winPct", () => expect(r.winPct).toBe(0.716));
     it("has usage overload factor", () => {
       expect(r.factors.some((f) => /overload/i.test(f.label) && f.kind === "bad")).toBe(true);
     });
   });
 
   // 9. Mixed era
-  // ortg=115.8, drtg=94.5, netRtg=21.3, winPct=0.945
+  // ortg=117.3, drtg=94.5, netRtg=22.7, winPct=0.951
   describe("mixedEra", () => {
     const r = evaluateLineup(MIXED_ERA, COEFF);
     it("wins", () => expect(r.wins).toBe(78));
     it("losses", () => expect(r.losses).toBe(4));
-    it("ortg", () => expect(r.ortg).toBe(115.8));
+    it("ortg", () => expect(r.ortg).toBe(117.3));
     it("drtg", () => expect(r.drtg).toBe(94.5));
-    it("netRtg", () => expect(r.netRtg).toBe(21.3));
-    it("winPct", () => expect(r.winPct).toBe(0.945));
+    it("netRtg", () => expect(r.netRtg).toBe(22.7));
+    it("winPct", () => expect(r.winPct).toBe(0.951));
     it("has era-discount note (Mikan/Russell are pre-1985)", () => {
       expect(r.notes.some((n) => /pre-1985/i.test(n) || /era.adjust/i.test(n))).toBe(true);
     });
   });
 
   // 10. Modern balanced
-  // ortg=121.6, drtg=98.1, netRtg=23.5, winPct=0.953
+  // ortg=122.2, drtg=98.2, netRtg=24.0, winPct=0.953
   describe("modernBalanced", () => {
     const r = evaluateLineup(MODERN_BALANCED, COEFF);
     it("wins", () => expect(r.wins).toBe(78));
     it("losses", () => expect(r.losses).toBe(4));
-    it("ortg", () => expect(r.ortg).toBe(121.6));
-    it("drtg", () => expect(r.drtg).toBe(98.1));
-    it("netRtg", () => expect(r.netRtg).toBe(23.5));
+    it("ortg", () => expect(r.ortg).toBe(122.2));
+    it("drtg", () => expect(r.drtg).toBe(98.2));
+    it("netRtg", () => expect(r.netRtg).toBe(24));
     it("winPct", () => expect(r.winPct).toBe(0.953));
     it("grade A+ (wins=78, S threshold is 80)", () => expect(r.grade).toBe("A+"));
   });
@@ -335,5 +350,35 @@ describe("engine golden master — evaluateLineup with committed coefficients.js
       expect(r.losses).toBe(82);
     });
     it("grade F", () => expect(r.grade).toBe("F"));
+  });
+
+  // ── Ceiling tie: the best five scripts/search_best.ts ever found ──────────
+  // ResultCard's BEST_KNOWN_RECORD ("80-2") and the site copy cite this number. If an engine or
+  // data change moves it, this breaks loudly — re-run search_best.ts and update both together.
+  describe("best-known five (BEST_KNOWN_RECORD anchor)", () => {
+    const BEST_KNOWN = lineup(
+      "nikola_joki_den_2020s_2024",
+      "lebron_james_mia_2010s_2013",
+      "wilt_chamberlain_phi_1960s_1968",
+      "john_stockton_uta_1980s_1989",
+      "nate_mcmillan_sea_1990s_1994",
+    );
+    const r = evaluateLineup(BEST_KNOWN, COEFF);
+    it("still projects 80-2", () => {
+      expect(r.wins).toBe(80);
+      expect(r.losses).toBe(2);
+    });
+    it("earns the S grade (the tier is reachable)", () => expect(r.grade).toBe("S"));
+  });
+
+  // ── Display-tether sync: UI constants read DEFAULT_COEFFICIENTS ───────────
+  // playerContribRows (explain.ts), UsageBar (controls.tsx) and blueprint.ts scale display
+  // numbers with DEFAULT_COEFFICIENTS while the engine runs on the merged coefficients.json.
+  // If a recalibration ever moves these keys without updating the defaults, the UI would
+  // silently disagree with the engine — fail loudly here instead.
+  describe("DEFAULT_COEFFICIENTS stays in sync with the fitted coefficients.json", () => {
+    for (const key of ["offScale", "defScale", "usageBudget", "overloadGamma", "pythK"] as const) {
+      it(`${key} matches`, () => expect(COEFF[key]).toBe(DEFAULT_COEFFICIENTS[key]));
+    }
   });
 });

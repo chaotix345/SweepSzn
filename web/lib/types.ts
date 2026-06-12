@@ -77,7 +77,7 @@ export interface DraftCandidate {
   blk?: number | null;
   defense_estimated?: boolean;
   fit?: CandidateFit;
-  usage?: number;       // engine usage demand — sent only on Blueprint (bp-*) spins for the live budget bar
+  usage?: number;       // engine usage demand — sent on every spin for the live budget bar (intrinsic public player data, not seed-relative — DESIGN.md §12)
 }
 
 // Daily leaderboard: the client submits the draft as an ordered trace (index = round) so the
@@ -201,7 +201,10 @@ export interface LineupResult {
   winPct: number;
   grade: string;
   label: string;
-  factors: { label: string; value: number; kind: "good" | "bad" }[];
+  // winsEst: exact counterfactual wins effect of this factor for THIS lineup (wins with the
+  // factor minus wins with it removed, through the Pythagorean curve). Absent on level terms
+  // (Star offense/defense), which are the rating itself rather than a delta.
+  factors: { label: string; value: number; kind: "good" | "bad"; winsEst?: number }[];
   players: PlayerBreakdown[];
   notes: string[];
 }

@@ -199,8 +199,11 @@ function selectSpin(seed: string, round: number, opts: SpinOptions): { team: str
 // Classic-originated one, where the carried seed still starts with "classic-" but the responder
 // draft does NOT request fit) — so the network response can't be read in devtools to draft
 // optimally and skew a leaderboard.
-// Blueprint spins additionally carry each candidate's usage demand: USAGE DISCIPLINE grades on
-// total usage, so the live budget bar needs the real engine number during drafting (spec fix).
+// Every spin carries each candidate's usage demand for the live budget bar (USAGE DISCIPLINE
+// grades on it; every other mode shows it so overload is felt before the reveal). Usage is an
+// intrinsic player property computable from the public players.json + coefficients.json — unlike
+// fit grades it is NOT seed-relative, so shipping it on competitive seeds reveals nothing a
+// script couldn't already derive (the §12 bar is unchanged).
 export function spin(seed: string, round: number, opts: SpinOptions = {}, wantFit = false): SpinResult {
   const { byId, coeff } = load();
   const { team, decade, pool } = selectSpin(seed, round, opts);
@@ -211,7 +214,7 @@ export function spin(seed: string, round: number, opts: SpinOptions = {}, wantFi
   const fits = showFit ? computeFits(drafted, pool, coeff) : null;
   // send unrounded usage so the live budget bar sums the SAME floats blueprintMetric grades on —
   // a per-player round here could straddle the A+/A boundary the bar tells the player they hit
-  const candidates = pool.map((p) => toCandidate(p, fits?.get(p.id), isBp ? playerFeatures(p, coeff).usage : undefined));
+  const candidates = pool.map((p) => toCandidate(p, fits?.get(p.id), playerFeatures(p, coeff).usage));
   return { team, decade, candidates };
 }
 
@@ -263,7 +266,8 @@ export function primeSpin(seed: string, round: number, opts: SpinOptions = {}, w
   const excludeIds = new Set(opts.exclude ?? []);
   const drafted = showFit && excludeIds.size ? [...excludeIds].map((id) => byId.get(id)).filter((p): p is Player => !!p) : [];
   const fits = showFit ? computeFits(drafted, pool, coeff) : null;
-  return { team, decade: "PRIME", candidates: pool.map((p) => toCandidate(p, fits?.get(p.id))) };
+  // usage rides every prime spin too — the live budget bar shows in Prime (it is stats-visible)
+  return { team, decade: "PRIME", candidates: pool.map((p) => toCandidate(p, fits?.get(p.id), playerFeatures(p, coeff).usage)) };
 }
 
 export function primeStats() {

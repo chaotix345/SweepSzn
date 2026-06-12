@@ -30,14 +30,16 @@ export function surgeonDiagnosis(factors: LineupResult["factors"]): SurgeonDiagn
 
 // Diagnosis -> the roster need a replacement should target (drives candidate ranking + the
 // "why offered" copy — the spec's anti-"rigged feeling" mitigation).
-export type SurgeonNeed = "shoot" | "rim" | "perim" | "lowusage" | "off" | "def";
+export type SurgeonNeed = "shoot" | "rim" | "perim" | "lowusage" | "off" | "def" | "modern";
 export function needOf(canonical: string): SurgeonNeed {
   switch (canonical) {
     case "Usage overload": return "lowusage";
     case "Spacing": return "shoot";
     case "Thin interior size":
     case "No interior size": return "rim";
+    case "Thin perimeter defense":
     case "No perimeter defender": return "perim";
+    case "Era adjustment": return "modern"; // the fix is an undiscounted (1985+) star
     case "Star offense": return "off";
     default: return "def"; // "Star defense"
   }
@@ -46,6 +48,7 @@ export function needOf(canonical: string): SurgeonNeed {
 const NEED_TITLE: Record<SurgeonNeed, string> = {
   shoot: "floor spacer", rim: "rim anchor", perim: "perimeter stopper",
   lowusage: "low-usage glue", off: "shot creator", def: "defensive upgrade",
+  modern: "modern-era star",
 };
 
 const f1 = (v: number | null | undefined) => (v == null ? "–" : v.toFixed(1));
@@ -94,6 +97,8 @@ export function buildSurgeonPool(lineup: Player[], offered: Player[], need: Surg
     lowusage: (p) => -fx(p).usage,
     off: (p) => fx(p).off,
     def: (p) => fx(p).def,
+    // era fix: undiscounted (1985+) players first, then by two-way impact
+    modern: (p) => (p.year >= 1985 ? 1000 : 0) + fx(p).off + fx(p).def,
   };
   let ranked = [...pool].sort((a, b) =>
     score[need](b) - score[need](a) || (b.peak_score ?? 0) - (a.peak_score ?? 0) || (a.id < b.id ? -1 : 1));
@@ -113,6 +118,7 @@ export function buildSurgeonPool(lineup: Player[], offered: Player[], need: Surg
       case "lowusage": return { why: `${NEED_TITLE[need]} — ${Math.round(f.usage)}% usage demand`, stat: `${Math.round(f.usage)}% USG` };
       case "off": return { why: `${NEED_TITLE[need]} — ${f1(p.pts)} PPG`, stat: `${f1(p.pts)} PPG` };
       case "def": return { why: `${NEED_TITLE[need]} — ${f1(p.stl)} SPG · ${f1(p.blk)} BPG`, stat: `${f1(p.blk)} BPG` };
+      case "modern": return { why: `${NEED_TITLE[need]} — ${p.year} season${p.year >= 1985 ? ", no era discount" : " (still era-adjusted)"}`, stat: `${p.year}` };
     }
   };
 

@@ -11,9 +11,11 @@ The original sums per-game stats (PPG×0.46 + RPG×0.25 + …) with no era adjus
 - Uses **OBPM/DBPM** (Box Plus/Minus — validated points-per-100 impact) for 1974+, with z-score box proxies for older eras. Pre-1974 **defense** is redone: DWS Bayesian-shrunk toward the league mean (the old model had a perverse rebounding term that ranked obscure 1950s role players as all-time defenders).
 - Applies a **continuous usage-overload penalty** (five ball-dominant stars can't all keep their numbers) and a **continuous interior-presence penalty** (a no-big lineup concedes the rim, post, and glass) — which keeps five point guards honest without a gameable positional rule.
 - Scores **offense and defense separately** (≈ equal weight) and adds a **data-fit spacing** term (per-shooter coefficient regressed from real ORtg residuals, not hand-set).
-- Maps team ORtg/DRtg → wins via **Pythagorean expectation**, core coefficients **fitted to 1,170 real NBA team-seasons** (the fit recovered the canonical exponent k≈14). Honest **year-grouped 10-fold cross-validation** reports out-of-sample accuracy (~6.1 wins RMSE — the real ceiling for a 5-starter feature set) in `coefficients.json._meta.cv_wins_rmse`.
+- Maps team ORtg/DRtg → wins via **Pythagorean expectation**, core coefficients **fitted to 1,170 real NBA team-seasons**. Honest **year-grouped 10-fold cross-validation** measures against **luck-free Pythagorean win totals** (~5.6 wins RMSE; ~6.1 vs raw wins, which carry ~2.4 wins of close-game luck) in `coefficients.json._meta`.
+- **Fantasy-regime penalties fire only out-of-distribution**: the usage budget sits at 110 (the median real top-5 sums ~107.5% usage, so the old budget of 100 penalized 91.7% of *real* teams), and the perimeter-defense term is a continuous gradient, not a gameable cliff. **Elite peak cards are 3-yr smoothed** (same-team adjacent seasons) so one transcendent outlier season isn't priced as durable ability.
+- Every penalty factor on the result card carries its **exact win cost for that lineup** (counterfactual through the Pythagorean curve), the era discount is itemized, and records are anchored to verified real seasons ("comparable to the 66-16 Heat").
 
-Result: a balanced two-way team beats a stat-stuffer; 82-0 is achievable but brutal (best lineup found ≈ 79 wins). See `DESIGN.md` §11 for the full accuracy-overhaul writeup.
+Result: a balanced two-way team beats a stat-stuffer; nobody has gone 82-0 (best five ever found projects **80-2** — `scripts/search_best.ts`). See `DESIGN.md` §11 and §13 for the accuracy writeups.
 
 ## Layout
 

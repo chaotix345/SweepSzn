@@ -8,13 +8,20 @@ import type { LineupResult, Player, Slot } from "@/lib/types";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { encodeLineup } from "@/lib/share";
 import { bpCode, type BlueprintView } from "@/lib/blueprint";
-import { factorViews, lineupRoles, headline } from "@/lib/explain";
+import { factorViews, lineupRoles, headline, historyAnchor, playerContribRows, type ContribRow } from "@/lib/explain";
+import { WIN_GRADES } from "@/lib/engine";
 import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
 
 // Crowd snapshot + your vote (and, same-session only, the spun team/era the vote was about).
 type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
 // Factor Hunt verdict: the locked pre-reveal prediction vs. the engine's actual top factor.
 type FactorHuntProp = { prediction: string; answer: string; correct: boolean };
+// Daily leaderboard standing at submit time (rank/total from the submit response) — context only.
+type LbRankProp = { rank: number; total: number };
+
+// The strongest five search_best.ts has ever found (verified through evaluateLineup) — the
+// honest ceiling the elite-result copy cites. Re-run the script after any engine/data change.
+const BEST_KNOWN_RECORD = "80-2";
 
 const GRADE_COLOR: Record<string, string> = {
   S: "text-gold", "A+": "text-gold", A: "text-green-400",
@@ -23,9 +30,9 @@ const GRADE_COLOR: Record<string, string> = {
 const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1));
 
 export default function ResultCard({
-  result, players, slots, mode, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint,
+  result, players, slots, mode, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint, lbRank,
 }: {
-  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean; blueprint?: BlueprintView;
+  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean; blueprint?: BlueprintView; lbRank?: LbRankProp | null;
 }) {
   const factors = factorViews(result);
   // split by the value's sign (what actually helped/hurt), not the engine's fixed label —
@@ -33,6 +40,11 @@ export default function ResultCard({
   const helps = factors.filter((f) => f.value > 0);
   const hurts = factors.filter((f) => f.value < 0);
   const roles = lineupRoles(players, result.players);
+  const contrib = playerContribRows(result.players);
+  const anchor = historyAnchor(result.wins);
+  const winsDelta = result.wins - 41;
+  // top-half ranks read as a percentile; bottom-half as a plain standing (Top 93% is a brag fail)
+  const pct = lbRank && lbRank.total >= 10 ? Math.max(1, Math.ceil((100 * lbRank.rank) / lbRank.total)) : null;
   const totals = players.reduce(
     (a, p) => ({ pts: a.pts + (p.pts ?? 0), trb: a.trb + (p.trb ?? 0), ast: a.ast + (p.ast ?? 0), stl: a.stl + (p.stl ?? 0), blk: a.blk + (p.blk ?? 0) }),
     { pts: 0, trb: 0, ast: 0, stl: 0, blk: 0 }
@@ -80,6 +92,31 @@ export default function ResultCard({
           <div className="mt-2 ml-1 inline-flex items-center gap-1 rounded-full bg-cyan-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-cyan-300"
             title={`Committed before the spin: ${blueprint.label}`}>📐 {blueprint.label}</div>
         )}
+        {/* context layer: real-history anchor, league-average baseline, verified ceiling, rank */}
+        {anchor && (
+          <p className="mt-2 text-xs italic text-zinc-400">
+            Comparable to the {anchor.record} {anchor.team} ({anchor.season}) — {anchor.hook}.
+          </p>
+        )}
+        <p className="mt-1 text-[11px] text-zinc-500">
+          {winsDelta >= 1
+            ? `+${winsDelta} win${winsDelta === 1 ? "" : "s"} above the 41-win NBA average`
+            : winsDelta <= -1
+              ? `${-winsDelta} win${winsDelta === -1 ? "" : "s"} below the 41-win NBA average`
+              : "Right at the 41-win NBA average"}
+        </p>
+        {result.wins >= 72 && (
+          <p className="mt-1 text-[11px] text-zinc-500">
+            The best five ever found projects {BEST_KNOWN_RECORD} — nobody has gone 82-0.
+          </p>
+        )}
+        {pct != null && lbRank && (
+          <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-orange-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-orange-300"
+            title="Your standing on today's server-verified leaderboard">
+            {pct <= 50 ? <>🏆 Top {pct}% today</> : <>#{lbRank.rank} of {lbRank.total} today</>}
+          </div>
+        )}
+        <GradeLadder wins={result.wins} grade={result.grade} />
         <p className="mx-auto mt-3 max-w-md text-sm text-zinc-400">{headline(result)}</p>
         <div className="mt-4 flex justify-center gap-2 text-sm">
           <Metric label="ORtg" value={result.ortg.toFixed(1)} />
@@ -96,8 +133,8 @@ export default function ResultCard({
       <div className="border-t border-zinc-800 px-6 py-5">
         <div className="mb-3 text-xs font-bold uppercase tracking-wide text-zinc-500">Why this record</div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <FactorColumn title="What's helping" items={helps} kind="good" />
-          <FactorColumn title="What's hurting" items={hurts} kind="bad" />
+          <FactorColumn title="What's helping" items={helps} kind="good" contrib={contrib} />
+          <FactorColumn title="What's hurting" items={hurts} kind="bad" contrib={contrib} />
         </div>
         {result.notes.map((n, i) => (
           <p key={i} className="mt-3 flex gap-2 text-xs text-amber-500/80">
@@ -172,6 +209,12 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
   const canNative = useSyncExternalStore(subscribeNoop, getCanNative, getServerCanNative);
   // Defying the crowd is the share-worthy Pick'Em moment — it rewrites the share copy (spec).
   const defyLine = pickem ? pickemShareLine(result.wins, result.losses, pickem, pickem.subject) : null;
+  // a real-team comparison gives a recipient with zero context proof the number is basketball,
+  // not a random simulator — the highest-leverage moment to pre-frame the engine (B-R verified).
+  const shareAnchor = historyAnchor(result.wins);
+  const anchorBit = shareAnchor
+    ? ` — comparable to the ${shareAnchor.record} ${shareAnchor.team}`
+    : ` — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`;
   const text = textOverride
     ? textOverride
     : defyLine
@@ -179,7 +222,7 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
     : blueprint
       // the committed objective is the identity-rich share hook (spec: "I went SPACING BOMB…")
       ? `I went ${blueprint.label} on SweepSzn — ${result.wins}-${result.losses} (${result.label}) with ${blueprint.grade} blueprint execution${usedHints ? " (with hints)" : ""}, board score ${blueprint.score % 1 === 0 ? blueprint.score : blueprint.score.toFixed(1)}. Can you out-execute me?`
-      : `My ${prime ? "PRIME cross-era five" : "all-time five"} (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""} — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}. Can you build a better one?`;
+      : `My ${prime ? "PRIME cross-era five" : "all-time five"} (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""}${anchorBit}. Can you build a better one?`;
   const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
 
@@ -307,7 +350,59 @@ function Metric({ label, value, color = "text-zinc-200" }: { label: string; valu
   );
 }
 
-function FactorColumn({ title, items, kind }: { title: string; items: ReturnType<typeof factorViews>; kind: "good" | "bad" }) {
+// Compact grade scale (F → S) with the current tier highlighted and a "2 wins from B" nudge
+// when the next boundary is close. Boundaries come from the engine's WIN_GRADES — never redefined.
+function GradeLadder({ wins, grade }: { wins: number; grade: string }) {
+  const asc = [...WIN_GRADES].reverse(); // F → S
+  const next = asc.find((g) => g.min > wins);
+  return (
+    <div className="mt-3">
+      <div className="flex items-center justify-center gap-1" role="img" aria-label={`Grade scale — you are ${grade}`}>
+        {asc.map((g) => (
+          <span key={g.grade} title={`${g.label} — ${g.min}+ wins`}
+            className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+              g.grade === grade ? `${GRADE_COLOR[g.grade] ?? "text-zinc-200"} bg-zinc-800` : "text-zinc-600"}`}>
+            {g.grade}
+          </span>
+        ))}
+      </div>
+      {next && next.min - wins <= 5 && (
+        <p className="mt-1 text-[11px] text-zinc-500">
+          {next.min - wins} win{next.min - wins === 1 ? "" : "s"} from {next.grade} ({next.label})
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Per-player rating contributions behind the Star offense/defense factors. This is the single
+// most common confusion fix: a defensive anchor's NEGATIVE offensive impact silently drags
+// "Star offense" — surfacing the per-player split turns "engine is broken" into "real tradeoff".
+function StarContrib({ rows, side }: { rows: ContribRow[]; side: "off" | "def" }) {
+  return (
+    <details className="mt-1">
+      <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-wide text-zinc-600 hover:text-zinc-400">
+        Per-player impact
+      </summary>
+      <div className="mt-1 space-y-0.5">
+        {rows.map((r) => {
+          const v = side === "off" ? r.offPts : r.defPts;
+          return (
+            <div key={r.id} className="flex items-center justify-between text-[11px]">
+              <span className="truncate text-zinc-400">{displayName(r.name)}</span>
+              <span className={`shrink-0 tabular-nums font-semibold ${v < 0 ? "text-amber-400" : "text-zinc-300"}`}>
+                {v > 0 ? "+" : ""}{v.toFixed(1)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-1 text-[10px] leading-snug text-zinc-600">Engine impact on this lineup — not a career grade.</p>
+    </details>
+  );
+}
+
+function FactorColumn({ title, items, kind, contrib }: { title: string; items: ReturnType<typeof factorViews>; kind: "good" | "bad"; contrib?: ContribRow[] }) {
   const color = kind === "good" ? "text-green-400" : "text-red-400";
   return (
     <div>
@@ -316,15 +411,26 @@ function FactorColumn({ title, items, kind }: { title: string; items: ReturnType
         <div className="text-xs text-zinc-500">{kind === "bad" ? "No major weaknesses — a clean, balanced build." : "—"}</div>
       )}
       <div className="space-y-2">
-        {items.map((f, i) => (
-          <div key={i}>
-            <div className="flex items-center justify-between gap-2 text-sm">
-              <span className="text-zinc-300">{f.label}</span>
-              <span className={`shrink-0 tabular-nums font-semibold ${color}`}>{f.value > 0 ? "+" : ""}{f.value.toFixed(1)}</span>
+        {items.map((f, i) => {
+          const starSide = f.label === "Star offense" ? "off" : f.label === "Star defense" ? "def" : null;
+          return (
+            <div key={i}>
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-zinc-300">{f.label}</span>
+                <span className={`shrink-0 tabular-nums font-semibold ${color}`}>
+                  {f.value > 0 ? "+" : ""}{f.value.toFixed(1)}
+                  {f.winsEst != null && Math.abs(f.winsEst) >= 1 && (
+                    <span className="ml-1 font-normal text-zinc-500" title="Exact win effect for this five — record with this factor vs. without it">
+                      (~{f.winsEst > 0 ? "+" : "-"}{Math.abs(f.winsEst)} win{Math.abs(f.winsEst) === 1 ? "" : "s"})
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="text-[11px] leading-snug text-zinc-500">{f.blurb}</div>
+              {starSide && contrib && contrib.length > 0 && <StarContrib rows={contrib} side={starSide} />}
             </div>
-            <div className="text-[11px] leading-snug text-zinc-500">{f.blurb}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
