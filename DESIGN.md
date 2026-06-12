@@ -276,7 +276,11 @@ ladder with next-grade nudge, per-player off/def contribution disclosures (the G
 "Star offense" confusion killer), "Top X% today" pill from the daily submit response, the usage
 budget bar in every stats-visible mode (usage is intrinsic public player data, not a seed-relative
 hint — §12 unaffected; HoopIQ stays blind), anchor-aware share copy + OG footer, and honest
-ceiling copy: **the best five ever found projects 80-2** (`scripts/search_best.ts`, now
-person-deduped and exact to the engine), so "82-0 achievable" copy was replaced with the chase
-framing. Factor Hunt's label list and Surgeon's need mapping ("Era adjustment" → modern-era star,
+ceiling copy: the engine's theoretical max is **80-2** (`scripts/search_best.ts`, person-deduped
+and exact to the engine) — but that five needs two C-only bigs (Jokić + Wilt) and is slot-illegal,
+so the ceiling a player can actually reach is the best DRAFTABLE five at **79-3** (Stockton /
+McMillan / LeBron '13 / Magic '90 / Jokić '24; the script's slot-legal search section). Product
+copy cites the draftable number; the S grade (80+) is engine-theoretical and unreachable on any
+leaderboard (it always was — the pre-fix ceiling was also 79). "82-0 achievable" copy was replaced
+with the chase framing; golden tests pin both numbers. Factor Hunt's label list and Surgeon's need mapping ("Era adjustment" → modern-era star,
 "Thin perimeter defense" → perimeter stopper) were extended to cover the new factors.

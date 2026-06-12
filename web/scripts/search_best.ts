@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { evaluateLineup, quickScore, playerFeatures, DEFAULT_COEFFICIENTS } from "../lib/engine";
-import type { Player, Coefficients } from "../lib/types";
+import type { Player, Coefficients, Slot } from "../lib/types";
 
 const D = path.join(process.cwd(), "public", "data");
 const players: Player[] = JSON.parse(fs.readFileSync(path.join(D, "players.json"), "utf-8"));
@@ -108,5 +108,105 @@ console.log(`\n--- top 10 teams by win% (brute force pool, person-deduped) ---`)
 top.slice(0, 10).forEach((t, i) => {
   const names = t.idx.map((x) => pool[x].p.name.split(" ").slice(-1)[0]).join("/");
   const r = quickScore(t.idx.map((x) => pool[x].p), c);
+  console.log(`  ${String(i + 1).padStart(2)}. ${r.wins}-${82 - r.wins}  (net ${r.netRtg.toFixed(1)})  ${names}`);
+});
+
+// ════════════════ DRAFTABLE best (the lineup a player can actually build) ════════════════
+// The engine optimum above ignores the game's slot rule: one player per PG/SG/SF/PF/C slot,
+// constrained by each card's `eligible` array. Two C-only bigs (Jokić + Wilt) are engine-legal
+// but game-illegal. This section finds the best five that admits a perfect slot assignment.
+
+const SLOTS5: Slot[] = ["PG", "SG", "SF", "PF", "C"];
+const eligOf = (p: Player): Slot[] => (p.eligible && p.eligible.length ? p.eligible : [p.pos as Slot]);
+const maskOf = (p: Player) => eligOf(p).reduce((m, s) => m | (1 << SLOTS5.indexOf(s)), 0);
+const masks = feat.map((f) => maskOf(f.p));
+
+// 5x5 bipartite perfect matching (DFS augmenting — tiny, exact)
+function slotAssign(ms: number[]): number[] | null {
+  const slotOf = new Array<number>(5).fill(-1); // slot -> player index (into ms)
+  const tryP = (pi: number, seen: boolean[]): boolean => {
+    for (let s = 0; s < 5; s++) {
+      if (!((ms[pi] >> s) & 1) || seen[s]) continue;
+      seen[s] = true;
+      if (slotOf[s] === -1 || tryP(slotOf[s], seen)) { slotOf[s] = pi; return true; }
+    }
+    return false;
+  };
+  for (let pi = 0; pi < 5; pi++) if (!tryP(pi, new Array(5).fill(false))) return null;
+  return slotOf;
+}
+const isDraftable = (gIdx: number[]) => slotAssign(gIdx.map((i) => masks[i])) !== null;
+
+// ---- brute force over the strongest NL by base value, legality-gated ----
+const NL = 80;
+const lpool = [...feat.keys()].sort((a, b) => base(feat[b]) - base(feat[a])).slice(0, NL);
+console.log(`\nbrute-forcing C(${NL},5) draftable combos...`);
+let lbf: Cand = { wp: -1, idx: [] };
+const ltop: Cand[] = [];
+for (let a = 0; a < NL; a++)
+ for (let b = a + 1; b < NL; b++)
+  for (let d = b + 1; d < NL; d++)
+   for (let e = d + 1; e < NL; e++)
+    for (let g = e + 1; g < NL; g++) {
+      const gIdx = [lpool[a], lpool[b], lpool[d], lpool[e], lpool[g]];
+      const fs5 = gIdx.map((i) => feat[i]);
+      if (!distinctPersons(fs5)) continue;
+      // cheap prefilter: the five's eligibility union must cover all slots
+      if ((masks[gIdx[0]] | masks[gIdx[1]] | masks[gIdx[2]] | masks[gIdx[3]] | masks[gIdx[4]]) !== 31) continue;
+      const wp = wpOf(fs5);
+      if (wp <= (ltop.length === 12 ? ltop[11].wp : -1) && wp <= lbf.wp) continue;
+      if (!isDraftable(gIdx)) continue; // exact matching only for contenders
+      if (wp > lbf.wp) lbf = { wp, idx: gIdx };
+      ltop.push({ wp, idx: gIdx });
+      ltop.sort((x, y) => y.wp - x.wp);
+      if (ltop.length > 12) ltop.pop();
+    }
+
+// ---- slot-keyed hill-climb over the FULL pool (legal by construction) ----
+const bySlot: number[][] = SLOTS5.map((_, s) => [...feat.keys()].filter((i) => (masks[i] >> s) & 1));
+let lhc = { wp: -1, idx: [] as number[] };
+for (let start = 0; start < 200; start++) {
+  const cur: number[] = []; const used = new Set<string>();
+  for (let s = 0; s < 5; s++) {
+    let k: number;
+    do { k = bySlot[s][Math.floor(rand() * bySlot[s].length)]; } while (used.has(feat[k].person));
+    used.add(feat[k].person); cur.push(k);
+  }
+  let curWp = wpOf(cur.map((i) => feat[i]));
+  let improved = true;
+  while (improved) {
+    improved = false;
+    for (let s = 0; s < 5; s++) for (const cand of bySlot[s]) {
+      if (cur.includes(cand)) continue;
+      if (cur.some((o, j) => j !== s && feat[o].person === feat[cand].person)) continue;
+      const trial = cur.slice(); trial[s] = cand;
+      const wp = wpOf(trial.map((i) => feat[i]));
+      if (wp > curWp) { cur[s] = cand; curWp = wp; improved = true; }
+    }
+  }
+  if (curWp > lhc.wp) lhc = { wp: curWp, idx: cur.slice() };
+}
+
+const legalIdx = lhc.wp > lbf.wp ? lhc.idx : lbf.idx;
+const legalTeam = legalIdx.map((i) => feat[i].p);
+console.log(`draftable: brute-force winPct=${lbf.wp.toFixed(4)} | slot hill-climb winPct=${lhc.wp.toFixed(4)} | agree=${Math.abs(lhc.wp - lbf.wp) < 1e-4}`);
+
+const assign = slotAssign(legalIdx.map((i) => masks[i]))!;
+const RL = evaluateLineup(legalTeam, c);
+console.log(`\n================ BEST DRAFTABLE TEAM (slot-legal) ================`);
+console.log(`RECORD: ${RL.wins}-${RL.losses}   ${RL.grade} ${RL.label}   (ORtg ${RL.ortg} / DRtg ${RL.drtg} / Net ${RL.netRtg > 0 ? "+" : ""}${RL.netRtg}, win% ${(RL.winPct * 100).toFixed(1)})`);
+console.log("LINEUP (assigned slot):");
+for (let s = 0; s < 5; s++) {
+  const p = feat[legalIdx[assign[s]]].p;
+  const im = RL.players.find((x) => x.id === p.id)!;
+  console.log(`  ${SLOTS5[s].padEnd(2)} ${p.name.padEnd(22)} ${p.year} ${p.team.padEnd(4)} elig[${eligOf(p).join(",")}]  off ${im.off.toFixed(1).padStart(5)}  def ${im.def.toFixed(1).padStart(5)}  usg ${Math.round(im.usage)}`);
+}
+console.log("FACTORS:");
+for (const f of RL.factors) console.log(`  ${f.value > 0 ? "+" : ""}${f.value}  ${f.label}${f.winsEst != null ? `  (~${f.winsEst > 0 ? "+" : ""}${f.winsEst} wins)` : ""}`);
+
+console.log(`\n--- top 10 DRAFTABLE teams (brute force pool) ---`);
+ltop.slice(0, 10).forEach((t, i) => {
+  const names = t.idx.map((x) => feat[x].p.name.split(" ").slice(-1)[0]).join("/");
+  const r = quickScore(t.idx.map((x) => feat[x].p), c);
   console.log(`  ${String(i + 1).padStart(2)}. ${r.wins}-${82 - r.wins}  (net ${r.netRtg.toFixed(1)})  ${names}`);
 });

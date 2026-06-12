@@ -15,7 +15,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Can you really go 82-0?",
-    a: "Nobody has. The best five ever found projects 80-2 — better than the 73-9 Warriors, the best real season in NBA history — and it takes a genuinely balanced two-way five, not five ball-dominant scorers. The chase is the whole challenge.",
+    a: "Nobody has. The best draftable five projects 79-3 — better than the 73-9 Warriors, the best real season in NBA history — and it takes a genuinely balanced two-way five, not five ball-dominant scorers. (The engine's theoretical maximum is 80-2, but that lineup needs two centers in one starting five — you can't actually draft it.) The chase is the whole challenge.",
   },
   {
     q: "How accurate is the engine?",

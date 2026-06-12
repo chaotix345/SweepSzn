@@ -15,7 +15,7 @@ The original sums per-game stats (PPG×0.46 + RPG×0.25 + …) with no era adjus
 - **Fantasy-regime penalties fire only out-of-distribution**: the usage budget sits at 110 (the median real top-5 sums ~107.5% usage, so the old budget of 100 penalized 91.7% of *real* teams), and the perimeter-defense term is a continuous gradient, not a gameable cliff. **Elite peak cards are 3-yr smoothed** (same-team adjacent seasons) so one transcendent outlier season isn't priced as durable ability.
 - Every penalty factor on the result card carries its **exact win cost for that lineup** (counterfactual through the Pythagorean curve), the era discount is itemized, and records are anchored to verified real seasons ("comparable to the 66-16 Heat").
 
-Result: a balanced two-way team beats a stat-stuffer; nobody has gone 82-0 (best five ever found projects **80-2** — `scripts/search_best.ts`). See `DESIGN.md` §11 and §13 for the accuracy writeups.
+Result: a balanced two-way team beats a stat-stuffer; nobody has gone 82-0 — the best **draftable** five projects **79-3** (the engine's theoretical max is 80-2, but that five needs two C-only bigs and is slot-illegal; both pinned by golden tests, reproduce with `scripts/search_best.ts`). See `DESIGN.md` §11 and §13 for the accuracy writeups.
 
 ## Layout
 

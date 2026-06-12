@@ -264,9 +264,15 @@ describe("ResultCard — context & explanation layer", () => {
     expect(container.textContent).toMatch(/11 wins below the 41-win NBA average/i);
   });
 
-  it("notes the verified engine ceiling on elite results", () => {
+  it("notes the verified draftable ceiling on elite results", () => {
     const { container } = renderCard({ result: makeResult({ wins: 74, losses: 8, grade: "A+", label: "HISTORIC" }) });
-    expect(container.textContent).toMatch(/best five ever found projects 80-2/i);
+    expect(container.textContent).toMatch(/best draftable five projects 79-3/i);
+  });
+
+  it("at the draftable ceiling, the ladder says S is theoretical instead of taunting '1 win from S'", () => {
+    const { container } = renderCard({ result: makeResult({ wins: 79, losses: 3, grade: "A+", label: "HISTORIC" }) });
+    expect(container.textContent).toMatch(/S .*theoretical — no draftable five has reached it/i);
+    expect(container.textContent).not.toMatch(/1 win from S/i);
   });
 
   it("renders the grade ladder with a next-grade hint when close", () => {
