@@ -32,7 +32,7 @@ const SEO_COPY =
   "and Surgeon mode diagnoses your lineup's worst factor and gives you one targeted swap to fix it. " +
   "You can also challenge a friend to the same spins. Every result generates a unique shareable " +
   "permalink and result card. The goal: can you build an all-time NBA five that goes 82-0, " +
-  "undefeated over a full season? Nobody has — the best five ever found projects 80-2, better than " +
+  "undefeated over a full season? Nobody has — the best draftable five projects 79-3, better than " +
   "the 73-9 Warriors, and the engine is brutally honest about why.";
 
 const jsonLd = {

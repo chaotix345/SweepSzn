@@ -19,9 +19,11 @@ type FactorHuntProp = { prediction: string; answer: string; correct: boolean };
 // Daily leaderboard standing at submit time (rank/total from the submit response) — context only.
 type LbRankProp = { rank: number; total: number };
 
-// The strongest five search_best.ts has ever found (verified through evaluateLineup) — the
-// honest ceiling the elite-result copy cites. Re-run the script after any engine/data change.
-const BEST_KNOWN_RECORD = "80-2";
+// The strongest SLOT-LEGAL five search_best.ts has ever found (verified through evaluateLineup)
+// — the ceiling a player can actually draft, which is what the elite-result copy cites. The
+// engine's theoretical max is 80-2, but that five needs two C-only bigs and can't be drafted.
+// Re-run the script after any engine/data change; golden tests pin both numbers.
+const BEST_DRAFTABLE_RECORD = "79-3";
 
 const GRADE_COLOR: Record<string, string> = {
   S: "text-gold", "A+": "text-gold", A: "text-green-400",
@@ -107,7 +109,7 @@ export default function ResultCard({
         </p>
         {result.wins >= 72 && (
           <p className="mt-1 text-[11px] text-zinc-500">
-            The best five ever found projects {BEST_KNOWN_RECORD} — nobody has gone 82-0.
+            The best draftable five projects {BEST_DRAFTABLE_RECORD} — nobody has gone 82-0.
           </p>
         )}
         {pct != null && lbRank && (
@@ -368,7 +370,10 @@ function GradeLadder({ wins, grade }: { wins: number; grade: string }) {
       </div>
       {next && next.min - wins <= 5 && (
         <p className="mt-1 text-[11px] text-zinc-500">
-          {next.min - wins} win{next.min - wins === 1 ? "" : "s"} from {next.grade} ({next.label})
+          {next.grade === "S"
+            // the draftable ceiling is 79 — "1 win from S" would taunt an impossible chase
+            ? "S (80+) is theoretical — no draftable five has reached it"
+            : `${next.min - wins} win${next.min - wins === 1 ? "" : "s"} from ${next.grade} (${next.label})`}
         </p>
       )}
     </div>

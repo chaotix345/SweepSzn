@@ -352,23 +352,45 @@ describe("engine golden master — evaluateLineup with committed coefficients.js
     it("grade F", () => expect(r.grade).toBe("F"));
   });
 
-  // ── Ceiling tie: the best five scripts/search_best.ts ever found ──────────
-  // ResultCard's BEST_KNOWN_RECORD ("80-2") and the site copy cite this number. If an engine or
-  // data change moves it, this breaks loudly — re-run search_best.ts and update both together.
-  describe("best-known five (BEST_KNOWN_RECORD anchor)", () => {
-    const BEST_KNOWN = lineup(
+  // ── Ceiling ties: both numbers scripts/search_best.ts reports ─────────────
+  // If an engine or data change moves either, these break loudly — re-run search_best.ts and
+  // update the pins together with ResultCard's BEST_DRAFTABLE_RECORD + the site copy.
+
+  // Engine-theoretical max — NOT slot-legal (Jokić + Wilt are both C-only, one C slot), so no
+  // player can draft it; it exists only via /api/evaluate and hand-built permalinks.
+  describe("engine-theoretical best five (not draftable)", () => {
+    const ENGINE_MAX = lineup(
       "nikola_joki_den_2020s_2024",
       "lebron_james_mia_2010s_2013",
       "wilt_chamberlain_phi_1960s_1968",
       "john_stockton_uta_1980s_1989",
       "nate_mcmillan_sea_1990s_1994",
     );
-    const r = evaluateLineup(BEST_KNOWN, COEFF);
+    const r = evaluateLineup(ENGINE_MAX, COEFF);
     it("still projects 80-2", () => {
       expect(r.wins).toBe(80);
       expect(r.losses).toBe(2);
     });
-    it("earns the S grade (the tier is reachable)", () => expect(r.grade).toBe("S"));
+    it("is the only S-grade five known (engine-theoretical — S is unreachable by drafting)", () =>
+      expect(r.grade).toBe("S"));
+  });
+
+  // Best DRAFTABLE five (slot-legal: PG Stockton, SG McMillan, SF LeBron, PF Magic, C Jokić) —
+  // the ceiling the result card and marketing copy cite (BEST_DRAFTABLE_RECORD "79-3").
+  describe("best draftable five (BEST_DRAFTABLE_RECORD anchor)", () => {
+    const BEST_DRAFTABLE = lineup(
+      "john_stockton_uta_1980s_1989",
+      "nate_mcmillan_sea_1990s_1994",
+      "lebron_james_mia_2010s_2013",
+      "magic_johnson_lal_1980s_1990",
+      "nikola_joki_den_2020s_2024",
+    );
+    const r = evaluateLineup(BEST_DRAFTABLE, COEFF);
+    it("still projects 79-3", () => {
+      expect(r.wins).toBe(79);
+      expect(r.losses).toBe(3);
+    });
+    it("grade A+ (the best earnable grade in actual play)", () => expect(r.grade).toBe("A+"));
   });
 
   // ── Display-tether sync: UI constants read DEFAULT_COEFFICIENTS ───────────
