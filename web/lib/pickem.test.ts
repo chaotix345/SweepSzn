@@ -18,8 +18,15 @@ describe("pickemSeedOk", () => {
   it("challenge seed rejected", () => {
     expect(pickemSeedOk("h2h-abc123")).toBe(false);
   });
-  it("unknown prefix rejected", () => {
-    expect(pickemSeedOk("prime-123")).toBe(false);
+  it("prime seed accepted", () => {
+    expect(pickemSeedOk("prime-123")).toBe(true);
+  });
+  it("blueprint (bp) seed accepted", () => {
+    expect(pickemSeedOk("bp-2026-6-13")).toBe(true);
+  });
+  it("unknown prefix rejected (factorhunt/surgeon don't vote)", () => {
+    expect(pickemSeedOk("fh-2026-6-13")).toBe(false);
+    expect(pickemSeedOk("surgeon-123")).toBe(false);
   });
   it("empty suffix rejected", () => {
     expect(pickemSeedOk("daily-")).toBe(false);

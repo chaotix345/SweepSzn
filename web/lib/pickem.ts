@@ -10,8 +10,10 @@ export type PickemVote = "y" | "n";
 export interface PickemView { y: number; n: number; vote: PickemVote | null }
 
 // Modes where the overlay runs. Challenge replays someone else's seed (no vote), and any other
-// prefix is rejected so the API can't be used to mint arbitrary Redis keys.
-const PICKEM_SEED_RE = /^(daily|classic|hoopiq)-[a-z0-9-]{1,40}$/;
+// prefix is rejected so the API can't be used to mint arbitrary Redis keys. Daily and Blueprint
+// (bp-) share one seed per day, so a real crowd accumulates; Classic/HoopIQ/Prime use a per-game
+// random seed, so their vote settles as a solo self-prediction.
+const PICKEM_SEED_RE = /^(daily|classic|hoopiq|prime|bp)-[a-z0-9-]{1,40}$/;
 
 export function pickemSeedOk(seed: unknown): seed is string {
   return typeof seed === "string" && PICKEM_SEED_RE.test(seed);
@@ -80,8 +82,8 @@ return {claimed, stored, y or '0', n or '0'}
 // --- /pe/<card> share segment: "<y>.<n>.<v|x>.<lineupSegment>" ---
 // The lineup segment is encodeLineup() output ([a-z0-9_,] plus optional flag prefixes — no
 // dots), so dot-delimiting is collision-free, mirroring rankShare's card encoding.
-// Accepts EVERY encodeLineup prefix (b<code>~ / p~ / h~, in encode order) even though prime and
-// blueprint seeds can't vote today — the segment validator must never lag the encoder.
+// Accepts EVERY encodeLineup prefix (b<code>~ / p~ / h~, in encode order) — the segment validator
+// must never lag the encoder.
 
 const LINEUP_SEG_RE = /^(b[a-z]~)?(p~)?(h~)?[a-z0-9_]+(,[a-z0-9_]+){4}$/;
 const MAX_VOTES = 1_000_000_000;
