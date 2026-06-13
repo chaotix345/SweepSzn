@@ -1,3 +1,5 @@
+import type { TraitKey } from "./traits";
+
 export type Pos = "PG" | "SG" | "SF" | "PF" | "C" | "G" | "F";
 export type Slot = "PG" | "SG" | "SF" | "PF" | "C";
 export type Tier = "complete" | "partial" | "primitive";
@@ -78,6 +80,7 @@ export interface DraftCandidate {
   defense_estimated?: boolean;
   fit?: CandidateFit;
   usage?: number;       // engine usage demand — sent on every spin for the live budget bar (intrinsic public player data, not seed-relative — DESIGN.md §12)
+  traits?: TraitKey[];  // descriptive board tags derived from intrinsic stats (see lib/traits.ts) — informs without revealing fit
 }
 
 // Daily leaderboard: the client submits the draft as an ordered trace (index = round) so the
@@ -190,6 +193,9 @@ export interface PlayerBreakdown {
   usage: number;
   shooter: boolean;
   rimProtector: boolean;
+  shoot?: number;
+  rimScore?: number;
+  perimScore?: number;
 }
 
 export interface LineupResult {

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import type { CandidateFit, DraftCandidate } from "@/lib/types";
 import { teamColors, eraLabel } from "@/lib/teams";
+import { TRAIT_META } from "@/lib/traits";
 import type { Mode } from "@/components/game/types";
 
 type Spin = { team: string; decade: string; candidates: DraftCandidate[] };
@@ -115,6 +116,16 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
                   {spin.decade === "PRIME" && <span className="ml-1 text-violet-400/80">· {eraLabel(c.decade)}</span>}
                   {!fits && <span className="ml-1 text-zinc-500">· no open slot</span>}
                 </div>
+                {!hideStats && c.traits && c.traits.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {c.traits.slice(0, 2).map((t) => (
+                      <span key={t} title={TRAIT_META[t].desc}
+                        className="rounded bg-zinc-800/80 px-1.5 py-0.5 text-[10px] font-medium text-zinc-300">
+                        {TRAIT_META[t].icon} {TRAIT_META[t].label}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {showRowFit && c.fit!.adds.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-1">
                     {c.fit!.adds.map((a) => (

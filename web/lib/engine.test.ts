@@ -189,3 +189,31 @@ describe("era adjustment is a quantified factor", () => {
     expect(b.factors.some((x) => /era adjustment/i.test(x.label))).toBe(false);
   });
 });
+
+describe("per-player role scores on the breakdown", () => {
+  it("a high-volume shooter carries a positive spacing score", () => {
+    expect(b.players[0].shoot!).toBeGreaterThan(0); // Floor General, fg3a 7
+  });
+
+  it("the anchor center carries interior presence", () => {
+    expect(b.players[4].rimScore!).toBeGreaterThan(0); // Anchor Center, blk z 1.6
+  });
+
+  it("at least one perimeter defender carries a perimeter score", () => {
+    expect(b.players.some((p) => (p.perimScore ?? 0) > 0)).toBe(true);
+  });
+
+  it("a no-shooting guard scores zero on spacing and rim", () => {
+    expect(s.players[0].shoot).toBe(0);     // Volume A, fg3a 0
+    expect(s.players[0].rimScore).toBe(0);  // PG — not a big
+  });
+
+  it("breakdown role scores match playerFeatures (rounded to 2dp)", () => {
+    for (let i = 0; i < balanced.length; i++) {
+      const f = playerFeatures(balanced[i], DEFAULT_COEFFICIENTS);
+      expect(b.players[i].shoot).toBeCloseTo(Math.round(f.shoot * 100) / 100, 5);
+      expect(b.players[i].rimScore).toBeCloseTo(Math.round(f.rimScore * 100) / 100, 5);
+      expect(b.players[i].perimScore).toBeCloseTo(Math.round(f.perimScore * 100) / 100, 5);
+    }
+  });
+});

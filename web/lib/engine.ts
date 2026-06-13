@@ -191,10 +191,16 @@ export function evaluateLineup(lineup: Player[], coeff: Coefficients = DEFAULT_C
       grade: "F", label: "TANKING", factors: [], players: [], notes: ["Empty lineup"] };
   }
 
-  const pb: PlayerBreakdown[] = lineup.map((p) => ({
-    id: p.id, name: p.name, off: offValue(p, c), def: defValue(p, c),
-    usage: usageDemand(p, c), shooter: shooterUnit(p) >= 0.4, rimProtector: isRimProtector(p, c),
-  }));
+  const pb: PlayerBreakdown[] = lineup.map((p) => {
+    const f = playerFeatures(p, c);
+    return {
+      id: p.id, name: p.name, off: f.off, def: f.def,
+      usage: f.usage, shooter: f.shoot >= 0.4, rimProtector: isRimProtector(p, c),
+      shoot: Math.round(f.shoot * 100) / 100,
+      rimScore: Math.round(f.rimScore * 100) / 100,
+      perimScore: Math.round(f.perimScore * 100) / 100,
+    };
+  });
 
   const t = lineupTerms(lineup, c);
   const netRtg = t.ortg - t.drtg;

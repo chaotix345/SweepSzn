@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Player, Coefficients, DraftCandidate, CandidateFit, Slot } from "./types";
 import { DEFAULT_COEFFICIENTS, quickScore, playerFeatures } from "./engine";
 import { buildPrimePools, type PrimePools } from "./prime";
+import { playerTraits } from "./traits";
 import { mulberry32, strSeed } from "./rng";
 
 const DATA_DIR = path.join(process.cwd(), "public", "data");
@@ -80,6 +81,7 @@ function toCandidate(p: Player, fit?: CandidateFit, usage?: number): DraftCandid
     id: p.id, person_id: p.person_id, name: p.name, year: p.year, decade: p.decade, team: p.team,
     pos: p.pos, eligible: (p.eligible && p.eligible.length ? p.eligible : [p.pos as Slot]),
     pts: p.pts, trb: p.trb, ast: p.ast, stl: p.stl, blk: p.blk, defense_estimated: p.defense_estimated, fit, usage,
+    traits: playerTraits(p),
   };
 }
 
