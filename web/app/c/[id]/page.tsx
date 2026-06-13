@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import Link from "next/link";
 import { getChallengePublic } from "@/lib/challengeStore";
+import ChallengeSpectatorBoard from "@/components/ChallengeSpectatorBoard";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -34,6 +35,7 @@ export default async function ChallengePage({ params }: Props) {
         </Link>
 
         {info ? (
+         <>
           <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center">
             <div className="text-sm font-semibold uppercase tracking-widest text-zinc-500">You&apos;ve been challenged</div>
             <h1 className="mt-3 text-2xl font-black">
@@ -55,6 +57,8 @@ export default async function ChallengePage({ params }: Props) {
               <div className="mt-4 text-xs text-zinc-500">{info.responders} {info.responders === 1 ? "player has" : "players have"} taken this challenge</div>
             )}
           </div>
+          <ChallengeSpectatorBoard id={info.id} />
+         </>
         ) : (
           <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center">
             <h1 className="text-xl font-black">This challenge isn&apos;t available</h1>
