@@ -257,10 +257,18 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
 
   return (
     <div className="relative flex-1" ref={ref}>
-      <button onClick={() => (canNative ? native() : setOpen((o) => !o))} aria-haspopup={!canNative} aria-expanded={!canNative ? open : undefined} aria-controls={!canNative ? "result-share-panel" : undefined}
-        className="w-full rounded-xl border border-zinc-700 py-2.5 text-sm font-semibold hover:border-zinc-500">
-        {copied ? "Copied!" : copyErr ? "Copy failed" : "Share"}
-      </button>
+      <div className="flex gap-1.5">
+        <button onClick={() => (canNative ? native() : setOpen((o) => !o))} aria-haspopup={!canNative} aria-expanded={!canNative ? open : undefined} aria-controls={!canNative ? "result-share-panel" : undefined}
+          className="min-w-0 flex-1 rounded-xl border border-zinc-700 py-2.5 text-sm font-semibold hover:border-zinc-500">
+          {copied ? "Copied!" : copyErr ? "Copy failed" : "Share"}
+        </button>
+        <a href={links[0][1]} target="_blank" rel="noreferrer" onClick={() => { track("share", { target: "X" }); ev("share", { uid: getUid() }); }}
+          aria-label="Post to X" title="Post to X"
+          className="grid w-11 shrink-0 place-items-center rounded-xl border border-zinc-700 text-sm font-black hover:border-zinc-500">X</a>
+        <a href={links[1][1]} target="_blank" rel="noreferrer" onClick={() => { track("share", { target: "Bluesky" }); ev("share", { uid: getUid() }); }}
+          aria-label="Post to Bluesky" title="Post to Bluesky"
+          className="grid w-11 shrink-0 place-items-center rounded-xl border border-zinc-700 text-[11px] font-bold hover:border-zinc-500">Bsky</a>
+      </div>
       {open && !canNative && (
         <div id="result-share-panel" role="menu" className="absolute bottom-full left-0 z-10 mb-2 w-full rounded-xl border border-zinc-700 bg-zinc-900 p-2 shadow-xl">
           <button onClick={copy} role="menuitem" className="mb-1 w-full rounded-lg bg-zinc-800 py-2 text-xs font-semibold hover:bg-zinc-700">

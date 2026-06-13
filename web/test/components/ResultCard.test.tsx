@@ -317,3 +317,22 @@ describe("ResultCard — context & explanation layer", () => {
     expect(container.textContent).not.toMatch(/of 5 today/i);
   });
 });
+
+describe("ResultCard — one-tap share CTAs", () => {
+  it("renders inline X and Bluesky share links next to Share", () => {
+    const { container } = renderCard();
+    expect(container.querySelector('a[aria-label="Post to X"]')).toBeTruthy();
+    expect(container.querySelector('a[aria-label="Post to Bluesky"]')).toBeTruthy();
+  });
+
+  it("the X link points at X and the Bluesky link points at Bluesky (guards the links[] order)", () => {
+    const { container } = renderCard();
+    const x = container.querySelector('a[aria-label="Post to X"]')?.getAttribute("href") ?? "";
+    const bsky = container.querySelector('a[aria-label="Post to Bluesky"]')?.getAttribute("href") ?? "";
+    expect(x).toContain("twitter.com/intent/tweet");
+    expect(bsky).toContain("bsky.app/intent/compose");
+    // each carries the encoded share URL back to the result permalink
+    expect(decodeURIComponent(x)).toContain("/r/");
+    expect(decodeURIComponent(bsky)).toContain("/r/");
+  });
+});
