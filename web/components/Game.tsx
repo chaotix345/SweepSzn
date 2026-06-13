@@ -407,7 +407,9 @@ export default function Game() {
 
   // Pick'Em overlay gate: first reels settled, nothing drafted yet, a votable seed, not yet
   // voted/skipped (this game, this seed via localStorage, or for good via the skip preference).
-  const showPickem = !!current && filled === 0 && mode !== "challenge" && mode !== null &&
+  // Suppressed in HoopIQ: the roster is hidden there, so "will the best five win 60+?" is a blind
+  // guess with nothing to reason about.
+  const showPickem = !!current && filled === 0 && mode !== "challenge" && mode !== "hoopiq" && mode !== null &&
     !pickemDismissed && !pickemVote && pickemSeedOk(seed) && !getPickemSkip() && !getLocalVote(seed);
 
   // Vote overlay focus management (same pattern as the mobile position sheet above).
