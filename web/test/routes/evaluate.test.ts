@@ -76,6 +76,17 @@ describe("POST /api/evaluate — valid lineup", () => {
     const r = body.result as Record<string, unknown>;
     expect((r.wins as number) + (r.losses as number)).toBe(82);
   });
+
+  it("each player breakdown carries the role-score fields (shoot/rimScore/perimScore)", async () => {
+    const { body } = await readJson(await post({ ids: FIVE_IDS }));
+    const pb = (body.result as { players: Record<string, unknown>[] }).players;
+    expect(pb.length).toBe(5);
+    for (const p of pb) {
+      expect(typeof p.shoot).toBe("number");
+      expect(typeof p.rimScore).toBe("number");
+      expect(typeof p.perimScore).toBe("number");
+    }
+  });
 });
 
 describe("POST /api/evaluate — after() ev:complete counter", () => {

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
 import { getUid } from "@/lib/streak";
-import type { LineupResult, Player, Slot } from "@/lib/types";
+import type { LineupResult, Player, PlayerBreakdown, Slot } from "@/lib/types";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { encodeLineup } from "@/lib/share";
 import { bpCode, type BlueprintView } from "@/lib/blueprint";
@@ -166,6 +166,7 @@ export default function ResultCard({
                       <span className="shrink-0 text-[10px] text-zinc-500">{p.team} · {eraLabel(p.decade)}</span>
                     </div>
                     <div className="text-[11px] text-orange-400/90">{role.role}<span className="text-zinc-600"> · {role.blurb}</span></div>
+                    <RoleBars pb={result.players[i]} />
                   </div>
                   <StatRow p={p} className="hidden shrink-0 sm:flex" />
                 </div>
@@ -437,6 +438,31 @@ function FactorColumn({ title, items, kind, contrib }: { title: string; items: R
           );
         })}
       </div>
+    </div>
+  );
+}
+
+const ROLE_BARS = [
+  { key: "shoot", label: "Spacing", tint: "bg-amber-400" },
+  { key: "rimScore", label: "Rim", tint: "bg-violet-400" },
+  { key: "perimScore", label: "Perim D", tint: "bg-cyan-400" },
+] as const;
+
+function RoleBars({ pb }: { pb: PlayerBreakdown }) {
+  if (!ROLE_BARS.some((b) => (pb[b.key] ?? 0) > 0.05)) return null;
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {ROLE_BARS.map((b) => {
+        const v = Math.max(0, Math.min(1, pb[b.key] ?? 0));
+        return (
+          <div key={b.key} className="flex items-center gap-1.5" title={`${b.label} — engine score ${Math.round(v * 100)} / 100`}>
+            <span className="text-[8px] font-semibold uppercase tracking-wide text-zinc-600">{b.label}</span>
+            <div className="h-1 w-8 overflow-hidden rounded-full bg-zinc-800">
+              <div className={`h-full rounded-full ${b.tint}`} style={{ width: `${Math.round(v * 100)}%` }} />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

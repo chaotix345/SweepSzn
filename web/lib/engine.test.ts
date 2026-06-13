@@ -189,3 +189,36 @@ describe("era adjustment is a quantified factor", () => {
     expect(b.factors.some((x) => /era adjustment/i.test(x.label))).toBe(false);
   });
 });
+
+describe("per-player role scores on the breakdown", () => {
+  it("a high-volume shooter carries a positive spacing score", () => {
+    expect(b.players[0].shoot!).toBeGreaterThan(0); // Floor General, fg3a 7
+  });
+
+  it("the anchor center carries interior presence", () => {
+    expect(b.players[4].rimScore!).toBeGreaterThan(0); // Anchor Center, blk z 1.6
+  });
+
+  it("at least one perimeter defender carries a perimeter score", () => {
+    expect(b.players.some((p) => (p.perimScore ?? 0) > 0)).toBe(true);
+  });
+
+  it("a no-shooting guard scores zero on spacing and rim", () => {
+    expect(s.players[0].shoot).toBe(0);     // Volume A, fg3a 0
+    expect(s.players[0].rimScore).toBe(0);  // PG — not a big
+  });
+
+  it("exposes the engine's actual per-player role values (concrete, against the known fixture)", () => {
+    // Floor General: fg3a 7 / fg3 2.9 (full volume × max accuracy → shoot capped at 1.2), not a big
+    // (rim 0), stl z 0.9 → perim clamp((0.9-0.2)/0.8)≈0.875 → 0.87 at 2dp (float underflow on 0.9-0.2).
+    const fg = b.players[0];
+    expect(fg.shoot).toBeCloseTo(1.2, 5);
+    expect(fg.rimScore).toBe(0);
+    expect(fg.perimScore).toBeCloseTo(0.87, 5);
+    // Anchor Center: blk z 1.6 + dbpm 3.5 (≥1.5 boost) → rim saturates to 1; no 3s (shoot 0); a C (perim 0).
+    const c = b.players[4];
+    expect(c.shoot).toBe(0);
+    expect(c.rimScore).toBe(1);
+    expect(c.perimScore).toBe(0);
+  });
+});
