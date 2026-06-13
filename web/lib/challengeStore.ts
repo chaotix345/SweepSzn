@@ -40,6 +40,12 @@ async function board(id: string, uid?: string): Promise<ChallengeBoard> {
   return { total, top, you };
 }
 
+// Public spectator board for /c/<id>: the ranked records (name/W-L/net), already stripped of every
+// uid and lineup. Readable without having played — turns the challenge link into a live scoreboard.
+export async function getChallengeBoard(id: string): Promise<ChallengeBoard> {
+  return board(id);
+}
+
 // Redacted read for the public landing page / responder bootstrap — exposes the bar (record +
 // grade), the draft seed (so the responder replays the SAME spins), and whether the creator used
 // hints, but never any lineup or uid.
