@@ -1,10 +1,9 @@
-import type { Player } from "./types";
+import type { Player, TraitKey } from "./types";
 
 // Descriptive, at-a-glance player tags for the draft board. Derived from intrinsic box-score stats
 // (public, not seed-relative — DESIGN.md §12), so they inform without revealing the engine's
 // per-roster fit verdict (that stays behind the hint mechanic). Computed server-side in toCandidate;
-// TRAIT_META is the client-side icon/label/tooltip lookup.
-export type TraitKey = "sniper" | "shooter" | "rim" | "glass" | "playmaker" | "lockdown" | "efficient" | "volume";
+// TRAIT_META is the client-side icon/label/tooltip lookup. TraitKey lives in types.ts.
 
 export const TRAIT_META: Record<TraitKey, { icon: string; label: string; desc: string }> = {
   sniper: { icon: "🎯", label: "Elite shooter", desc: "High-volume, high-accuracy 3-point shooter" },

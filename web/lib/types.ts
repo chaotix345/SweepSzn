@@ -1,8 +1,8 @@
-import type { TraitKey } from "./traits";
-
 export type Pos = "PG" | "SG" | "SF" | "PF" | "C" | "G" | "F";
 export type Slot = "PG" | "SG" | "SF" | "PF" | "C";
 export type Tier = "complete" | "partial" | "primitive";
+// Descriptive draft-board tags derived from intrinsic box stats (thresholds live in lib/traits.ts).
+export type TraitKey = "sniper" | "shooter" | "rim" | "glass" | "playmaker" | "lockdown" | "efficient" | "volume";
 
 export interface ZScores {
   pts?: number | null;

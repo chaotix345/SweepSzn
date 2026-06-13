@@ -208,12 +208,17 @@ describe("per-player role scores on the breakdown", () => {
     expect(s.players[0].rimScore).toBe(0);  // PG — not a big
   });
 
-  it("breakdown role scores match playerFeatures (rounded to 2dp)", () => {
-    for (let i = 0; i < balanced.length; i++) {
-      const f = playerFeatures(balanced[i], DEFAULT_COEFFICIENTS);
-      expect(b.players[i].shoot).toBeCloseTo(Math.round(f.shoot * 100) / 100, 5);
-      expect(b.players[i].rimScore).toBeCloseTo(Math.round(f.rimScore * 100) / 100, 5);
-      expect(b.players[i].perimScore).toBeCloseTo(Math.round(f.perimScore * 100) / 100, 5);
-    }
+  it("exposes the engine's actual per-player role values (concrete, against the known fixture)", () => {
+    // Floor General: fg3a 7 / fg3 2.9 (full volume × max accuracy → shoot capped at 1.2), not a big
+    // (rim 0), stl z 0.9 → perim clamp((0.9-0.2)/0.8)≈0.875 → 0.87 at 2dp (float underflow on 0.9-0.2).
+    const fg = b.players[0];
+    expect(fg.shoot).toBeCloseTo(1.2, 5);
+    expect(fg.rimScore).toBe(0);
+    expect(fg.perimScore).toBeCloseTo(0.87, 5);
+    // Anchor Center: blk z 1.6 + dbpm 3.5 (≥1.5 boost) → rim saturates to 1; no 3s (shoot 0); a C (perim 0).
+    const c = b.players[4];
+    expect(c.shoot).toBe(0);
+    expect(c.rimScore).toBe(1);
+    expect(c.perimScore).toBe(0);
   });
 });
