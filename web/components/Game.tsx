@@ -620,7 +620,7 @@ export default function Game() {
                 <>
                   <p className="mb-3 text-sm text-zinc-400">Your starting five is set.</p>
                   <button onClick={() => finishDraft(roster)} disabled={loading}
-                    className="rounded-xl bg-green-500 px-6 py-2.5 font-bold text-black hover:bg-green-400 disabled:opacity-50">
+                    className="rounded-xl bg-orange-500 px-6 py-2.5 font-bold text-black hover:bg-orange-400 disabled:opacity-50">
                     {mode === "factorhunt" ? "Lock Five → Predict" : mode === "surgeon" ? "Lock Five → Diagnose" : "Simulate Season"}
                   </button>
                 </>

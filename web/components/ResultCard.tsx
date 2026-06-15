@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import Link from "next/link";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
 import { getUid } from "@/lib/streak";
@@ -11,7 +10,8 @@ import { bpCode, type BlueprintView } from "@/lib/blueprint";
 import { factorViews, lineupRoles, headline, historyAnchor, playerContribRows, type ContribRow } from "@/lib/explain";
 import { WIN_GRADES, weakestSlot } from "@/lib/engine";
 import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
-import { GRADE_COLOR } from "@/lib/grades";
+import { GRADE_COLOR, isEliteGrade } from "@/lib/grades";
+import { Button, ButtonLink } from "@/components/ui/Button";
 
 // Crowd snapshot + your vote (and, same-session only, the spun team/era the vote was about).
 type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
@@ -25,6 +25,14 @@ type LbRankProp = { rank: number; total: number };
 // engine's theoretical max is 80-2, but that five needs two C-only bigs and can't be drafted.
 // Re-run the script after any engine/data change; golden tests pin both numbers.
 const BEST_DRAFTABLE_RECORD = "79-3";
+
+// Grade-aware nudge above the share/replay row — frames sharing as a social act, not a chore.
+function shareNudge(result: LineupResult): string {
+  if (isEliteGrade(result.grade)) return "All-time tier. Show it off →";
+  if (result.grade === "A") return "Strong five — worth sharing.";
+  if (result.wins >= 41) return "Think a friend can beat it? Share the challenge.";
+  return "Rough one. Share the carnage — or build another.";
+}
 
 const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1));
 
@@ -59,12 +67,14 @@ export default function ResultCard({
   const sharePath = hasPickem ? `/pe/${encodePickemCard(lineupSeg, pickem!)}` : `/r/${lineupSeg}`;
   const names = players.map((p) => displayName(p.name));
 
+  const elite = isEliteGrade(result.grade);
+
   return (
-    <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
-      {/* hero */}
+    <div className={`mt-4 overflow-hidden rounded-2xl border bg-zinc-900 ${elite ? "border-gold/30 ring-1 ring-gold/25 animate-gold-pulse" : "border-zinc-800"}`}>
+      {/* hero — the buzzer moment: the record slams in; elite grades get the gold trophy glow */}
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
         <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{mode} · projected record</div>
-        <div className={`mt-1 font-display text-7xl tabular-nums ${gradeColor}`}>
+        <div className={`mt-1 font-display text-7xl tabular-nums sm:text-8xl ${gradeColor} animate-record-slam`}>
           {result.wins}<span className="text-zinc-600">–</span>{result.losses}
         </div>
         <div className="mt-1 text-lg font-bold tracking-wide">
@@ -119,7 +129,7 @@ export default function ResultCard({
           </div>
         )}
         <GradeLadder wins={result.wins} grade={result.grade} />
-        <p className="mx-auto mt-3 max-w-md text-sm text-zinc-400">{headline(result)}</p>
+        <p className="mx-auto mt-3 max-w-md text-base font-medium text-zinc-200">{headline(result)}</p>
         <div className="mt-4 flex justify-center gap-2 text-sm">
           <Metric label="ORtg" value={result.ortg.toFixed(1)} />
           <Metric label="DRtg" value={result.drtg.toFixed(1)} />
@@ -191,13 +201,16 @@ export default function ResultCard({
         </div>
       </div>
 
-      <div className="flex gap-3 border-t border-zinc-800 px-6 py-4">
-        <ShareButton result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint} />
-        {shared ? (
-          <Link href="/play" className="flex-1 rounded-xl bg-orange-500 py-2.5 text-center text-sm font-bold text-black hover:bg-orange-400">Build your own five →</Link>
-        ) : (
-          <button onClick={onReset} className="flex-1 rounded-xl bg-orange-500 py-2.5 text-sm font-bold text-black hover:bg-orange-400">Build Another</button>
-        )}
+      <div className="border-t border-zinc-800 px-6 py-4">
+        <p className="mb-2.5 text-center text-xs font-medium text-zinc-400">{shareNudge(result)}</p>
+        <div className="flex gap-3">
+          <ShareButton primary result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint} />
+          {shared ? (
+            <ButtonLink href="/play" variant="secondary" className="flex-1">Build your own five →</ButtonLink>
+          ) : (
+            <Button variant="secondary" onClick={onReset} className="flex-1">Build Another</Button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -210,7 +223,7 @@ const getServerCanNative = () => false;
 
 // Exported so modes with their own result layout (Surgeon) reuse the exact share affordance
 // (native share / popover / copy / per-platform links). Pass `text` to fully override the copy.
-export function ShareButton({ result, path, names, usedHints, pickem, prime, blueprint, text: textOverride }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp; prime?: boolean; blueprint?: BlueprintView; text?: string }) {
+export function ShareButton({ result, path, names, usedHints, pickem, prime, blueprint, text: textOverride, primary }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp; prime?: boolean; blueprint?: BlueprintView; text?: string; primary?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -265,7 +278,7 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
     <div className="relative flex-1" ref={ref}>
       <div className="flex gap-1.5">
         <button onClick={() => (canNative ? native() : setOpen((o) => !o))} aria-haspopup={!canNative} aria-expanded={!canNative ? open : undefined} aria-controls={!canNative ? "result-share-panel" : undefined}
-          className="min-w-0 flex-1 rounded-xl border border-zinc-700 py-2.5 text-sm font-semibold hover:border-zinc-500">
+          className={`min-w-0 flex-1 rounded-xl py-2.5 text-sm transition ${primary ? "bg-orange-500 font-bold text-black hover:bg-orange-400" : "border border-zinc-700 font-semibold hover:border-zinc-500"}`}>
           {copied ? "Copied!" : copyErr ? "Copy failed" : "Share"}
         </button>
         <a href={links[0][1]} target="_blank" rel="noreferrer" onClick={() => { track("share", { target: "X" }); ev("share", { uid: getUid() }); }}
@@ -426,7 +439,7 @@ function FactorColumn({ title, items, kind, contrib }: { title: string; items: R
   const color = kind === "good" ? "text-green-400" : "text-red-400";
   return (
     <div>
-      <div className="mb-1.5 text-[11px] font-semibold text-zinc-500">{title}</div>
+      <div className={`mb-2 border-l-2 pl-2 text-xs font-bold uppercase tracking-wide ${kind === "good" ? "border-green-400 text-green-400" : "border-red-400 text-red-400"}`}>{title}</div>
       {items.length === 0 && (
         <div className="text-xs text-zinc-500">{kind === "bad" ? "No major weaknesses — a clean, balanced build." : "—"}</div>
       )}
