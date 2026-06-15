@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import NotificationBell from "@/components/NotificationBell";
+import AuthControl from "@/components/AuthControl";
 
 const NAV = [
   { href: "/play", label: "Play" },
@@ -52,6 +53,7 @@ export default function SiteHeader() {
           >
             Build your five
           </Link>
+          <AuthControl />
           <NotificationBell />
           <button
             ref={toggleRef}

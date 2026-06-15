@@ -82,7 +82,8 @@ export async function syncStreakDates(uid: string, dates: string[]): Promise<voi
     seen.add(p.key);
     entries.push({ score: p.ms, member: p.key });
   }
-  if (entries.length) await redis.zadd(keyStreak(uid), ...entries);
+  // zadd's typing requires at least one explicit member after the key — pass the head, spread the rest.
+  if (entries.length) await redis.zadd(keyStreak(uid), entries[0], ...entries.slice(1));
 }
 
 export async function getStreakCount(uid: string, now: number): Promise<number> {

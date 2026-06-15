@@ -1,14 +1,14 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
 import type { DraftStep, LeaderboardView, LeaderboardRow, AggBoardView, AggLeaderboardRow } from "@/lib/types";
 import type { RankCard } from "@/lib/rankShare";
 import { getUid, getName, setName as persistName, recordDailyDone, getStreak, msToNextUtcMidnight } from "@/lib/streak";
 import { useSession } from "@/lib/useSession";
-import GoogleOneTap from "@/components/GoogleOneTap";
 import RankShareButton from "@/components/RankShareButton";
 import { dayUTC } from "@/lib/day";
+import { fetchProfile } from "@/lib/account";
 
 type Tab = "daily" | "week" | "alltime";
 const TABS: [Tab, string][] = [["daily", "Daily"], ["week", "Weekly"], ["alltime", "All-time"]];
@@ -24,7 +24,7 @@ const hhmmss = (ms: number) => {
 const serverDate = dayUTC;
 
 export default function Leaderboard({ date, trace, usedHints = false, readOnly = false, onView }: { date: string; trace: DraftStep[]; usedHints?: boolean; readOnly?: boolean; onView?: (v: LeaderboardView | null) => void }) {
-  const { user, refresh, signOut } = useSession();
+  const { user, signOut, promptSignIn, signInNonce } = useSession();
   const [tab, setTab] = useState<Tab>("daily");
   const [view, setView] = useState<LeaderboardView | null>(null);
 
@@ -39,6 +39,7 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
+  const [serverStreak, setServerStreak] = useState<number | null>(null);
   const [countdown, setCountdown] = useState(() => msToNextUtcMidnight());
   const [reload, setReload] = useState(0);
 
@@ -64,20 +65,33 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
     return () => ctl.abort();
   }, [date, user?.uid, readOnly]);
 
-  // lazy-load the weekly / all-time board when its tab is active (and after a submit/sign-in)
+  // Weekly / all-time are sign-in gated: only fetch when signed in (the GET 401s otherwise). The
+  // server keys "you" off the session, so no uid query is sent or trusted.
   useEffect(() => {
-    if (tab === "daily" || !enabled || !effectiveUid) return;
+    if (tab === "daily" || !enabled || !user) return;
     const path = tab === "week" ? "/api/board/weekly" : "/api/board/alltime";
     const ctl = new AbortController();
     (async () => {
       try {
-        const r = await fetch(`${path}?uid=${encodeURIComponent(effectiveUid)}`, { signal: ctl.signal });
+        const r = await fetch(path, { signal: ctl.signal });
         if (r.status === 503) { setEnabled(false); return; }
         if (r.ok) { const v = await r.json(); setAgg((a) => ({ ...a, [tab]: v })); }
       } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline */ }
     })();
     return () => ctl.abort();
-  }, [tab, effectiveUid, enabled, reload]);
+  }, [tab, user, enabled, reload]);
+
+  // Signed in: the streak is server-authoritative (follows the account across devices and outlives the
+  // daily board's 31-day TTL). Re-read after a submit/claim (reload bumps).
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      if (!user) { setServerStreak(null); return; }
+      const p = await fetchProfile();
+      if (on && p) setServerStreak(p.streak);
+    })();
+    return () => { on = false; };
+  }, [user, reload]);
 
   useEffect(() => {
     const t = setInterval(() => setCountdown(msToNextUtcMidnight()), 1000);
@@ -102,10 +116,10 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
     } catch { setErr("network error"); } finally { setBusy(false); }
   }, [date, anonUid, name, trace, user, usedHints]);
 
-  // On sign-in: refresh session, then auto-claim today's result under the Google identity
-  // (which also credits the weekly + all-time boards).
-  const onSignIn = useCallback(async () => {
-    await refresh();
+  // Fired once per fresh sign-in (via signInNonce): auto-claim today's result under the Google identity
+  // so it immediately credits the daily + weekly + all-time boards. The generic streak/result migration
+  // already ran in SessionProvider.onSignedIn.
+  const claimOnSignIn = useCallback(async () => {
     if (readOnly) { setReload((n) => n + 1); return; } // browsing the board: just highlight my rows, don't claim
     if (date !== serverDate()) { setErr("Today's daily just reset — start today's game to post a score."); return; } // don't claim a rolled-over game
     setBusy(true); setErr(null);
@@ -119,7 +133,14 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
       if (r.ok) { recordDailyDone(date); setStreak(getStreak()); setView(v); setSubmitted(true); setReload((n) => n + 1); track("daily_claim", { rank: v?.you?.rank ?? 0 }); }
       // surfaced (was a silent swallow): a network miss here lost the claim AND the streak credit with no feedback
     } catch { setErr("network error"); } finally { setBusy(false); }
-  }, [refresh, date, name, trace, readOnly, usedHints]);
+  }, [date, name, trace, readOnly, usedHints]);
+
+  // Run the claim exactly once per fresh sign-in (signInNonce bumps in SessionProvider). Comparing to a
+  // ref of the last-seen nonce means a claimOnSignIn identity change (name/trace edits) can't re-fire it.
+  const seenNonce = useRef(signInNonce);
+  useEffect(() => {
+    if (signInNonce !== seenNonce.current) { seenNonce.current = signInNonce; void claimOnSignIn(); }
+  }, [signInNonce, claimOnSignIn]);
 
   // the sharer's current standing on the active tab (if they're on the board)
   const youCard: RankCard | null = (() => {
@@ -131,13 +152,15 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
     return y ? { scope: tab, rank: y.rank, total: a?.total ?? 0, name: y.name, wins: y.wins, losses: 0, net: 0 } : null;
   })();
   const whenLabel = tab === "daily" ? " today" : tab === "week" ? " this week" : " all-time";
+  // Signed in: show the server streak (cross-device). Signed out: the local-only streak.
+  const displayStreak = user && serverStreak != null ? serverStreak : streak;
 
   return (
     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
       <div className="flex items-center justify-between">
         <div className="text-sm font-bold text-zinc-200">🏆 Leaderboard</div>
         <div className="flex items-center gap-3 text-xs text-zinc-500">
-          {streak > 0 && <span className="rounded bg-orange-500/15 px-2 py-0.5 font-semibold text-orange-300">🔥 {streak}-day streak</span>}
+          {displayStreak > 0 && <span className="rounded bg-orange-500/15 px-2 py-0.5 font-semibold text-orange-300">🔥 {displayStreak}-day streak</span>}
           {tab === "daily" && <span>next in <span className="tabular-nums text-zinc-400">{hhmmss(countdown)}</span></span>}
         </div>
       </div>
@@ -180,7 +203,9 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
                 <div className="mb-2 text-xs text-zinc-400">
                   {readOnly ? "Sign in to highlight your ranks across every board." : tab === "daily" ? "Sign in to claim your rank — and join the weekly & all-time boards." : "Sign in and play to climb the weekly & all-time boards."}
                 </div>
-                <GoogleOneTap onSignIn={onSignIn} />
+                <button onClick={promptSignIn} className="w-full rounded-lg bg-white px-4 py-2 text-sm font-bold text-zinc-900 transition hover:bg-zinc-100">
+                  Sign in with Google
+                </button>
               </div>
             )
           )}
@@ -188,7 +213,9 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
           {err && <div className="mt-2 text-xs text-red-400">{err}</div>}
 
           {tab === "daily" && view && <Board view={view} uid={effectiveUid} />}
-          {tab !== "daily" && <AggBoard view={agg[tab] ?? null} uid={effectiveUid} scope={tab} />}
+          {tab !== "daily" && (user
+            ? <AggBoard view={agg[tab] ?? null} uid={effectiveUid} scope={tab} />
+            : <SignInGate scope={tab} onSignIn={promptSignIn} />)}
 
           {youCard && (
             <div className="mt-3 flex items-center justify-between rounded-lg bg-zinc-950/40 px-2.5 py-2 text-xs text-zinc-400">
@@ -247,6 +274,22 @@ function AggBoard({ view, uid, scope }: { view: AggBoardView | null; uid: string
         {rows.map((r) => <AggRowView key={r.uid} r={r} me={r.uid === uid} />)}
         {youOutside && view.you && <AggRowView r={view.you} me />}
       </div>
+    </div>
+  );
+}
+
+// Signed-out state for the weekly / all-time tabs (those boards are sign-in gated).
+function SignInGate({ scope, onSignIn }: { scope: "week" | "alltime"; onSignIn: () => void }) {
+  const label = scope === "week" ? "weekly" : "all-time";
+  return (
+    <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 text-center">
+      <div className="text-sm font-semibold text-zinc-200">Sign in to see the {label} board</div>
+      <div className="mx-auto mt-1 max-w-xs text-xs text-zinc-500">The {label} leaderboard is for signed-in players — your ranks then follow you across every device.</div>
+      {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+        <button onClick={onSignIn} className="mt-3 rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-black transition hover:bg-orange-400">
+          Sign in with Google
+        </button>
+      )}
     </div>
   );
 }

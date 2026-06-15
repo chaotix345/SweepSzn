@@ -5,6 +5,7 @@ import { track } from "@vercel/analytics";
 import type { DraftStep } from "@/lib/types";
 import type { FhBoardView, FhBoardRow } from "@/lib/factorHunt";
 import { getUid, getName, setName as persistName } from "@/lib/streak";
+import { useSessionContext } from "@/components/SessionProvider";
 import { dayUTC } from "@/lib/day";
 
 // Factor Hunt daily board — deliberately slimmer than the Daily Leaderboard: no streak, no
@@ -16,6 +17,7 @@ const serverDate = dayUTC;
 export default function FhLeaderboard({ date, trace, prediction, readOnly = false }: {
   date: string; trace: DraftStep[]; prediction: string | null; readOnly?: boolean;
 }) {
+  const { user } = useSessionContext();
   const [view, setView] = useState<FhBoardView | null>(null);
   const [enabled, setEnabled] = useState(true);
   const [uid, setUid] = useState("");
@@ -28,7 +30,7 @@ export default function FhLeaderboard({ date, trace, prediction, readOnly = fals
   useEffect(() => {
     const ctl = new AbortController();
     (async () => {
-      const id = getUid();
+      const id = user?.uid ?? getUid(); // signed in: highlight + "already posted" key off the account
       setUid(id); setNameState(getName());
       try {
         const r = await fetch(`/api/factorhunt/leaderboard?date=${encodeURIComponent(date)}&uid=${encodeURIComponent(id)}`, { signal: ctl.signal });
@@ -37,7 +39,7 @@ export default function FhLeaderboard({ date, trace, prediction, readOnly = fals
       } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline — board hidden */ }
     })();
     return () => ctl.abort();
-  }, [date]);
+  }, [date, user?.uid]);
 
   const submit = useCallback(async () => {
     if (date !== serverDate()) { setErr("Today's hunt just reset — start today's game to post a score."); return; }

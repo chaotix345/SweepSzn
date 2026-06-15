@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { listResults, type ResultEntry } from "@/lib/resultHistory";
+import { useSessionContext } from "@/components/SessionProvider";
+import { fetchProfile } from "@/lib/account";
 
 const MODE_LABEL: Record<ResultEntry["mode"], string> = { daily: "Daily", classic: "Classic", hoopiq: "HoopIQ", challenge: "Challenge", factorhunt: "Factor Hunt", prime: "Prime", blueprint: "Blueprint", surgeon: "Surgeon" };
 const gradeText = (g: string) =>
@@ -19,10 +21,28 @@ const ago = (ts: number) => {
 // live creator dashboard; everything else opens its /r/ permalink. Read from localStorage after mount
 // to avoid an SSR/hydration mismatch; renders nothing until then (and nothing when empty).
 export default function ResultsHistory({ onOpenChallenge }: { onOpenChallenge: (challengeId: string) => void }) {
+  const { user } = useSessionContext();
   const [items, setItems] = useState<ResultEntry[] | null>(null);
   // localStorage is read after mount (avoids SSR/hydration mismatch). async IIFE keeps the setState out
   // of the effect body for react-hooks/set-state-in-effect — the repo's idiom.
   useEffect(() => { (async () => { setItems(listResults()); })(); }, []);
+  // Signed in: merge this account's server-side history in (so games played on another device show up
+  // here too). Union by mode:encoded, newest-first; the local list already covers this device.
+  useEffect(() => {
+    if (!user) return;
+    let on = true;
+    (async () => {
+      const p = await fetchProfile();
+      if (!on || !p?.results?.length) return;
+      setItems((local) => {
+        const seen = new Set((local ?? []).map((e) => `${e.mode}:${e.encoded}`));
+        const merged = [...(local ?? [])];
+        for (const e of p.results) if (!seen.has(`${e.mode}:${e.encoded}`)) merged.push(e);
+        return merged.sort((a, b) => b.ts - a.ts);
+      });
+    })();
+    return () => { on = false; };
+  }, [user]);
   if (!items || items.length === 0) return null;
 
   const Row = ({ e }: { e: ResultEntry }) => (

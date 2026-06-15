@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Anton } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { baseUrl, SITE_NAME } from "@/lib/site";
+import SessionProvider from "@/components/SessionProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -50,7 +51,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${anton.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {children}
+        <SessionProvider>{children}</SessionProvider>
         <Analytics />
       </body>
     </html>
