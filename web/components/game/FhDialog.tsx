@@ -16,7 +16,7 @@ export function FhDialog({ fhStep, fhPick, setFhPick, lockFh, dialogRef }: {
     <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Factor Hunt prediction"
       onKeyDown={(e) => buildFocusTrapHandler(dialogRef, () => lockFh(null))(e)}
       className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
-      <div className="animate-slide-up w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
+      <div className="animate-slide-up max-h-[88dvh] w-full max-w-sm overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
         <div className="text-center text-xs font-black uppercase tracking-widest text-violet-400">🔮 Factor Hunt</div>
         <p className="mt-2 text-center text-base font-semibold text-zinc-100">
           {fhStep.ask === "worst"
