@@ -152,9 +152,7 @@ describe("self-disable 503: redis-gated routes return 503 when Redis env is abse
   // ── board (isLeaderboardEnabled) ──────────────────────────────────────────
 
   it("GET /api/board/alltime → 503", async () => {
-    const { status, body } = await readJson(
-      await boardAlltimeGET(req("/api/board/alltime")),
-    );
+    const { status, body } = await readJson(await boardAlltimeGET());
     expect(status).toBe(503);
     expect(body).toMatchObject({ error: "leaderboard not configured" });
   });
@@ -170,7 +168,7 @@ describe("self-disable 503: redis-gated routes return 503 when Redis env is abse
   // ── profile (isRedisEnabled gate) ─────────────────────────────────────────
 
   it("GET /api/profile → 503", async () => {
-    const { status, body } = await readJson(await profileGET());
+    const { status, body } = await readJson(await profileGET(req("/api/profile")));
     expect(status).toBe(503);
     expect(body).toMatchObject({ error: "not configured" });
   });
