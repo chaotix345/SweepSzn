@@ -70,7 +70,7 @@ export default function ResultCard({
   const elite = isEliteGrade(result.grade);
 
   return (
-    <div className={`mt-4 overflow-hidden rounded-2xl border bg-zinc-900 ${elite ? "border-gold/30 ring-1 ring-gold/25 animate-gold-pulse" : "border-zinc-800"}`}>
+    <div className={`mt-4 overflow-hidden rounded-2xl border bg-zinc-900 ${elite ? "border-gold/30 ring-1 ring-gold/25 animate-gold-pulse" : "animate-rise-in border-zinc-800"}`}>
       {/* hero — the buzzer moment: the record slams in; elite grades get the gold trophy glow */}
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
         <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{mode} · projected record</div>

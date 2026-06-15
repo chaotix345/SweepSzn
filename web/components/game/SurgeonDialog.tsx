@@ -37,7 +37,7 @@ export function SurgeonDialog({ sgPool, sgInId, setSgInId, sgOutId, setSgOutId, 
         buildFocusTrapHandler(dialogRef, () => dismissPool(), { forwardFromContainer: true, selector: "button:not([disabled]), input:not([disabled])" })(e);
       }}
       className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
-      <div className="max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
+      <div className="animate-slide-up max-h-[88dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
         <div className="text-center text-xs font-black uppercase tracking-widest text-rose-400">🩺 Diagnosis</div>
         <p className="mt-2 text-center text-base font-semibold text-zinc-100">
           {sgPool.diagnosis.kind === "worst" ? "Your worst factor: " : "No real weaknesses — your weakest strength: "}

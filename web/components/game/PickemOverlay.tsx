@@ -17,7 +17,7 @@ export function PickemOverlay({ current, mode, dialogRef, onVote, onSkip }: {
     <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Pick'Em crowd vote"
       onKeyDown={(e) => buildFocusTrapHandler(dialogRef, () => onSkip())(e)}
       className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
-      <div className="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-5 text-center shadow-2xl">
+      <div className="animate-slide-up w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-5 text-center shadow-2xl">
         <div className="flex items-center justify-between">
           <span className="text-xs font-black uppercase tracking-widest text-orange-500">🗳️ Pick&apos;Em</span>
           <button onClick={onSkip} aria-label="Skip Pick'Em — won't ask again" title="Skip — won't ask again"

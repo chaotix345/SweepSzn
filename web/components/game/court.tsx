@@ -38,7 +38,8 @@ export function Court({ roster, selSlot, isTarget, onSlot, maskColors, idle }: {
             aria-label={p ? `${p.name} at ${s}${target ? ", swap target" : movable ? ", tap to move" : ""}` : `${s} slot${target ? ", eligible — tap to place" : " (empty)"}`}
             className={`absolute -translate-x-1/2 -translate-y-1/2 transition ${target ? "animate-pulse" : ""}`}>
             {p && c ? (
-              <span className={`relative flex h-14 w-14 flex-col items-center justify-center rounded-xl text-xs font-black leading-none shadow-lg ring-2 ${
+              // key on the player id so the snap replays exactly when a slot fills (or a swap lands)
+              <span key={p.id} className={`animate-token-snap relative flex h-14 w-14 flex-col items-center justify-center rounded-xl text-xs font-black leading-none shadow-lg ring-2 ${
                   picked ? "ring-orange-400" : target ? "ring-orange-400" : "ring-white/20"}`}
                 style={{ background: c.bg, color: c.text }}>
                 <span>{initials(p.name)}</span>

@@ -632,7 +632,7 @@ export default function Game() {
               canPlace={(c) => openSlots.some((s) => c.eligible.includes(s))}
               onSelect={(c) => { setSelSlot(null); setSelPlayer((p) => (p?.id === c.id ? null : c)); }} />
           ) : (
-            <div className="rounded-2xl border border-dashed border-zinc-800 p-8 text-center">
+            <div className="animate-rise-in rounded-2xl border border-dashed border-zinc-800 p-8 text-center">
               {allFilled ? (
                 <>
                   <p className="mb-3 text-sm text-zinc-400">Your starting five is set.</p>
