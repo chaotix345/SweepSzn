@@ -39,9 +39,11 @@ export default function AuthControl() {
     return (
       <button
         onClick={promptSignIn}
-        className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-semibold text-zinc-200 transition hover:border-zinc-500"
+        aria-label="Sign in to sync your record across devices"
+        className="rounded-lg border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 text-sm font-semibold text-orange-300 transition hover:border-orange-500/70 hover:bg-orange-500/20"
       >
-        Sign in
+        <span className="sm:hidden">Sync</span>
+        <span className="hidden sm:inline">Sync your record</span>
       </button>
     );
   }

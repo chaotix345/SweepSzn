@@ -5,6 +5,7 @@ import { getUid } from "@/lib/streak";
 import { useSessionContext } from "@/components/SessionProvider";
 import { notificationText } from "@/lib/notify";
 import type { NotifView } from "@/lib/types";
+import { BellIcon } from "@/components/ui/icons";
 
 function relTime(ts: number): string {
   const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
@@ -89,9 +90,9 @@ export default function NotificationBell() {
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls="notif-panel"
-        className="relative flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-700 text-lg text-zinc-300 transition hover:border-zinc-500"
+        className="relative flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:border-zinc-500"
       >
-        <span aria-hidden="true">🔔</span>
+        <BellIcon className="h-5 w-5" />
         {unread > 0 && (
           <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-black tabular-nums text-black">
             {unread > 9 ? "9+" : unread}
