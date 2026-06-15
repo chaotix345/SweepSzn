@@ -29,7 +29,8 @@ function cleanResults(input: unknown): ProfileResult[] {
       wins: Math.max(0, Math.min(82, Math.trunc(wins))),
       losses: Math.max(0, Math.min(82, Math.trunc(losses))),
       grade: typeof r.grade === "string" ? r.grade.slice(0, 4) : "",
-      ts: Number.isFinite(ts) && ts > 0 ? ts : Date.now(),
+      // clamp to now (+60s clock-skew slack) so a fabricated far-future ts can't pin an entry at the top forever
+      ts: Number.isFinite(ts) && ts > 0 ? Math.min(ts, Date.now() + 60_000) : Date.now(),
       ...(typeof r.challengeId === "string" ? { challengeId: r.challengeId.slice(0, 64) } : {}),
     });
   }

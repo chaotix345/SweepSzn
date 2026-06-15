@@ -2,8 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSessionContext } from "@/components/SessionProvider";
 import { updateName } from "@/lib/account";
-
-const AUTH_ENABLED = !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+import { AUTH_ENABLED } from "@/lib/authClient";
 
 // Header account control: a "Sign in" button when signed out (opens the One Tap popover via the
 // provider), or an avatar menu when signed in (edit the cross-device handle, sign out). Renders

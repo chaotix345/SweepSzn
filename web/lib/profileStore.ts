@@ -39,6 +39,9 @@ function parseDay(s: unknown): { key: string; ms: number } | null {
   const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
   if (!m) return null;
   const y = +m[1], mo = +m[2], d = +m[3];
+  // Reject absurd far-past/far-future years from untrusted sync input (bounds the no-TTL streak ZSET).
+  // Wide enough to never reject a legitimate near-future date.
+  if (y < 2000 || y > 2100) return null;
   if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
   const ms = Date.UTC(y, mo - 1, d);
   return { key: dayUTC(new Date(ms)), ms };
@@ -95,12 +98,11 @@ export async function getStreakCount(uid: string, now: number): Promise<number> 
 // --- profile (display handle) ---
 
 // On sign-in: keep name/picture current across devices (idempotent), but stamp createdAt only once.
+// hsetnx is atomic — no check-then-set race when two devices sign in at the same moment.
 export async function upsertProfileOnSignIn(uid: string, name: string, picture: string, now: number): Promise<void> {
   if (!redis) return;
   await redis.hset(keyProfile(uid), { name, picture });
-  if (!(await redis.hexists(keyProfile(uid), "createdAt"))) {
-    await redis.hset(keyProfile(uid), { createdAt: now });
-  }
+  await redis.hsetnx(keyProfile(uid), "createdAt", now);
 }
 
 export async function setProfileName(uid: string, name: string): Promise<void> {
@@ -121,8 +123,10 @@ export async function getResults(uid: string): Promise<ProfileResult[]> {
   return (await redis.lrange<ProfileResult>(keyResults(uid), 0, RESULTS_CAP - 1)) ?? [];
 }
 
-// Union merge, deduped by mode:encoded (matching lib/resultHistory.ts), newest-first, capped. Returns
-// how many fresh entries were actually added. `entries` is expected newest-first.
+// Union merge, deduped by mode:encoded (matching lib/resultHistory.ts), kept strictly newest-first by
+// ts and capped. Returns how many fresh entries were actually added. Because a cross-device backfill can
+// carry games OLDER than ones already stored, we re-sort the whole list by ts (not just prepend) so the
+// cap can never evict a newer entry in favour of an older backfilled one.
 export async function syncResults(uid: string, entries: ProfileResult[]): Promise<number> {
   if (!redis || !entries.length) return 0;
   const existing = (await redis.lrange<ProfileResult>(keyResults(uid), 0, -1)) ?? [];
@@ -135,8 +139,9 @@ export async function syncResults(uid: string, entries: ProfileResult[]): Promis
     fresh.push(e);
   }
   if (!fresh.length) return 0;
-  // lpush leaves its LAST arg at the head; reverse so the newest fresh entry ends up first.
-  await redis.lpush(keyResults(uid), ...[...fresh].reverse());
-  await redis.ltrim(keyResults(uid), 0, RESULTS_CAP - 1);
+  const merged = [...existing, ...fresh].sort((a, b) => b.ts - a.ts).slice(0, RESULTS_CAP);
+  // Rebuild the list newest-first: lpush leaves its LAST arg at the head, so push the reverse.
+  await redis.del(keyResults(uid));
+  await redis.lpush(keyResults(uid), ...[...merged].reverse());
   return fresh.length;
 }

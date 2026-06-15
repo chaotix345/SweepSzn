@@ -4,6 +4,7 @@ import GoogleOneTap from "@/components/GoogleOneTap";
 import { getHistory } from "@/lib/streak";
 import { listResults } from "@/lib/resultHistory";
 import { syncToAccount } from "@/lib/account";
+import { AUTH_ENABLED } from "@/lib/authClient";
 
 // App-wide session state: one /api/auth/me fetch shared by the header, the leaderboard, every mode
 // board, and the notification bell (instead of each calling it independently). Also hosts the single
@@ -34,8 +35,6 @@ const Ctx = createContext<SessionCtx>({
 });
 
 export const useSessionContext = () => useContext(Ctx);
-
-const AUTH_ENABLED = !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
 async function fetchMe(): Promise<SessionUser | null> {
   try { const r = await fetch("/api/auth/me"); const j = await r.json(); return j?.user ?? null; }

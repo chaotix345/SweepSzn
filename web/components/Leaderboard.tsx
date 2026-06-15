@@ -9,6 +9,7 @@ import { useSession } from "@/lib/useSession";
 import RankShareButton from "@/components/RankShareButton";
 import { dayUTC } from "@/lib/day";
 import { fetchProfile } from "@/lib/account";
+import { AUTH_ENABLED } from "@/lib/authClient";
 
 type Tab = "daily" | "week" | "alltime";
 const TABS: [Tab, string][] = [["daily", "Daily"], ["week", "Weekly"], ["alltime", "All-time"]];
@@ -68,7 +69,7 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
   // Weekly / all-time are sign-in gated: only fetch when signed in (the GET 401s otherwise). The
   // server keys "you" off the session, so no uid query is sent or trusted.
   useEffect(() => {
-    if (tab === "daily" || !enabled || !user) return;
+    if (tab === "daily" || !enabled || !user?.uid) return;
     const path = tab === "week" ? "/api/board/weekly" : "/api/board/alltime";
     const ctl = new AbortController();
     (async () => {
@@ -79,19 +80,19 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
       } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline */ }
     })();
     return () => ctl.abort();
-  }, [tab, user, enabled, reload]);
+  }, [tab, user?.uid, enabled, reload]);
 
   // Signed in: the streak is server-authoritative (follows the account across devices and outlives the
   // daily board's 31-day TTL). Re-read after a submit/claim (reload bumps).
   useEffect(() => {
     let on = true;
     (async () => {
-      if (!user) { setServerStreak(null); return; }
+      if (!user?.uid) { setServerStreak(null); return; }
       const p = await fetchProfile();
       if (on && p) setServerStreak(p.streak);
     })();
     return () => { on = false; };
-  }, [user, reload]);
+  }, [user?.uid, reload]);
 
   useEffect(() => {
     const t = setInterval(() => setCountdown(msToNextUtcMidnight()), 1000);
@@ -126,14 +127,15 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
     try {
       const r = await fetch("/api/daily/submit", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ date, name: name.trim(), trace, usedHints }),
+        // prefer the account handle (synced across devices) over this device's localStorage name
+        body: JSON.stringify({ date, name: (user?.name || name).trim(), trace, usedHints }),
       });
       if (r.status === 503) { setEnabled(false); return; }
       const v = await r.json();
       if (r.ok) { recordDailyDone(date); setStreak(getStreak()); setView(v); setSubmitted(true); setReload((n) => n + 1); track("daily_claim", { rank: v?.you?.rank ?? 0 }); }
       // surfaced (was a silent swallow): a network miss here lost the claim AND the streak credit with no feedback
     } catch { setErr("network error"); } finally { setBusy(false); }
-  }, [date, name, trace, readOnly, usedHints]);
+  }, [date, name, trace, readOnly, usedHints, user]);
 
   // Run the claim exactly once per fresh sign-in (signInNonce bumps in SessionProvider). Comparing to a
   // ref of the last-seen nonce means a claimOnSignIn identity change (name/trace edits) can't re-fire it.
@@ -192,7 +194,7 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
           )}
 
           {/* Identity: signed-in badge, or a sign-in prompt (claims today + joins weekly/all-time) */}
-          {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+          {AUTH_ENABLED && (
             user ? (
               <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
                 <span>Signed in{user.name ? ` as ${user.name}` : ""} · ranks are yours to keep</span>
@@ -280,16 +282,15 @@ function AggBoard({ view, uid, scope }: { view: AggBoardView | null; uid: string
 
 // Signed-out state for the weekly / all-time tabs (those boards are sign-in gated).
 function SignInGate({ scope, onSignIn }: { scope: "week" | "alltime"; onSignIn: () => void }) {
+  if (!AUTH_ENABLED) return null; // no sign-in configured → nothing to prompt
   const label = scope === "week" ? "weekly" : "all-time";
   return (
     <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 text-center">
       <div className="text-sm font-semibold text-zinc-200">Sign in to see the {label} board</div>
       <div className="mx-auto mt-1 max-w-xs text-xs text-zinc-500">The {label} leaderboard is for signed-in players — your ranks then follow you across every device.</div>
-      {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
-        <button onClick={onSignIn} className="mt-3 rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-black transition hover:bg-orange-400">
-          Sign in with Google
-        </button>
-      )}
+      <button onClick={onSignIn} className="mt-3 rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-black transition hover:bg-orange-400">
+        Sign in with Google
+      </button>
     </div>
   );
 }
