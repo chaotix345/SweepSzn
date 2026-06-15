@@ -95,7 +95,7 @@ export default function Game() {
   const [hintsUsed, setHintsUsed] = useState(0);   // hints spent this game (UI mirror of the ref)
   const hintsUsedRef = useRef(0);                  // synchronous count, read at simulate time
   const saltRef = useRef(0);
-  const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const traceRef = useRef<DraftStep[]>([]);            // ordered picks for leaderboard verification
   const roundRespinsRef = useRef<("team" | "era")[]>([]); // re-spins used in the current round
   const [convertedId, setConvertedId] = useState<string | null>(null); // challenge minted from a finished game
@@ -125,7 +125,7 @@ export default function Game() {
   const roundNum = Math.min(filled + 1, 5);
   const openSlots = useMemo(() => SLOTS.filter((s) => !roster[s]), [roster]);
 
-  useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
+  useEffect(() => () => { if (tickRef.current) clearTimeout(tickRef.current); }, []);
 
   const dismissLeversTip = useCallback(() => {
     try { localStorage.setItem("szn_levers_tip_seen", "1"); } catch { /* no storage */ }
@@ -173,14 +173,26 @@ export default function Game() {
   const runSpin = useCallback(async (opts: SpinOpts, locked: "team" | "era" | null = null) => {
     if (spinning) return;
     setError(null); setSpinning(true); setCurrent(null); setSelPlayer(null); setSelSlot(null); setLockedReel(locked);
-    if (tickRef.current) clearInterval(tickRef.current);
-    tickRef.current = setInterval(() => {
-      setReel({
-        team: locked === "team" ? opts.lockedTeam! : FRANCHISES[Math.floor(Math.random() * FRANCHISES.length)],
-        // Prime Draft: the era reel never cycles — it's permanently locked to PRIME
-        era: mode === "prime" ? "PRIME" : locked === "era" ? eraLabel(opts.lockedDecade!) : eraLabel(DECADES[Math.floor(Math.random() * DECADES.length)]),
-      });
-    }, 70);
+    if (tickRef.current) clearTimeout(tickRef.current);
+    const reduce = typeof window !== "undefined" && (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false);
+    // Cosmetic reel churn: a fast blur while the (deterministic) spin resolves, then a slot-machine
+    // deceleration over the fixed floor so the value visibly clicks into place. Self-rescheduling
+    // setTimeout (not setInterval) so the ramp can slow per-tick. The result and the 1100ms floor
+    // below are untouched — 82-0 parity holds; the tick is purely visual. Skipped under reduced-motion.
+    const churn = () => setReel({
+      team: locked === "team" ? opts.lockedTeam! : FRANCHISES[Math.floor(Math.random() * FRANCHISES.length)],
+      // Prime Draft: the era reel never cycles — it's permanently locked to PRIME
+      era: mode === "prime" ? "PRIME" : locked === "era" ? eraLabel(opts.lockedDecade!) : eraLabel(DECADES[Math.floor(Math.random() * DECADES.length)]),
+    });
+    let decel = false;
+    let step = 0;
+    const DECEL = [70, 85, 105, 130, 165, 210, 270, 340]; // ramps up; the snap below cuts it at the floor
+    const schedule = () => {
+      const gap = decel ? DECEL[step] : 60;
+      if (gap === undefined) return; // deceleration ramp exhausted — hold the last value until the snap
+      tickRef.current = setTimeout(() => { churn(); if (decel) step += 1; schedule(); }, gap);
+    };
+    if (!reduce) schedule();
     try {
       const r = await fetch("/api/spin", {
         method: "POST", headers: { "content-type": "application/json" },
@@ -190,9 +202,14 @@ export default function Game() {
       });
       if (!r.ok) throw new Error("spin failed");
       const res: Spin = await r.json();
+      // result known — restart the churn as a deceleration ramp from the first (fast) step
+      if (!reduce) { if (tickRef.current) clearTimeout(tickRef.current); decel = true; step = 0; schedule(); }
       await new Promise((rs) => setTimeout(rs, 1100));
+      if (tickRef.current) { clearTimeout(tickRef.current); tickRef.current = null; }
       setReel({ team: res.team, era: eraLabel(res.decade) });
       setCurrent(res);
+      // a single haptic "click" at the landing — Android only; iOS/desktop silently no-op
+      if (!reduce) { try { navigator.vibrate?.(35); } catch { /* no haptics */ } }
     } catch {
       setLockedReel(null); setReel({ team: "ATL", era: mode === "prime" ? "PRIME" : "60's" });
       // roll back the re-spin we optimistically charged before this call so a network error doesn't
@@ -204,7 +221,7 @@ export default function Game() {
       if (locked !== null) { roundRespinsRef.current = roundRespinsRef.current.slice(0, -1); saltRef.current--; }
       setError("Network hiccup — tap SPIN to try again.");
     } finally {
-      if (tickRef.current) clearInterval(tickRef.current);
+      if (tickRef.current) clearTimeout(tickRef.current);
       setSpinning(false);
     }
   }, [spinning, seed, filled, drafted, mode]);
