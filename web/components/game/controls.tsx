@@ -27,11 +27,17 @@ export function UsageBar({ total, discipline = false }: { total: number; discipl
         {discipline && <div className="absolute inset-y-0 w-px bg-zinc-400/70" style={{ left: mark(95) }} title="A grade line (95)" />}
         <div className="absolute inset-y-0 w-px bg-red-400/70" style={{ left: mark(BUDGET) }} title={`Engine overload budget (${BUDGET})`} />
       </div>
-      {over > 0 && (
+      {over > 0 ? (
         <p className="mt-1 text-center text-[10px] text-red-400/80">
           Over budget — forcing this much ball-dominance costs ~{(over * GAMMA).toFixed(1)} pts of offense at reveal.
         </p>
-      )}
+      ) : !discipline ? (
+        // Disclose the RULE before the line is crossed: going over the budget is a penalty, not a hard cap.
+        // Zero basketball knowledge in this — it just stops players treating 110 as a block they must not pass.
+        <p className="mt-1 text-center text-[10px] text-zinc-500">
+          Going over {BUDGET} only docks points at reveal — it never blocks a pick.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -39,6 +45,9 @@ export function UsageBar({ total, discipline = false }: { total: number; discipl
 export function SkipBtn({ label, used, onClick, disabled }: { label: string; used: boolean; onClick: () => void; disabled?: boolean }) {
   return (
     <button onClick={onClick} disabled={used || disabled}
+      // Scope is per-GAME, not per-round (skips reset only in start()) — say so, framed as expiry, since
+      // the failure mode is hoarding re-spins to the end and losing them, not misreading the count.
+      title="One per game — doesn't carry over between rounds"
       className={`rounded-full border px-3 py-1 font-semibold transition ${
         used ? "border-zinc-800 text-zinc-700 line-through" : "border-zinc-700 text-zinc-300 hover:border-orange-500 hover:text-orange-400"}`}>
       {label}{used ? " · used" : ""}

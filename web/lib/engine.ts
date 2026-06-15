@@ -1,4 +1,4 @@
-import type { Player, Coefficients, DefModel, LineupResult, PlayerBreakdown } from "./types";
+import type { Player, Coefficients, DefModel, LineupResult, PlayerBreakdown, Slot } from "./types";
 
 // Defaults mirror the fitted coefficients.json so the engine is sane even if the file is missing.
 export const DEFAULT_COEFFICIENTS: Coefficients = {
@@ -84,6 +84,21 @@ function defValue(p: Player, c: Coefficients): number {
 }
 export function playerImpact(p: Player, c: Coefficients = DEFAULT_COEFFICIENTS) {
   return { off: round1(offValue(p, c)), def: round1(defValue(p, c)), usage: Math.round(usageDemand(p, c)) };
+}
+
+// Post-game teaching aid: which drafted SLOT added the least on-court value (offScale*off +
+// defScale*def, the two terms that move ortg/drtg). Gradeless and name-less by design — it points
+// at a slot, never a player or a fit number, so it closes the "which pick was my mistake?" loop
+// without exposing the hint-gated per-player fit. Null when the breakdown is incomplete (cold restore).
+export function weakestSlot(result: LineupResult, slots: Slot[], c: Coefficients = DEFAULT_COEFFICIENTS): Slot | null {
+  const pb = result.players;
+  if (!pb.length || pb.length !== slots.length) return null;
+  let worstIdx = 0, worstVal = Infinity;
+  for (let i = 0; i < pb.length; i++) {
+    const v = c.offScale * pb[i].off + c.defScale * pb[i].def;
+    if (v < worstVal) { worstVal = v; worstIdx = i; }
+  }
+  return slots[worstIdx];
 }
 
 export function playerFeatures(p: Player, c: Coefficients = DEFAULT_COEFFICIENTS) {
