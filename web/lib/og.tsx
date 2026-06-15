@@ -3,6 +3,7 @@ import { SLOTS, teamColors, initials, eraLabel, displayName } from "./teams";
 import { headline, historyAnchor } from "./explain";
 import type { RankCard } from "./rankShare";
 import { pickemVerdict, type PickemView } from "./pickem";
+import { GRADE_HEX } from "./grades";
 
 // Shared building blocks for the dynamic Open Graph cards (next/og + satori).
 // Satori only supports flexbox + a CSS subset, so every multi-child node sets display:flex
@@ -11,9 +12,6 @@ import { pickemVerdict, type PickemView } from "./pickem";
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_ALT = "SweepSzn — build an all-time NBA starting five";
 
-const GRADE_HEX: Record<string, string> = {
-  S: "#ffc53d", "A+": "#ffc53d", A: "#4ade80", B: "#60a5fa", C: "#fbbf24", D: "#94a3b8", F: "#f87171",
-};
 
 // satori's default font is latin-only; strip diacritics so names like Dončić/Jokić don't tofu.
 const ascii = (s: string) => s.normalize("NFKD").replace(/[̀-ͯ]/g, "");

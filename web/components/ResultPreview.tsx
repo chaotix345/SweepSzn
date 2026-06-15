@@ -5,6 +5,7 @@
 import { getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
 import { factorViews } from "@/lib/explain";
+import { GRADE_COLOR } from "@/lib/grades";
 
 // A balanced two-way GOAT five (slot order PG/SG/SF/PF/C). Verified output: 78-4, A+ HISTORIC,
 // Net +23.4 — Star offense/defense/Spacing help; Usage overload (-13.2) hurts even this lineup,
@@ -17,10 +18,6 @@ const HERO_IDS = [
   "nikola_joki_den_2020s_2024",
 ];
 
-const GRADE_COLOR: Record<string, string> = {
-  S: "text-gold", "A+": "text-gold", A: "text-green-400",
-  B: "text-blue-400", C: "text-amber-400", D: "text-slate-400", F: "text-red-400",
-};
 
 export default function ResultPreview() {
   const players = getPlayersByIds(HERO_IDS);

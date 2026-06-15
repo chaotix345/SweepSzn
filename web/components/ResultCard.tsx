@@ -11,6 +11,7 @@ import { bpCode, type BlueprintView } from "@/lib/blueprint";
 import { factorViews, lineupRoles, headline, historyAnchor, playerContribRows, type ContribRow } from "@/lib/explain";
 import { WIN_GRADES } from "@/lib/engine";
 import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
+import { GRADE_COLOR } from "@/lib/grades";
 
 // Crowd snapshot + your vote (and, same-session only, the spun team/era the vote was about).
 type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
@@ -25,10 +26,6 @@ type LbRankProp = { rank: number; total: number };
 // Re-run the script after any engine/data change; golden tests pin both numbers.
 const BEST_DRAFTABLE_RECORD = "79-3";
 
-const GRADE_COLOR: Record<string, string> = {
-  S: "text-gold", "A+": "text-gold", A: "text-green-400",
-  B: "text-blue-400", C: "text-amber-400", D: "text-slate-400", F: "text-red-400",
-};
 const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1));
 
 export default function ResultCard({
