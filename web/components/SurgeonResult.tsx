@@ -5,15 +5,12 @@ import type { SurgeonDiagnosis } from "@/lib/surgeon";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { factorViews } from "@/lib/explain";
 import { ShareButton } from "@/components/ResultCard";
+import { GRADE_COLOR } from "@/lib/grades";
 
 // Surgeon result: the delta IS the story. BEFORE/AFTER records and factor breakdowns side by
 // side, the diagnosis that drove the deal, and the one swap that moved the needle. Used by the
 // game's reveal and by the /sg/ permalink (shared), like ResultCard is for single-lineup modes.
 
-const GRADE_COLOR: Record<string, string> = {
-  S: "text-gold", "A+": "text-gold", A: "text-green-400",
-  B: "text-blue-400", C: "text-amber-400", D: "text-slate-400", F: "text-red-400",
-};
 
 export default function SurgeonResult({
   before, after, beforePlayers, afterPlayers, outIdx, diagnosis, card, shared, onReset,

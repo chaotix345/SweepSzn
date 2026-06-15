@@ -218,6 +218,13 @@ export function createRedisFake() {
       return added;
     },
     hget: async (k: string, f: string) => { log("hget", k, f); return de(hashes.get(k)?.get(f) ?? null); },
+    hsetnx: async (k: string, f: string, v: unknown) => {
+      log("hsetnx", k, f);
+      const h = hash(k);
+      if (h.has(f)) return 0;
+      h.set(f, ser(v));
+      return 1;
+    },
     hmget: async (k: string, ...fields: string[]) => {
       log("hmget", k, ...fields);
       const h = hashes.get(k);

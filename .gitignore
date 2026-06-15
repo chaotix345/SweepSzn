@@ -16,6 +16,7 @@ data/raw/
 .gstack/
 .claude/
 .playwright-mcp/
+.audit/
 research/shots/
 *.log
 

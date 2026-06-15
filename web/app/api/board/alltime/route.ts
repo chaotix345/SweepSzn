@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { isLeaderboardEnabled } from "@/lib/leaderboard";
 import { getAggBoard } from "@/lib/aggBoard";
-import { BOARD_CACHE } from "@/lib/boardCache";
+import { getSession } from "@/lib/authServer";
+import { PRIVATE_NO_STORE } from "@/lib/boardCache";
 
 export const runtime = "nodejs";
 
-export async function GET(req: Request) {
+// Sign-in gated (see weekly): the all-time board requires an account; session uid is the "you" key.
+export async function GET() {
   if (!isLeaderboardEnabled()) return NextResponse.json({ error: "leaderboard not configured" }, { status: 503 });
-  const uid = new URL(req.url).searchParams.get("uid") ?? undefined;
-  if (uid && !/^[a-z0-9-]{8,64}$/i.test(uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
-  return NextResponse.json(await getAggBoard("alltime", uid), { headers: BOARD_CACHE });
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: "auth_required" }, { status: 401 });
+  return NextResponse.json(await getAggBoard("alltime", session.uid), { headers: PRIVATE_NO_STORE });
 }

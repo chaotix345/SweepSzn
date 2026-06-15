@@ -2,8 +2,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getUid } from "@/lib/streak";
+import { useSessionContext } from "@/components/SessionProvider";
 import { notificationText } from "@/lib/notify";
 import type { NotifView } from "@/lib/types";
+import { BellIcon } from "@/components/ui/icons";
 
 function relTime(ts: number): string {
   const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
@@ -17,6 +19,8 @@ function relTime(ts: number): string {
 // endpoint; the dropdown lists challenge-response pings and deep-links to the creator dashboard.
 // Self-disabling: renders nothing when notifications aren't configured (Redis absent -> 503).
 export default function NotificationBell() {
+  const { user } = useSessionContext();
+  const uid = user?.uid ?? getUid(); // signed in: notifications are keyed by the account uid server-side
   const [view, setView] = useState<NotifView | null>(null);
   const [open, setOpen] = useState(false);
   const [disabled, setDisabled] = useState(false);
@@ -30,7 +34,7 @@ export default function NotificationBell() {
     let alive = true;
     const tick = async () => {
       try {
-        const r = await fetch(`/api/notifications?uid=${encodeURIComponent(getUid())}`);
+        const r = await fetch(`/api/notifications?uid=${encodeURIComponent(uid)}`);
         if (!alive) return;
         if (r.status === 503) { setDisabled(true); return; }
         if (!r.ok) return;
@@ -45,7 +49,7 @@ export default function NotificationBell() {
     document.addEventListener("visibilitychange", onFocus);
     window.addEventListener("focus", onFocus);
     return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onFocus); window.removeEventListener("focus", onFocus); };
-  }, []);
+  }, [uid]);
 
   // Escape + outside-click close the panel and restore focus to the bell.
   useEffect(() => {
@@ -69,8 +73,8 @@ export default function NotificationBell() {
     setHighlight(view?.unread ?? 0);
     setOpen(true);
     setView((v) => (v ? { ...v, unread: 0 } : v)); // optimistic: clear the badge
-    try { await fetch("/api/notifications/read", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ uid: getUid() }) }); } catch { /* best-effort */ }
-  }, [open, view]);
+    try { await fetch("/api/notifications/read", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ uid }) }); } catch { /* best-effort */ }
+  }, [open, view, uid]);
 
   if (disabled) return null;
 
@@ -86,9 +90,9 @@ export default function NotificationBell() {
         aria-haspopup="true"
         aria-expanded={open}
         aria-controls="notif-panel"
-        className="relative flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-700 text-lg text-zinc-300 transition hover:border-zinc-500"
+        className="relative flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:border-zinc-500"
       >
-        <span aria-hidden="true">🔔</span>
+        <BellIcon className="h-5 w-5" />
         {unread > 0 && (
           <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-black tabular-nums text-black">
             {unread > 9 ? "9+" : unread}

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { track } from "@vercel/analytics";
 import { getUid } from "@/lib/streak";
+import { useSessionContext } from "@/components/SessionProvider";
 import type { ChallengeOwnerView } from "@/lib/types";
 import FiveStrip from "@/components/FiveStrip";
 import PushPrompt from "@/components/PushPrompt";
@@ -20,6 +21,7 @@ const signed = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
 // Stamps `?own=<id>` so a refresh restores it in place. Rendered both right after creation (inside the
 // result screen) and standalone when re-opened from "Your results".
 export default function ChallengeOwner({ id, created }: { id: string; created?: boolean }) {
+  const { user } = useSessionContext();
   const [view, setView] = useState<ChallengeOwnerView | null>(null);
   const [state, setState] = useState<State>("loading");
   const [copied, setCopied] = useState(false);
@@ -55,7 +57,7 @@ export default function ChallengeOwner({ id, created }: { id: string; created?: 
         const r = await fetch(`/api/challenge/${id}/results`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ uid: getUid() }),
+          body: JSON.stringify({ uid: user?.uid ?? getUid() }), // signed in: the creator gate keys off the account
         });
         if (!alive) return;
         if (r.status === 503) { setState("disabled"); return; }
@@ -73,7 +75,7 @@ export default function ChallengeOwner({ id, created }: { id: string; created?: 
     document.addEventListener("visibilitychange", onFocus);
     window.addEventListener("focus", onFocus);
     return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onFocus); window.removeEventListener("focus", onFocus); };
-  }, [id]);
+  }, [id, user?.uid]);
 
   const card = "mt-4 rounded-2xl border border-orange-500/40 bg-zinc-900 p-5";
 

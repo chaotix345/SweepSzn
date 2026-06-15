@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ButtonLink } from "@/components/ui/Button";
 
 // Static credibility stats (mirrors the calibration facts in the homepage SEO copy).
 const STATS: [string, string][] = [
@@ -13,12 +14,15 @@ export default function SiteFooter() {
       <div className="mx-auto max-w-5xl px-5 py-10">
         <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
           <div>
-            <div className="font-display text-2xl tracking-tight">
+            <div className="font-display text-2xl tracking-wide">
               Sweep<span className="text-orange-500">Szn</span>
             </div>
             <p className="mt-2 max-w-xs text-sm text-zinc-400">
               Can you go 82-0? Draft an all-time NBA five and find out. It&apos;s sweep season.
             </p>
+            <ButtonLink href="/play" size="sm" className="mt-4">
+              Build your five →
+            </ButtonLink>
           </div>
           <nav className="grid grid-cols-2 gap-x-10 gap-y-2 text-sm">
             <Link href="/play" className="text-zinc-400 hover:text-zinc-100">Play</Link>
@@ -33,7 +37,7 @@ export default function SiteFooter() {
               <span className="font-mono font-bold text-zinc-400">{n}</span> {label}
             </span>
           ))}
-          <span className="sm:ml-auto">Free · runs in your browser</span>
+          <span className="sm:ml-auto">© 2026 SweepSzn · Free · runs in your browser</span>
         </div>
       </div>
     </footer>

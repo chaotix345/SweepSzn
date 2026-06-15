@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { enableRedisEnv, freshFake, ctx, req, readJson } from "@/test/routeHarness";
+import { enableRedisEnv, freshFake, ctx, readJson, signIn } from "@/test/routeHarness";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -20,18 +20,26 @@ function seedAlltimeBoard(rows: Array<{ uid: string; name: string; wins: number 
   }
 }
 
-const get = (qs = "") => GET(req(`/api/board/alltime${qs ? `?${qs}` : ""}`));
+const get = () => GET();
 
 beforeEach(() => { freshFake(); });
 
 describe("GET /api/board/alltime", () => {
-  it("rejects a malformed uid", async () => {
-    const { status, body } = await readJson(await get("uid=!!bad!!"));
-    expect(status).toBe(400);
-    expect(body.error).toBe("bad uid");
+  it("401 auth_required when signed out (board is now sign-in gated)", async () => {
+    const { status, body } = await readJson(await get());
+    expect(status).toBe(401);
+    expect(body.error).toBe("auth_required");
+  });
+
+  it("private, no-store cache header on a gated response", async () => {
+    await signIn({ uid: "user-aaaa0001", name: "Alice" });
+    const res = await get();
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
   });
 
   it("returns empty board for a fresh alltime key", async () => {
+    await signIn({ uid: "user-aaaa0001", name: "Alice" });
     const { status, body } = await readJson(await get());
     expect(status).toBe(200);
     expect(body.scope).toBe("alltime");
@@ -42,6 +50,7 @@ describe("GET /api/board/alltime", () => {
   });
 
   it("returns rows in descending win order with correct rank", async () => {
+    await signIn({ uid: "user-zzzz9999", name: "Zed" });
     seedAlltimeBoard([
       { uid: "user-aaaa0001", name: "Alice", wins: 100 },
       { uid: "user-bbbb0002", name: "Bob",   wins: 250 },
@@ -56,12 +65,13 @@ describe("GET /api/board/alltime", () => {
     expect(top[2]).toMatchObject({ uid: "user-aaaa0001", wins: 100, rank: 3 });
   });
 
-  it("includes the requesting uid's rank when they are in the top 100", async () => {
+  it("highlights the signed-in user's rank when they are in the top 100", async () => {
+    await signIn({ uid: "user-bbbb0002", name: "Bob" });
     seedAlltimeBoard([
       { uid: "user-aaaa0001", name: "Alice", wins: 100 },
       { uid: "user-bbbb0002", name: "Bob",   wins: 250 },
     ]);
-    const { body } = await readJson(await get("uid=user-bbbb0002"));
+    const { body } = await readJson(await get());
     const you = body.you as { uid: string; wins: number; rank: number };
     expect(you).toBeDefined();
     expect(you.uid).toBe("user-bbbb0002");
@@ -69,15 +79,16 @@ describe("GET /api/board/alltime", () => {
     expect(you.wins).toBe(250);
   });
 
-  it("includes the requesting uid's rank when they are outside the top 100", async () => {
+  it("highlights the signed-in user's rank when they are outside the top 100", async () => {
+    const outsideUid = "user-00000100";
+    await signIn({ uid: outsideUid, name: "User100" });
     const rows = Array.from({ length: 101 }, (_, i) => ({
       uid: `user-${String(i).padStart(8, "0")}`,
       name: `User${i}`,
       wins: 101 - i,
     }));
     seedAlltimeBoard(rows);
-    const outsideUid = "user-00000100";
-    const { body } = await readJson(await get(`uid=${outsideUid}`));
+    const { body } = await readJson(await get());
     const you = body.you as { uid: string; rank: number; wins: number };
     expect(you).toBeDefined();
     expect(you.uid).toBe(outsideUid);
@@ -85,28 +96,10 @@ describe("GET /api/board/alltime", () => {
     expect(you.wins).toBe(1);
   });
 
-  it("omits you when uid is absent", async () => {
+  it("omits you when the signed-in user is not on the board", async () => {
+    await signIn({ uid: "user-notfound0000", name: "Ghost" });
     seedAlltimeBoard([{ uid: "user-aaaa0001", name: "Alice", wins: 50 }]);
     const { body } = await readJson(await get());
     expect(body.you).toBeUndefined();
-  });
-
-  it("omits you when uid is valid format but not on the board", async () => {
-    seedAlltimeBoard([{ uid: "user-aaaa0001", name: "Alice", wins: 50 }]);
-    const { body } = await readJson(await get("uid=user-notfound0000"));
-    expect(body.you).toBeUndefined();
-  });
-
-  it("accepts uid at max length boundary (64 chars)", async () => {
-    const longUid = "a".repeat(64);
-    const { status } = await readJson(await get(`uid=${longUid}`));
-    expect(status).toBe(200);
-  });
-
-  it("rejects uid that is too short (7 chars)", async () => {
-    // 7 chars is below the 8-char minimum
-    const res = await get("uid=sssssss");
-    const result = await readJson(res);
-    expect(result.status).toBe(400);
   });
 });

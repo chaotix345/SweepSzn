@@ -3,6 +3,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import NotificationBell from "@/components/NotificationBell";
+import AuthControl from "@/components/AuthControl";
+import { ButtonLink } from "@/components/ui/Button";
+import { MenuIcon, CloseIcon } from "@/components/ui/icons";
+import { buildFocusTrapHandler } from "@/components/game/useFocusTrap";
 
 const NAV = [
   { href: "/play", label: "Play" },
@@ -15,6 +19,8 @@ export default function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   // Escape closes the mobile menu and returns focus to the toggle (keyboard a11y)
@@ -25,10 +31,13 @@ export default function SiteHeader() {
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // Move focus into the menu on open so Tab cycles inside it (paired with the focus trap below).
+  useEffect(() => { if (open) firstLinkRef.current?.focus(); }, [open]);
+
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/80 shadow-[0_1px_0_0_rgba(255,106,0,0.08),0_10px_30px_-12px_rgba(0,0,0,0.85)] backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-        <Link href="/" onClick={() => setOpen(false)} className="font-display text-xl tracking-tight">
+        <Link href="/" onClick={() => setOpen(false)} className="font-display text-2xl tracking-wide">
           Sweep<span className="text-orange-500">Szn</span>
         </Link>
 
@@ -46,12 +55,10 @@ export default function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/play"
-            className="hidden rounded-lg bg-orange-500 px-3.5 py-1.5 text-sm font-black text-black transition hover:bg-orange-400 sm:inline-block"
-          >
+          <ButtonLink href="/play" size="sm" className="hidden sm:inline-flex">
             Build your five
-          </Link>
+          </ButtonLink>
+          <AuthControl />
           <NotificationBell />
           <button
             ref={toggleRef}
@@ -59,18 +66,24 @@ export default function SiteHeader() {
             aria-label="Toggle menu"
             aria-expanded={open}
             aria-controls="mobile-nav"
-            className="flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-700 text-lg text-zinc-300 hover:border-zinc-500 sm:hidden"
+            className="flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:border-zinc-500 sm:hidden"
           >
-            <span aria-hidden="true">{open ? "✕" : "☰"}</span>
+            {open ? <CloseIcon /> : <MenuIcon />}
           </button>
         </div>
       </div>
 
       {open && (
-        <nav id="mobile-nav" className="border-t border-zinc-800 px-4 pb-3 pt-1 sm:hidden">
-          {NAV.map((n) => (
+        <nav
+          id="mobile-nav"
+          ref={navRef}
+          onKeyDown={(e) => buildFocusTrapHandler<HTMLElement>(navRef, () => { setOpen(false); toggleRef.current?.focus(); }, { selector: "a[href]" })(e)}
+          className="animate-menu-down border-t border-zinc-800 px-4 pb-3 pt-1 sm:hidden"
+        >
+          {NAV.map((n, i) => (
             <Link
               key={n.href}
+              ref={i === 0 ? firstLinkRef : undefined}
               href={n.href}
               onClick={() => setOpen(false)}
               aria-current={isActive(n.href) ? "page" : undefined}
@@ -79,13 +92,9 @@ export default function SiteHeader() {
               {n.label}
             </Link>
           ))}
-          <Link
-            href="/play"
-            onClick={() => setOpen(false)}
-            className="mt-1 block rounded-lg bg-orange-500 px-2 py-3 text-center text-sm font-black text-black"
-          >
+          <ButtonLink href="/play" onClick={() => setOpen(false)} className="mt-1 w-full">
             Build your five →
-          </Link>
+          </ButtonLink>
         </nav>
       )}
     </header>

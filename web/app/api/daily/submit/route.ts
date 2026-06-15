@@ -2,6 +2,7 @@ import { NextResponse, after } from "next/server";
 import { verifyDaily } from "@/lib/dailyVerify";
 import { isLeaderboardEnabled, submitScore, submitScoreAuthed, removeEntry } from "@/lib/leaderboard";
 import { getSession } from "@/lib/authServer";
+import { recordStreakDate } from "@/lib/profileStore";
 import { encodeLineup } from "@/lib/share";
 import { cleanName } from "@/lib/clean";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
@@ -54,6 +55,9 @@ export async function POST(req: Request) {
   const view = session
     ? await submitScoreAuthed(date, row, v.result)
     : await submitScore(date, row, v.result);
+  // Server-authoritative streak (signed-in only): completing today's verified daily records the
+  // day under the account, so the streak survives across devices and beyond the daily board's TTL.
+  if (session) await recordStreakDate(uid, date, Date.now());
   after(() => bump(redis, "submit", { uid }));
   return NextResponse.json(view);
 }
