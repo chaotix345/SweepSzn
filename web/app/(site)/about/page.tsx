@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { ButtonLink } from "@/components/ui/Button";
+import ResultPreview from "@/components/ResultPreview";
 
 export const metadata: Metadata = {
   title: "About SweepSzn",
@@ -52,7 +53,7 @@ const faqLdHtml = JSON.stringify(faqLd).replace(/</g, "\\u003c").replace(/>/g, "
 
 export default function About() {
   return (
-    <div className="mx-auto max-w-2xl px-5 py-12 sm:py-16">
+    <div className="mx-auto max-w-3xl px-5 py-12 sm:py-16">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqLdHtml }} />
 
       <p className="text-xs font-bold uppercase tracking-widest text-orange-400">About</p>
@@ -68,25 +69,35 @@ export default function About() {
         It&apos;s sweep season.
       </p>
 
-      <section className="mt-12">
-        <h2 className="font-display text-2xl tracking-tight">FAQ</h2>
-        <dl className="mt-5 space-y-5">
-          {FAQ.map((f) => (
-            <div key={f.q} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-              <dt className="text-sm font-black text-zinc-100">{f.q}</dt>
-              <dd className="mt-2 text-sm leading-relaxed text-zinc-400">{f.a}</dd>
-            </div>
-          ))}
-        </dl>
+      <section className="mt-10">
+        <p className="mb-4 text-sm text-zinc-400">
+          Here&apos;s what a real engine result looks like — a balanced two-way GOAT five that still loses wins to usage overload.
+        </p>
+        <ResultPreview />
       </section>
 
-      <div className="mt-12 text-center">
-        <Link
-          href="/play"
-          className="inline-block rounded-xl bg-orange-500 px-8 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400"
-        >
-          Build your five →
-        </Link>
+      <section className="mt-12">
+        <h2 className="font-display text-2xl tracking-tight">FAQ</h2>
+        <div className="mt-5 space-y-3">
+          {FAQ.map((f, i) => (
+            <details key={f.q} open={i < 2} className="group rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-100 [&::-webkit-details-marker]:hidden">
+                <span>{f.q}</span>
+                <span aria-hidden className="shrink-0 text-lg leading-none text-orange-400 transition-transform group-open:rotate-45">+</span>
+              </summary>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-400">{f.a}</p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      <div className="mt-12 border-t border-zinc-800 pt-10 text-center">
+        <h2 className="font-display text-3xl tracking-tight">
+          One way to find out if your five can go <span className="text-gold">82-0</span>.
+        </h2>
+        <div className="mt-5 flex justify-center">
+          <ButtonLink href="/play" size="lg">Build your five →</ButtonLink>
+        </div>
       </div>
     </div>
   );
