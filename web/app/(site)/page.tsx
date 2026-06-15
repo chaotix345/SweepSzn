@@ -48,6 +48,7 @@ const jsonLd = {
   genre: "Sports simulation",
   keywords:
     "NBA lineup simulator, all-time NBA team builder, best NBA starting five, NBA fantasy draft game, NBA team builder game",
+  sameAs: ["https://x.com/SweepSeason"],
 };
 
 // Escape the three characters that could break out of the <script> context (defense-in-depth;
