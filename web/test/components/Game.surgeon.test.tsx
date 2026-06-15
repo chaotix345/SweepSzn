@@ -154,7 +154,7 @@ function renderGame() {
 
 function findSurgeonModeBtn(): HTMLElement {
   const allBtns = screen.getAllByRole("button");
-  return allBtns.find((b) => b.textContent?.includes("Surgeon") && b.textContent?.includes("diagnoses"))!;
+  return allBtns.find((b) => b.getAttribute("aria-label") === "Play Surgeon mode")!;
 }
 
 function findSpinBtn(): HTMLElement {

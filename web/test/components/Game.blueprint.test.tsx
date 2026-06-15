@@ -97,7 +97,7 @@ function renderGame() {
 
 function findBlueprintModeBtn(): HTMLElement {
   const allBtns = screen.getAllByRole("button");
-  return allBtns.find((b) => b.textContent?.includes("Blueprint") && b.textContent?.includes("objective"))!;
+  return allBtns.find((b) => b.getAttribute("aria-label") === "Play Blueprint mode")!;
 }
 
 function findBpDialog(): HTMLElement {
