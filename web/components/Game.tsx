@@ -39,6 +39,8 @@ import SurgeonResult from "@/components/SurgeonResult";
 import SgLeaderboard from "@/components/SgLeaderboard";
 import { applySwapToTrace } from "@/lib/trace";
 import { dayUTC } from "@/lib/day";
+import { ProjectionMeter } from "@/components/game/ProjectionMeter";
+import { projectionAllowed, type RosterProjection } from "@/lib/projection";
 type Roster = Record<Slot, DraftCandidate | null>;
 const EMPTY: Roster = { PG: null, SG: null, SF: null, PF: null, C: null };
 interface Spin { team: string; decade: string; candidates: DraftCandidate[] }
@@ -84,6 +86,7 @@ export default function Game() {
   const [restoring, setRestoring] = useState(false);           // briefly true while a refresh rebuilds a finished result
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [projection, setProjection] = useState<RosterProjection | null>(null); // live floor↔ceiling win band (Classic/Prime/Blueprint)
   // R6: first-run scoring primer — dismissible, localStorage-gated, never blocks play (no modal).
   // tipSeen is read hydration-safely; tipDismissed covers the in-session dismiss.
   const tipSeen = useSyncExternalStore(subscribeNoop, getTipSeen, getTipSeenServer);
@@ -124,8 +127,23 @@ export default function Game() {
   const allFilled = filled === 5;
   const roundNum = Math.min(filled + 1, 5);
   const openSlots = useMemo(() => SLOTS.filter((s) => !roster[s]), [roster]);
+  const rosterKey = useMemo(() => SLOTS.map((s) => roster[s]?.id ?? "").join("|"), [roster]);
+  const projAllowed = projectionAllowed(seed);
 
   useEffect(() => () => { if (tickRef.current) clearTimeout(tickRef.current); }, []);
+
+  // Live projection (Classic / Prime / Blueprint only): after each placement, fetch the floor↔ceiling
+  // win band for the roster so far. Read-only, gated server-side too, and never blocks the draft.
+  useEffect(() => {
+    if (!projAllowed || filled < 1 || filled > 4) return;
+    const lineup = rosterKey.split("|").map((id) => id || null);
+    const ctrl = new AbortController();
+    fetch("/api/project", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, lineup }), signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && d.floor) setProjection(d as RosterProjection); })
+      .catch(() => { /* offline or aborted — keep the last projection on screen */ });
+    return () => ctrl.abort();
+  }, [seed, filled, projAllowed, rosterKey]);
 
   const dismissLeversTip = useCallback(() => {
     try { localStorage.setItem("szn_levers_tip_seen", "1"); } catch { /* no storage */ }
@@ -299,7 +317,7 @@ export default function Game() {
       s = m === "daily" ? `daily-${todaySeed()}` : m === "factorhunt" ? `fh-${todaySeed()}` : m === "blueprint" ? `bp-${todaySeed()}` : m === "surgeon" ? `surgeon-${todaySeed()}` : `${m}-${rand()}`;
     }
     setChallengeId(cid); setChallengeRole(crole); setSeed(s);
-    setRoster(EMPTY); setCurrent(null); setResult(null); setLbView(null); setError(null); setLoading(false);
+    setRoster(EMPTY); setCurrent(null); setResult(null); setLbView(null); setError(null); setLoading(false); setProjection(null);
     setSelPlayer(null); setSelSlot(null); setSkips({ team: false, era: false });
     setReel({ team: "ATL", era: m === "prime" ? "PRIME" : "60's" }); setLockedReel(null); saltRef.current = 0;
     traceRef.current = []; roundRespinsRef.current = []; setConvertedId(null);
@@ -614,6 +632,7 @@ export default function Game() {
       {/* USAGE DISCIPLINE drafts to a non-obvious budget — the live bar is the spec's fix.
           Everywhere else the bar pre-explains the engine's dominant penalty (see showUsageBar). */}
       {showUsageBar && <UsageBar total={drafted.reduce((a, c) => a + (c.usage ?? 0), 0)} discipline={discBar} />}
+      {projAllowed && !allFilled && filled >= 1 && projection?.floor && <ProjectionMeter projection={projection} />}
       {(current || spinning) && (
         <div className="mt-2 flex justify-center gap-2 text-xs">
           <SkipBtn label="↻ Re-spin Team" used={skips.team} onClick={reSpinTeam} disabled={spinning} />

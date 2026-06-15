@@ -76,6 +76,18 @@ export function getPlayersByIds(ids: string[]): Player[] {
   return ids.map((id) => byId.get(id)).filter((p): p is Player => !!p);
 }
 
+// Top-K draftable players by peak_score — the candidate universe the projection ticker's "ceiling"
+// (best-possible completion) is chosen from. Public global pool only (never a seed's future spins),
+// so it leaks nothing. Prime draws from the all-time peak-variant pools; everything else from the
+// regular current-franchise / canonical-decade universe.
+export function getDraftablePool(prime: boolean, topK = 250): Player[] {
+  const { players } = load();
+  const pool = prime
+    ? [...loadPrime().byTeam.values()].flat()
+    : players.filter((p) => CURRENT.has(p.team) && DECADES.has(p.decade));
+  return [...pool].sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0)).slice(0, topK);
+}
+
 function toCandidate(p: Player, fit?: CandidateFit, usage?: number): DraftCandidate {
   return {
     id: p.id, person_id: p.person_id, name: p.name, year: p.year, decade: p.decade, team: p.team,
