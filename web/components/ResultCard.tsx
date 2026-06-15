@@ -9,7 +9,7 @@ import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { encodeLineup } from "@/lib/share";
 import { bpCode, type BlueprintView } from "@/lib/blueprint";
 import { factorViews, lineupRoles, headline, historyAnchor, playerContribRows, type ContribRow } from "@/lib/explain";
-import { WIN_GRADES } from "@/lib/engine";
+import { WIN_GRADES, weakestSlot } from "@/lib/engine";
 import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
 import { GRADE_COLOR } from "@/lib/grades";
 
@@ -40,6 +40,9 @@ export default function ResultCard({
   const hurts = factors.filter((f) => f.value < 0);
   const roles = lineupRoles(players, result.players);
   const contrib = playerContribRows(result.players);
+  // R5: gradeless "which pick was my mistake?" teaching aid — names the lowest-value SLOT only,
+  // never the player or a number, so it teaches forward without exposing the hint-gated fit.
+  const weakSlot = weakestSlot(result, slots);
   const anchor = historyAnchor(result.wins);
   const winsDelta = result.wins - 41;
   // top-half ranks read as a percentile; bottom-half as a plain standing (Top 93% is a brag fail)
@@ -140,6 +143,12 @@ export default function ResultCard({
             <span aria-hidden>⚠</span><span>{n}</span>
           </p>
         ))}
+        {weakSlot && (
+          <p className="mt-3 flex gap-2 text-xs text-zinc-500">
+            <span aria-hidden>🔎</span>
+            <span>Lowest-value pick: your <strong className="text-zinc-300">{weakSlot}</strong> added the least to this five — something to rethink next run.</span>
+          </p>
+        )}
       </div>
 
       {/* roster */}

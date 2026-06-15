@@ -39,7 +39,8 @@ export default function HowItWorks() {
         <ol className="mt-5 space-y-4">
           <Step n="1" title="Spin the reels">
             An orange <strong className="text-zinc-200">team</strong> reel and a violet <strong className="text-zinc-200">era</strong> reel
-            land on a franchise and a decade. Lock one and re-spin the other to chase the player you want. You get one re-spin of each.
+            land on a franchise and a decade. Lock one and re-spin the other to chase the player you want — you get one re-spin of
+            each <strong className="text-zinc-200">for the whole game</strong>, so they don&apos;t carry over between rounds.
           </Step>
           <Step n="2" title="Draft your five">
             Browse that team-and-era roster and slot a player at each position — PG, SG, SF, PF, C. Eligibility is enforced
@@ -117,9 +118,12 @@ export default function HowItWorks() {
             tracks every player&apos;s usage demand and docks lineups that blow the possession budget — the single biggest
             thing box-score adders get wrong.
           </Principle>
-          <Principle term="Era normalization">
-            Every player is z-scored against their own season&apos;s league average, so Wilt Chamberlain&apos;s pace-inflated
-            1962 line isn&apos;t compared head-to-head with a modern stat. Eras are leveled before anyone is rated.
+          <Principle term="Era adjustment">
+            Two things happen. First, every player is z-scored against their own season&apos;s league average, so Wilt
+            Chamberlain&apos;s pace-inflated 1962 line isn&apos;t compared head-to-head with a modern stat. Second — and separately —
+            box dominance in the thinner, less-competitive pre-1985 leagues is <strong className="text-zinc-200">discounted</strong>:
+            being a giant among smaller fields counts for less than the raw numbers imply. Z-scoring levels the units; the
+            era discount levels the competition.
           </Principle>
           <Principle term="Defense at full weight">
             Defense carries close to equal weight with offense. Rim protection, perimeter defense, and the defensive

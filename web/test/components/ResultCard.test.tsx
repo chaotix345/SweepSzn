@@ -316,6 +316,15 @@ describe("ResultCard — context & explanation layer", () => {
     expect(container.textContent).not.toMatch(/% today/i);
     expect(container.textContent).not.toMatch(/of 5 today/i);
   });
+
+  it("flags the lowest-value slot gradelessly — names the slot, not the player or a number (R5)", () => {
+    // In the fixture SG has the lowest offScale*off + defScale*def, so it's the weakest slot.
+    const { container } = renderCard();
+    expect(container.textContent).toMatch(/lowest-value pick/i);
+    expect(container.textContent).toMatch(/your SG/i);
+    // it must NOT leak the player's name or a fit/value number for that slot
+    expect(container.textContent).not.toMatch(/Player SG (added|was).*\d/i);
+  });
 });
 
 describe("ResultCard — one-tap share CTAs", () => {

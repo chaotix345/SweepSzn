@@ -10,8 +10,11 @@ export const COURT: Record<Slot, { left: number; top: number }> = {
   SF: { left: 15, top: 49 }, SG: { left: 79, top: 49 }, PG: { left: 47, top: 68 },
 };
 
-export function Court({ roster, selSlot, isTarget, onSlot, maskColors }: {
+export function Court({ roster, selSlot, isTarget, onSlot, maskColors, idle }: {
   roster: Roster; selSlot: Slot | null; isTarget: (s: Slot) => boolean; onSlot: (s: Slot) => void; maskColors?: boolean;
+  // idle = no pick/swap in progress; filled slots then advertise that tapping picks them up to move/swap
+  // (the mechanic was implemented but undiscoverable pre-tap, and the textual hints were desktop-only).
+  idle?: boolean;
 }) {
   return (
     <div className="relative mx-auto aspect-[4/3.4] w-full max-w-sm overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-b from-[#14223b] to-[#0c1626] lg:sticky lg:top-4">
@@ -27,17 +30,21 @@ export function Court({ roster, selSlot, isTarget, onSlot, maskColors }: {
         const p = roster[s];
         const target = isTarget(s);
         const picked = selSlot === s;
+        const movable = !!p && !!idle && !target; // a placed player, nothing else selected → tap to move
         const c = p ? (maskColors ? { bg: "#3f3f46", text: "#e4e4e7" } : teamColors(p.team)) : null;
         return (
           <button key={s} onClick={() => onSlot(s)} style={{ left: `${COURT[s].left}%`, top: `${COURT[s].top}%` }}
-            aria-label={p ? `${p.name} at ${s}${target ? ", swap target" : ""}` : `${s} slot${target ? ", eligible — tap to place" : " (empty)"}`}
+            title={movable ? "Tap to move" : undefined}
+            aria-label={p ? `${p.name} at ${s}${target ? ", swap target" : movable ? ", tap to move" : ""}` : `${s} slot${target ? ", eligible — tap to place" : " (empty)"}`}
             className={`absolute -translate-x-1/2 -translate-y-1/2 transition ${target ? "animate-pulse" : ""}`}>
             {p && c ? (
-              <span className={`flex h-14 w-14 flex-col items-center justify-center rounded-xl text-xs font-black leading-none shadow-lg ring-2 ${
+              <span className={`relative flex h-14 w-14 flex-col items-center justify-center rounded-xl text-xs font-black leading-none shadow-lg ring-2 ${
                   picked ? "ring-orange-400" : target ? "ring-orange-400" : "ring-white/20"}`}
                 style={{ background: c.bg, color: c.text }}>
                 <span>{initials(p.name)}</span>
                 <span className="mt-0.5 text-[8px] opacity-80">{s}</span>
+                {/* subtle pre-tap affordance: this badge is draggable-by-tap to another slot */}
+                {movable && <span className="absolute -bottom-1 -right-1 rounded-full bg-zinc-900/80 px-0.5 text-[8px] leading-none text-zinc-300 ring-1 ring-white/20" aria-hidden>⇄</span>}
               </span>
             ) : (
               <span className={`flex h-14 w-14 items-center justify-center rounded-xl border-2 border-dashed text-sm font-bold ${
