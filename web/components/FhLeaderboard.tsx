@@ -61,7 +61,7 @@ export default function FhLeaderboard({ date, trace, prediction, readOnly = fals
   return (
     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-bold text-zinc-200">🔮 Factor Hunt — today&apos;s board</div>
+        <div className="text-sm font-bold text-violet-300">🔮 Factor Hunt — today&apos;s board</div>
         <div className="text-xs text-zinc-500">wins × bonus</div>
       </div>
       {enabled ? (
@@ -100,7 +100,7 @@ function Board({ view, uid }: { view: FhBoardView; uid: string }) {
       <div className="mb-1 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-zinc-500">
         <span>Today&apos;s top {Math.min(rows.length, 100)}</span><span>{view.total} played</span>
       </div>
-      <div className="max-h-72 space-y-1 overflow-y-auto">
+      <div className="max-h-[min(18rem,55dvh)] space-y-1 overflow-y-auto">
         {rows.map((r) => <Row key={r.uid} r={r} me={r.uid === uid} />)}
         {youOutside && view.you && <Row r={view.you} me />}
       </div>
@@ -109,10 +109,12 @@ function Board({ view, uid }: { view: FhBoardView; uid: string }) {
 }
 
 function Row({ r, me }: { r: FhBoardRow; me?: boolean }) {
+  const lead = r.rank === 1;
+  const medal = r.rank === 1 ? "text-gold" : r.rank === 2 ? "text-zinc-300" : r.rank === 3 ? "text-amber-600" : "text-zinc-500";
   return (
     <Link href={`/r/${r.lineup}`}
-      className={`flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : "bg-zinc-950/50 hover:bg-zinc-800/60"}`}>
-      <span className="w-7 shrink-0 text-right text-xs font-bold tabular-nums text-zinc-500">{r.rank}</span>
+      className={`flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : lead ? "bg-gold/5 ring-1 ring-gold/25" : "bg-zinc-950/50 hover:bg-zinc-800/60"}`}>
+      <span className={`w-7 shrink-0 text-right text-xs font-bold tabular-nums ${medal}`}>{r.rank}</span>
       <span className="min-w-0 flex-1 truncate font-semibold text-zinc-200">
         {r.name}{me && <span className="ml-1 text-[10px] text-orange-300">you</span>}
         {r.correct && <span className="ml-1.5 text-[10px]" title={`Called it: ${r.predicted}`}>🔮</span>}
@@ -121,7 +123,7 @@ function Row({ r, me }: { r: FhBoardRow; me?: boolean }) {
         {r.score % 1 === 0 ? r.score : r.score.toFixed(1)}
         {r.correct && <span className="ml-1 text-[10px] font-semibold text-violet-300">×1.05</span>}
       </span>
-      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-zinc-500">{r.wins}-{r.losses}</span>
+      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-zinc-500"><span className="text-green-400">{r.wins}</span>-<span className="text-red-400">{r.losses}</span></span>
     </Link>
   );
 }
