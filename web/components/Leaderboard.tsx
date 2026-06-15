@@ -169,9 +169,9 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
 
       {enabled ? (
         <>
-          <div className="mt-3 flex gap-1 rounded-lg bg-zinc-950/60 p-1 text-xs font-semibold">
+          <div role="tablist" aria-label="Leaderboard scope" className="mt-3 flex gap-1 rounded-lg bg-zinc-950/60 p-1 text-xs font-semibold">
             {TABS.map(([k, label]) => (
-              <button key={k} onClick={() => setTab(k)}
+              <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                 className={`flex-1 rounded-md py-1.5 ${tab === k ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>{label}</button>
             ))}
           </div>
@@ -220,15 +220,45 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
             : <SignInGate scope={tab} onSignIn={promptSignIn} />)}
 
           {youCard && (
-            <div className="mt-3 flex items-center justify-between rounded-lg bg-zinc-950/40 px-2.5 py-2 text-xs text-zinc-400">
+            <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-200">
               <span>You&apos;re <span className="font-bold text-orange-300">#{youCard.rank}</span>{whenLabel} — show it off</span>
               <RankShareButton card={youCard} />
             </div>
           )}
         </>
       ) : (
-        <div className="mt-2 text-xs text-zinc-600">Leaderboard opens soon — keep your streak going.</div>
+        <div className="mt-3 rounded-lg border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-500">
+          Leaderboards are warming up.{" "}
+          <a href="/play" className="font-semibold text-orange-400 hover:text-orange-300">Play the Daily →</a>
+        </div>
       )}
+    </div>
+  );
+}
+
+// Podium colors — gold #1, silver #2, bronze #3 (the record is a trophy; #1 wears gold).
+const medalText = (rank: number) =>
+  rank === 1 ? "text-gold" : rank === 2 ? "text-zinc-300" : rank === 3 ? "text-amber-600" : "text-zinc-500";
+
+// Cold-visitor state: a ghost podium showing the records to chase + one clear "play now" CTA, so a
+// first-time visitor immediately understands what they're competing for (vs. a bare "be the first").
+function EmptyBoard() {
+  const targets: [number, string][] = [[1, "79–3"], [2, "74–8"], [3, "71–11"]];
+  return (
+    <div className="mt-3">
+      <div className="space-y-1">
+        {targets.map(([rank, rec]) => (
+          <div key={rank} className="flex items-center gap-3 rounded-lg border border-dashed border-zinc-800 px-2.5 py-1.5 text-sm">
+            <span className={`w-7 shrink-0 text-right text-xs font-bold tabular-nums opacity-60 ${medalText(rank)}`}>{rank}</span>
+            <span className="min-w-0 flex-1 text-zinc-600">your name here</span>
+            <span className="shrink-0 font-mono text-xs font-bold text-zinc-600">{rec}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2.5 text-center text-xs text-zinc-400">
+        Be the first on today&apos;s board.{" "}
+        <a href="/play" className="font-semibold text-orange-400 hover:text-orange-300">Play now →</a>
+      </p>
     </div>
   );
 }
@@ -236,13 +266,13 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
 function Board({ view, uid }: { view: LeaderboardView; uid: string }) {
   const rows = view.top;
   const youOutside = view.you && !rows.some((r) => r.uid === uid);
-  if (!rows.length) return <div className="mt-3 text-xs text-zinc-500">Be the first to post a score today.</div>;
+  if (!rows.length) return <EmptyBoard />;
   return (
     <div className="mt-3">
       <div className="mb-1 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-zinc-500">
         <span>Today&apos;s top {Math.min(rows.length, 100)}</span><span>{view.total} played</span>
       </div>
-      <div className="max-h-72 space-y-1 overflow-y-auto">
+      <div className="max-h-[min(18rem,55dvh)] space-y-1 overflow-y-auto">
         {rows.map((r) => <Row key={r.uid} r={r} me={r.uid === uid} />)}
         {youOutside && view.you && <Row r={view.you} me />}
       </div>
@@ -251,12 +281,15 @@ function Board({ view, uid }: { view: LeaderboardView; uid: string }) {
 }
 
 function Row({ r, me }: { r: LeaderboardRow; me?: boolean }) {
+  const lead = r.rank === 1;
   return (
     <Link href={`/r/${r.lineup}`}
-      className={`flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : "bg-zinc-950/50 hover:bg-zinc-800/60"}`}>
-      <span className="w-7 shrink-0 text-right text-xs font-bold tabular-nums text-zinc-500">{r.rank}</span>
+      className={`flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : lead ? "bg-gold/5 ring-1 ring-gold/25" : "bg-zinc-950/50 hover:bg-zinc-800/60"}`}>
+      <span className={`w-7 shrink-0 text-right text-xs font-bold tabular-nums ${medalText(r.rank)}`}>{r.rank}</span>
       <span className="min-w-0 flex-1 truncate font-semibold text-zinc-200">{r.name}{me && <span className="ml-1 text-[10px] text-orange-300">you</span>}</span>
-      <span className="shrink-0 tabular-nums font-bold text-zinc-100">{r.wins}-{r.losses}</span>
+      <span className={`shrink-0 tabular-nums font-bold ${lead ? "font-display text-base" : ""}`}>
+        <span className="text-green-400">{r.wins}</span><span className="text-zinc-600">-</span><span className="text-red-400">{r.losses}</span>
+      </span>
       <span className="w-12 shrink-0 text-right text-xs tabular-nums text-zinc-500">{r.net > 0 ? "+" : ""}{r.net.toFixed(1)}</span>
     </Link>
   );
@@ -272,7 +305,7 @@ function AggBoard({ view, uid, scope }: { view: AggBoardView | null; uid: string
       <div className="mb-1 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-zinc-500">
         <span>{scope === "week" ? "This week" : "All-time"} · top {Math.min(rows.length, 100)}</span><span>{view.total} players</span>
       </div>
-      <div className="max-h-72 space-y-1 overflow-y-auto">
+      <div className="max-h-[min(18rem,55dvh)] space-y-1 overflow-y-auto">
         {rows.map((r) => <AggRowView key={r.uid} r={r} me={r.uid === uid} />)}
         {youOutside && view.you && <AggRowView r={view.you} me />}
       </div>
@@ -296,11 +329,12 @@ function SignInGate({ scope, onSignIn }: { scope: "week" | "alltime"; onSignIn: 
 }
 
 function AggRowView({ r, me }: { r: AggLeaderboardRow; me?: boolean }) {
+  const lead = r.rank === 1;
   return (
-    <div className={`flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : "bg-zinc-950/50"}`}>
-      <span className="w-7 shrink-0 text-right text-xs font-bold tabular-nums text-zinc-500">{r.rank}</span>
+    <div className={`flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : lead ? "bg-gold/5 ring-1 ring-gold/25" : "bg-zinc-950/50"}`}>
+      <span className={`w-7 shrink-0 text-right text-xs font-bold tabular-nums ${medalText(r.rank)}`}>{r.rank}</span>
       <span className="min-w-0 flex-1 truncate font-semibold text-zinc-200">{r.name}{me && <span className="ml-1 text-[10px] text-orange-300">you</span>}</span>
-      <span className="shrink-0 tabular-nums font-bold text-zinc-100">{r.wins.toLocaleString()}<span className="ml-1 text-xs font-normal text-zinc-500">wins</span></span>
+      <span className={`shrink-0 tabular-nums font-bold text-zinc-100 ${lead ? "font-display text-base" : ""}`}>{r.wins.toLocaleString()}<span className="ml-1 text-xs font-normal text-zinc-500">wins</span></span>
     </div>
   );
 }
