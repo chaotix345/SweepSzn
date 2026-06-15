@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { enableRedisEnv, freshFake, ctx, req, readJson } from "@/test/routeHarness";
+import { enableRedisEnv, freshFake, ctx, req, readJson, signIn } from "@/test/routeHarness";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -27,24 +27,34 @@ const get = (qs = "") => GET(req(`/api/board/weekly${qs ? `?${qs}` : ""}`));
 beforeEach(() => { freshFake(); });
 
 describe("GET /api/board/weekly", () => {
-  it("rejects a malformed week param", async () => {
+  it("401 auth_required when signed out (board is now sign-in gated)", async () => {
+    const { status, body } = await readJson(await get(`week=${WEEK}`));
+    expect(status).toBe(401);
+    expect(body.error).toBe("auth_required");
+  });
+
+  it("private, no-store cache header on a gated response (never CDN-cached)", async () => {
+    await signIn({ uid: "user-aaaa0001", name: "Alice" });
+    const res = await get(`week=${WEEK}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("rejects a malformed week param when signed in", async () => {
+    await signIn({ uid: "user-aaaa0001", name: "Alice" });
     const { status, body } = await readJson(await get("week=not-a-week"));
     expect(status).toBe(400);
     expect(body.error).toBe("bad week");
   });
 
   it("rejects a week number out of range", async () => {
+    await signIn({ uid: "user-aaaa0001", name: "Alice" });
     const { status } = await readJson(await get("week=2026-W99"));
     expect(status).toBe(400);
   });
 
-  it("rejects a malformed uid", async () => {
-    const { status, body } = await readJson(await get(`week=${WEEK}&uid=!!bad!!`));
-    expect(status).toBe(400);
-    expect(body.error).toBe("bad uid");
-  });
-
   it("returns empty board for a fresh week", async () => {
+    await signIn({ uid: "user-aaaa0001", name: "Alice" });
     const { status, body } = await readJson(await get(`week=${WEEK}`));
     expect(status).toBe(200);
     expect(body.scope).toBe("week");
@@ -55,6 +65,7 @@ describe("GET /api/board/weekly", () => {
   });
 
   it("returns rows in descending win order with correct rank", async () => {
+    await signIn({ uid: "user-zzzz9999", name: "Zed" });
     seedWeeklyBoard(WEEK, [
       { uid: "user-aaaa0001", name: "Alice", wins: 15 },
       { uid: "user-bbbb0002", name: "Bob",   wins: 20 },
@@ -69,29 +80,30 @@ describe("GET /api/board/weekly", () => {
     expect(top[2]).toMatchObject({ uid: "user-cccc0003", wins: 10, rank: 3 });
   });
 
-  it("includes the requesting uid's rank when they are in the top 100", async () => {
+  it("highlights the signed-in user's rank when they are in the top 100", async () => {
+    await signIn({ uid: "user-aaaa0001", name: "Alice" });
     seedWeeklyBoard(WEEK, [
       { uid: "user-aaaa0001", name: "Alice", wins: 15 },
       { uid: "user-bbbb0002", name: "Bob",   wins: 20 },
     ]);
-    const { body } = await readJson(await get(`week=${WEEK}&uid=user-aaaa0001`));
+    const { body } = await readJson(await get(`week=${WEEK}`));
     const you = body.you as { uid: string; wins: number; rank: number };
     expect(you).toBeDefined();
     expect(you.uid).toBe("user-aaaa0001");
     expect(you.rank).toBe(2);
   });
 
-  it("includes the requesting uid's rank when they are outside the top 100", async () => {
-    // Seed 101 entries so uid-101 is outside the top-100 slice
+  it("highlights the signed-in user's rank when they are outside the top 100", async () => {
+    const outsideUid = "user-00000100";
+    await signIn({ uid: outsideUid, name: "User100" });
+    // Seed 101 entries so the signed-in uid is outside the top-100 slice
     const rows = Array.from({ length: 101 }, (_, i) => ({
       uid: `user-${String(i).padStart(8, "0")}`,
       name: `User${i}`,
       wins: 101 - i, // descending wins: user-0 has 101, user-100 has 1
     }));
     seedWeeklyBoard(WEEK, rows);
-    // The last user (index 100, wins=1) is outside the top-100 slice
-    const outsideUid = "user-00000100";
-    const { body } = await readJson(await get(`week=${WEEK}&uid=${outsideUid}`));
+    const { body } = await readJson(await get(`week=${WEEK}`));
     const you = body.you as { uid: string; rank: number; wins: number };
     expect(you).toBeDefined();
     expect(you.uid).toBe(outsideUid);
@@ -100,6 +112,7 @@ describe("GET /api/board/weekly", () => {
   });
 
   it("defaults week to the current ISO week when not provided", async () => {
+    await signIn({ uid: "user-aaaa0001", name: "Alice" });
     seedWeeklyBoard(WEEK, [{ uid: "user-aaaa0001", name: "Alice", wins: 5 }]);
     // We don't know the system's current week, so just verify the response shape is valid
     const { status, body } = await readJson(await get());
@@ -107,10 +120,5 @@ describe("GET /api/board/weekly", () => {
     expect(body.scope).toBe("week");
     expect(typeof body.key).toBe("string");
     expect(/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(body.key as string)).toBe(true);
-  });
-
-  it("returns null body when redis is enabled but empty (not 503)", async () => {
-    const { status } = await readJson(await get(`week=${WEEK}`));
-    expect(status).toBe(200);
   });
 });

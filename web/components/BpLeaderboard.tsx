@@ -5,6 +5,7 @@ import { track } from "@vercel/analytics";
 import type { DraftStep } from "@/lib/types";
 import { BLUEPRINTS, blueprintDef, type BlueprintKey, type BpBoardView, type BpBoardRow } from "@/lib/blueprint";
 import { getUid, getName, setName as persistName } from "@/lib/streak";
+import { useSessionContext } from "@/components/SessionProvider";
 import { dayUTC } from "@/lib/day";
 
 // Blueprint daily board — FhLeaderboard's slim shape (no streak, no weekly/all-time, no sign-in
@@ -22,6 +23,7 @@ const gradeText = (g: string) =>
 export default function BpLeaderboard({ date, trace, blueprint, usedHints = false, readOnly = false }: {
   date: string; trace: DraftStep[]; blueprint: BlueprintKey; usedHints?: boolean; readOnly?: boolean;
 }) {
+  const { user } = useSessionContext();
   const [tab, setTab] = useState<BoardTab>("all");
   const [views, setViews] = useState<Partial<Record<BoardTab, BpBoardView>>>({});
   const [enabled, setEnabled] = useState(true);
@@ -36,7 +38,7 @@ export default function BpLeaderboard({ date, trace, blueprint, usedHints = fals
   useEffect(() => {
     const ctl = new AbortController();
     (async () => {
-      const id = getUid();
+      const id = user?.uid ?? getUid(); // signed in: highlight + "already posted" key off the account
       setUid(id); setNameState(getName());
       try {
         const r = await fetch(`/api/blueprint/leaderboard?date=${encodeURIComponent(date)}&bp=${tab}&uid=${encodeURIComponent(id)}`, { signal: ctl.signal });
@@ -50,7 +52,7 @@ export default function BpLeaderboard({ date, trace, blueprint, usedHints = fals
       } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline — board hidden */ }
     })();
     return () => ctl.abort();
-  }, [date, tab, reload]);
+  }, [date, tab, reload, user?.uid]);
 
   const submit = useCallback(async () => {
     if (date !== serverDate()) { setErr("Today's blueprint just reset — start today's game to post a score."); return; }

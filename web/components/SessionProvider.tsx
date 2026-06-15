@@ -1,0 +1,100 @@
+"use client";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import GoogleOneTap from "@/components/GoogleOneTap";
+import { getHistory } from "@/lib/streak";
+import { listResults } from "@/lib/resultHistory";
+import { syncToAccount } from "@/lib/account";
+import { AUTH_ENABLED } from "@/lib/authClient";
+
+// App-wide session state: one /api/auth/me fetch shared by the header, the leaderboard, every mode
+// board, and the notification bell (instead of each calling it independently). Also hosts the single
+// Google One Tap instance — mounting GSI once avoids the double-initialize conflicts you'd get from
+// multiple prompts. The default context value is "signed out / no-op", so any component that calls
+// useSessionContext() outside the provider (e.g. an isolated component test) renders safely.
+
+export interface SessionUser { uid: string; name: string; picture?: string }
+
+interface SessionCtx {
+  user: SessionUser | null;
+  loading: boolean;
+  refresh: () => Promise<void>;
+  signOut: () => Promise<void>;
+  promptSignIn: () => void;
+  // Bumps once per FRESH sign-in (not on initial load of an already-signed-in session), so a component
+  // can run a one-time on-sign-in action (e.g. the daily "claim my rank") without re-firing every mount.
+  signInNonce: number;
+}
+
+const Ctx = createContext<SessionCtx>({
+  user: null,
+  loading: false,
+  refresh: async () => {},
+  signOut: async () => {},
+  promptSignIn: () => {},
+  signInNonce: 0,
+});
+
+export const useSessionContext = () => useContext(Ctx);
+
+async function fetchMe(): Promise<SessionUser | null> {
+  try { const r = await fetch("/api/auth/me"); const j = await r.json(); return j?.user ?? null; }
+  catch { return null; }
+}
+
+export default function SessionProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [signInNonce, setSignInNonce] = useState(0);
+
+  useEffect(() => {
+    let on = true;
+    (async () => { const u = await fetchMe(); if (on) { setUser(u); setLoading(false); } })();
+    return () => { on = false; };
+  }, []);
+
+  const refresh = useCallback(async () => { const u = await fetchMe(); setUser(u); setLoading(false); }, []);
+
+  const signOut = useCallback(async () => {
+    // only drop local state if the server actually cleared the cookie (avoid a split-brain UI)
+    try { const r = await fetch("/api/auth/signout", { method: "POST", headers: { "x-requested-with": "fetch" } }); if (r.ok) setUser(null); }
+    catch { /* leave state as-is */ }
+  }, []);
+
+  const promptSignIn = useCallback(() => setSignInOpen(true), []);
+
+  // Fresh sign-in: refresh the session, migrate this device's local progress (completed-daily dates +
+  // result history) up into the account, and bump the nonce so on-sign-in actions fire exactly once.
+  const onSignedIn = useCallback(async () => {
+    setSignInOpen(false);
+    await refresh();
+    await syncToAccount({ history: getHistory(), results: listResults() });
+    setSignInNonce((n) => n + 1);
+  }, [refresh]);
+
+  return (
+    <Ctx.Provider value={{ user, loading, refresh, signOut, promptSignIn, signInNonce }}>
+      {children}
+      {AUTH_ENABLED && !loading && !user && (
+        // One mounted GoogleOneTap: its One Tap bubble auto-greets signed-out visitors app-wide, and its
+        // fallback button lives in this container — offscreen until promptSignIn() reveals it as a popover
+        // (so the header "Sign in" button and the leaderboard CTA both surface the same single instance).
+        <>
+          {signInOpen && (
+            <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" onClick={() => setSignInOpen(false)} />
+          )}
+          <div
+            className={
+              signInOpen
+                ? "fixed right-3 top-16 z-50 w-72 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl shadow-black/50"
+                : "pointer-events-none fixed left-[-9999px] top-0 opacity-0"
+            }
+          >
+            <div className="mb-2 text-xs text-zinc-400">Sign in to save your streak, results, and ranks across every device.</div>
+            <GoogleOneTap onSignIn={onSignedIn} />
+          </div>
+        </>
+      )}
+    </Ctx.Provider>
+  );
+}

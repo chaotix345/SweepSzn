@@ -23,6 +23,9 @@ export function setName(n: string): void { try { localStorage.setItem(K.name, n)
 
 function history(): string[] { try { return JSON.parse(localStorage.getItem(K.hist) ?? "[]"); } catch { return []; } }
 
+// The raw set of completed-Daily date-keys, for the one-time sign-in migration (lib/account.syncToAccount).
+export function getHistory(): string[] { return history(); }
+
 export function recordDailyDone(date: string): void {
   try {
     const h = history();

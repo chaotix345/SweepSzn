@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { SurgeonBoardView, SurgeonBoardRow } from "@/lib/surgeon";
 import { getUid } from "@/lib/streak";
+import { useSessionContext } from "@/components/SessionProvider";
 
 // Surgeon daily board — slimmest of the boards: the submit happens at swap-confirm time (the
 // reveal IS the submit, so the row already exists by the time this renders). This component
@@ -10,6 +11,7 @@ import { getUid } from "@/lib/streak";
 // Rank = win delta; a surgical +8 on a broken five beats a lazy +2 on an elite one.
 
 export default function SgLeaderboard({ date, preloaded }: { date: string; preloaded?: SurgeonBoardView | null }) {
+  const { user } = useSessionContext();
   const [view, setView] = useState<SurgeonBoardView | null>(preloaded ?? null);
   const [enabled, setEnabled] = useState(true);
   const [uid, setUid] = useState("");
@@ -17,7 +19,7 @@ export default function SgLeaderboard({ date, preloaded }: { date: string; prelo
   useEffect(() => {
     const ctl = new AbortController();
     (async () => {
-      const id = getUid();
+      const id = user?.uid ?? getUid(); // signed in: "you" highlight keys off the account
       setUid(id);
       if (preloaded) return; // submit response already carried the fresh board
       try {
@@ -27,7 +29,7 @@ export default function SgLeaderboard({ date, preloaded }: { date: string; prelo
       } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline — board hidden */ }
     })();
     return () => ctl.abort();
-  }, [date, preloaded]);
+  }, [date, preloaded, user?.uid]);
 
   return (
     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">

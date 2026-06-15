@@ -5,6 +5,8 @@ import { ev } from "@/lib/ev";
 import type { DraftStep, LineupResult, Player, ChallengeSubmitResponse, ChallengeMiniPlayer, ChallengeBoard, ChallengeBoardRow } from "@/lib/types";
 import { getUid, getName, setName as persistName } from "@/lib/streak";
 import { saveResult } from "@/lib/resultHistory";
+import { useSessionContext } from "@/components/SessionProvider";
+import { pushResult } from "@/lib/account";
 import { encodeLineup } from "@/lib/share";
 import { SLOTS } from "@/lib/teams";
 import FiveStrip from "@/components/FiveStrip";
@@ -14,6 +16,7 @@ export default function ChallengeResult({ id, role, result, players, trace, seed
   id: string; role: "create" | "respond"; result: LineupResult; players: Player[]; trace: DraftStep[];
   seed: string; usedHints?: boolean; onCreateOwn?: () => void;
 }) {
+  const { user } = useSessionContext();
   const [resp, setResp] = useState<ChallengeSubmitResponse | null>(null);
   const [enabled, setEnabled] = useState(true);
   const [name, setName] = useState("");
@@ -34,7 +37,7 @@ export default function ChallengeResult({ id, role, result, players, trace, seed
         method: "POST", headers: { "content-type": "application/json" },
         // `seed` + `usedHints` are honored only when this submit CREATES the challenge — they carry the
         // finished game's draft so a friend faces the same teams/eras and beats this exact record.
-        body: JSON.stringify({ id, uid: getUid(), name: nm.trim(), trace, seed, usedHints: !!usedHints }),
+        body: JSON.stringify({ id, uid: user?.uid ?? getUid(), name: nm.trim(), trace, seed, usedHints: !!usedHints }),
       });
       if (r.status === 503) { setEnabled(false); return; }
       const v = await r.json();
@@ -45,10 +48,11 @@ export default function ChallengeResult({ id, role, result, players, trace, seed
       // carries the challenge id (re-opens the live dashboard); a responder entry opens their /r/ five.
       const role2 = (v as ChallengeSubmitResponse)?.role;
       const common = { encoded: encodeLineup(players.map((p) => p.id), !!usedHints), mode: "challenge" as const, wins: result.wins, losses: result.losses, grade: result.grade };
-      saveResult(role2 === "creator" ? { ...common, challengeId: id } : common);
+      const saved = saveResult(role2 === "creator" ? { ...common, challengeId: id } : common);
+      if (user) void pushResult(saved); // signed in: mirror this game to the account history
       track("challenge_submit", { role: role2 ?? role });
     } catch { setErr("network error"); } finally { setBusy(false); submittingRef.current = false; }
-  }, [id, trace, role, seed, usedHints, resp, players, result]);
+  }, [id, trace, role, seed, usedHints, resp, players, result, user]);
 
   // Pre-fill the player's known name. We deliberately do NOT auto-submit: the responder must click
   // "Reveal" (consent before the matchup is shown + recorded), and the creator's name must be captured

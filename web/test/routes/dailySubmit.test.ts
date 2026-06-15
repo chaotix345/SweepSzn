@@ -213,6 +213,10 @@ describe("POST /api/daily/submit — anon path", () => {
     const alltimeKeys = [...ctx.redis!.zsets.keys()].filter((k) => k === "lb:alltime");
     expect(weeklyKeys).toHaveLength(0);
     expect(alltimeKeys).toHaveLength(0);
+
+    // No server-side streak for anonymous players — streak stays in their localStorage only.
+    const streakKeys = [...ctx.redis!.zsets.keys()].filter((k) => k.startsWith("streak:"));
+    expect(streakKeys).toHaveLength(0);
   });
 
   it("anon keep-best: resubmitting a worse score does not decrease the stored score", async () => {
@@ -293,6 +297,17 @@ describe("POST /api/daily/submit — authed path", () => {
     const metaH = `lb:${TODAY}:meta`;
     const meta = ctx.redis!.hashes.get(metaH);
     expect(meta?.has(uid)).toBe(true);
+  });
+
+  it("records today's date in the per-account streak zset (server-authoritative, survives device swap)", async () => {
+    const uid = "g" + "f".repeat(31);
+    await signIn({ uid, name: "Fae" });
+
+    const { status } = await readJson(await submit({ date: TODAY, trace: LEGIT_TRACE }));
+    expect(status).toBe(200);
+
+    const streakZ = `streak:${uid}`;
+    expect(ctx.redis!.zsets.get(streakZ)?.has(TODAY)).toBe(true);
   });
 });
 

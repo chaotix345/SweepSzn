@@ -28,6 +28,8 @@ import ChallengeOwner from "@/components/ChallengeOwner";
 import { newChallengeId, challengeSeed } from "@/lib/challenge";
 import { encodeLineup, decodeShare } from "@/lib/share";
 import { saveResult, writeLastResult, readLastResult } from "@/lib/resultHistory";
+import { useSessionContext } from "@/components/SessionProvider";
+import { pushResult } from "@/lib/account";
 import { pickemSeedOk, getPickemSkip, getLocalVote } from "@/lib/pickem";
 import { buildFhChoices } from "@/lib/factorHunt";
 import FhLeaderboard from "@/components/FhLeaderboard";
@@ -56,6 +58,7 @@ const rand = () => Math.floor(Math.random() * 1e9);
 const HINT_BUDGET = 2;
 
 export default function Game() {
+  const { user } = useSessionContext();
   const [mode, setMode] = useState<Mode | null>(null);
   const [seed, setSeed] = useState("");
   const [roster, setRoster] = useState<Roster>(EMPTY);
@@ -226,7 +229,10 @@ export default function Game() {
       // Persist so the result survives a refresh (full object, incl. trace) and shows under "Your
       // results". A challenge entry is upgraded with its challengeId later, when the link is created.
       writeLastResult({ mode, seed, result: full, fh: fhPred, bp: blueprint });
-      if (mode) saveResult({ encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints, mode === "prime", mode === "blueprint" && blueprint ? bpCode(blueprint) : null), mode, wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
+      if (mode) {
+        const saved = saveResult({ encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints, mode === "prime", mode === "blueprint" && blueprint ? bpCode(blueprint) : null), mode, wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
+        if (user) void pushResult(saved); // signed in: mirror this game to the account history (cross-device)
+      }
       track("lineup_complete", { wins: data.result.wins, grade: data.result.grade });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return; // superseded by a restart — ignore
@@ -234,7 +240,7 @@ export default function Game() {
     } finally {
       if (!ctrl.signal.aborted) setLoading(false);
     }
-  }, [mode, seed, blueprint]);
+  }, [mode, seed, blueprint, user]);
 
   // Factor Hunt: hook placed after simulate so beginFhPrediction can close over the stable callback.
   const { fhStep, fhPick, setFhPick, fhPrediction, setFhPrediction, fhRef, beginFhPrediction, lockFh, reset: resetFh } = useFactorHunt(seed, simulate, setError);

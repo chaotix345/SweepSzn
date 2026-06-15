@@ -16,12 +16,14 @@ function read(): ResultEntry[] {
 
 // Remember a finished game. Dedupe by mode+encoded so replaying the same five — or upgrading a freshly
 // drafted challenge entry once it carries its challengeId — collapses to one newest entry. Newest first.
-export function saveResult(e: Omit<ResultEntry, "ts">): void {
+export function saveResult(e: Omit<ResultEntry, "ts">): ResultEntry {
+  const entry: ResultEntry = { ...e, ts: Date.now() };
   try {
     const dupe = `${e.mode}:${e.encoded}`;
     const rest = read().filter((x) => `${x.mode}:${x.encoded}` !== dupe);
-    localStorage.setItem(KEY, JSON.stringify([{ ...e, ts: Date.now() }, ...rest].slice(0, CAP)));
+    localStorage.setItem(KEY, JSON.stringify([entry, ...rest].slice(0, CAP)));
   } catch { /* no storage */ }
+  return entry; // returned so a signed-in caller can mirror it to the account (lib/account.pushResult)
 }
 
 export function listResults(): ResultEntry[] { return read(); } // already newest-first
