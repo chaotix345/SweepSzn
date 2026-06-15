@@ -4,6 +4,21 @@ import type { DraftCandidate, Slot } from "@/lib/types";
 
 type Roster = Record<Slot, DraftCandidate | null>;
 
+// Answer-neutral, one-line descriptions of each factor — they teach what each lever IS so the
+// prediction is reasoned, not blind, without hinting which one is worst for THIS five. Keyed by the
+// canonical labels in lib/factorHunt (FH_FACTOR_LABELS).
+const FH_BLURB: Record<string, string> = {
+  "Star offense": "Your five's raw scoring and shot-creation punch.",
+  "Star defense": "Combined defensive impact across the lineup.",
+  "Usage overload": "Too many ball-dominant scorers for one basketball.",
+  "Spacing": "Floor spacing from shooting — or the lack of it.",
+  "Thin interior size": "Some rim presence, but light on size.",
+  "No interior size": "No real big — the rim and glass go uncontested.",
+  "Thin perimeter defense": "Soft on-ball defense on the perimeter.",
+  "No perimeter defender": "No perimeter stopper — ball-handlers get downhill.",
+  "Era adjustment": "Pre-1985 box stats discounted for a shallower league.",
+};
+
 /* Factor Hunt prediction — focus-trapped dialog between "five locked" and the reveal.
    Lock applies the ×1.05 board bonus if right; Escape or Skip reveals with no bonus. */
 export function FhDialog({ fhStep, fhPick, setFhPick, lockFh, dialogRef }: {
@@ -29,6 +44,7 @@ export function FhDialog({ fhStep, fhPick, setFhPick, lockFh, dialogRef }: {
               className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm font-semibold transition ${
                 fhPick === c ? "border-violet-400 bg-violet-500/15 text-violet-200" : "border-zinc-700 bg-zinc-950/60 text-zinc-300 hover:border-zinc-500"}`}>
               {c}
+              {FH_BLURB[c] && <span className="mt-0.5 block text-[11px] font-normal leading-snug text-zinc-500">{FH_BLURB[c]}</span>}
             </button>
           ))}
         </div>
