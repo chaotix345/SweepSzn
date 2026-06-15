@@ -25,11 +25,11 @@ export default function SurgeonResult({
   const text = `One swap, ${delta > 0 ? "+" : ""}${delta} wins — ${before.wins}-${before.losses} → ${after.wins}-${after.losses} on today's SweepSzn Surgeon (diagnosis: ${diagnosis.canonical}). Can you out-operate me?`;
 
   return (
-    <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
-      {/* hero: the delta */}
+    <div className="animate-rise-in mt-4 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
+      {/* hero: the delta — the Surgeon buzzer moment (slams in like the main reveal's record) */}
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
         <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Surgeon · win delta</div>
-        <div className={`mt-1 font-display text-7xl tabular-nums ${deltaColor}`}>
+        <div className={`animate-record-slam mt-1 font-display text-7xl tabular-nums ${deltaColor}`}>
           {delta > 0 ? "+" : ""}{delta}
         </div>
         <div className="mt-1 flex items-center justify-center gap-3 text-lg font-bold tracking-wide">
