@@ -29,7 +29,7 @@ export function BlueprintDialog({ bpPick, setBpPick, onCommit, onCancel, dialogR
         buildFocusTrapHandler(dialogRef, () => onCancel(), { forwardFromContainer: true })(e);
       }}
       className="fixed inset-0 z-30 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
-      <div className="max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
+      <div className="animate-slide-up max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
         <div className="text-center text-xs font-black uppercase tracking-widest text-cyan-400">📐 Blueprint</div>
         <p className="mt-2 text-center text-base font-semibold text-zinc-100">Commit to an objective — before you see the reels.</p>
         <p className="mt-1 text-center text-[11px] text-zinc-500">The engine grades your execution on that axis. Board score = wins × execution (×1.0–1.3).</p>
