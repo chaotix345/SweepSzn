@@ -56,8 +56,8 @@ export default function ResultsHistory({ onOpenChallenge }: { onOpenChallenge: (
   );
 
   return (
-    <div className="mx-auto mt-10 max-w-2xl text-left">
-      <div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-zinc-500">Your results</div>
+    <div className="mx-auto mt-10 max-w-2xl border-t border-zinc-800/60 pt-8 text-left">
+      <div className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-500">Your results</div>
       <div className="space-y-2">
         {items.slice(0, 12).map((e) => {
           const cls = "flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 transition hover:border-zinc-600";

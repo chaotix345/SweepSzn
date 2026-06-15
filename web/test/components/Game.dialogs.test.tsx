@@ -100,7 +100,7 @@ function findDailyModeBtn(): HTMLElement {
 
 function findFhModeBtn(): HTMLElement {
   const allBtns = screen.getAllByRole("button");
-  return allBtns.find((b) => b.textContent?.includes("Factor Hunt") && b.textContent?.includes("predict WHY"))!;
+  return allBtns.find((b) => b.getAttribute("aria-label") === "Play Factor Hunt mode")!;
 }
 
 function findSpinBtn(): HTMLElement {
