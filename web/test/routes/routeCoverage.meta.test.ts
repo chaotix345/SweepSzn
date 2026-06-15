@@ -58,6 +58,7 @@ const ROUTE_TO_TEST: Record<string, string> = {
   "notifications/read":             "notificationsRead",
   "pickem":                         "pickem",
   "profile":                        "profile",
+  "project":                        "project",
   "profile/name":                   "profileName",
   "profile/sync":                   "profileSync",
   "push/subscribe":                 "pushSubscribe",
