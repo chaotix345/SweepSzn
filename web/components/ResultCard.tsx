@@ -289,7 +289,7 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
           className="grid w-11 shrink-0 place-items-center rounded-xl border border-zinc-700 text-[11px] font-bold hover:border-zinc-500">Bsky</a>
       </div>
       {open && !canNative && (
-        <div id="result-share-panel" role="menu" className="absolute bottom-full left-0 z-10 mb-2 w-full rounded-xl border border-zinc-700 bg-zinc-900 p-2 shadow-xl">
+        <div id="result-share-panel" role="menu" className="fixed inset-x-0 bottom-0 z-50 max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-zinc-700 bg-zinc-900 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl sm:absolute sm:inset-x-auto sm:bottom-full sm:left-0 sm:z-10 sm:mb-2 sm:w-full sm:rounded-xl sm:border sm:p-2 sm:pb-2 sm:shadow-xl">
           <button onClick={copy} role="menuitem" className="mb-1 w-full rounded-lg bg-zinc-800 py-2 text-xs font-semibold hover:bg-zinc-700">
             {copied ? "Copied to clipboard!" : copyErr ? "Copy failed — use a link below" : "Copy result"}
           </button>
@@ -387,9 +387,11 @@ function GradeLadder({ wins, grade }: { wins: number; grade: string }) {
   const next = asc.find((g) => g.min > wins);
   return (
     <div className="mt-3">
-      <div className="flex items-center justify-center gap-1" role="img" aria-label={`Grade scale — you are ${grade}`}>
+      <div className="flex items-center justify-center gap-1" role="list" aria-label="Grade scale, F to S">
         {asc.map((g) => (
-          <span key={g.grade} title={`${g.label} — ${g.min}+ wins`}
+          <span key={g.grade} role="listitem" aria-current={g.grade === grade ? "true" : undefined}
+            title={`${g.label} — ${g.min}+ wins`}
+            aria-label={g.grade === grade ? `${g.grade} — ${g.label}, your grade` : `${g.grade} — ${g.label}`}
             className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
               g.grade === grade ? `${GRADE_COLOR[g.grade] ?? "text-zinc-200"} bg-zinc-800` : "text-zinc-600"}`}>
             {g.grade}
@@ -482,7 +484,8 @@ function RoleBars({ pb }: { pb: PlayerBreakdown }) {
       {ROLE_BARS.map((b) => {
         const v = Math.max(0, Math.min(1, pb[b.key] ?? 0));
         return (
-          <div key={b.key} className="flex items-center gap-1.5" title={`${b.label} — engine score ${Math.round(v * 100)} / 100`}>
+          <div key={b.key} role="img" aria-label={`${b.label}: ${Math.round(v * 100)} out of 100`}
+            className="flex items-center gap-1.5" title={`${b.label} — engine score ${Math.round(v * 100)} / 100`}>
             <span className="text-[8px] font-semibold uppercase tracking-wide text-zinc-600">{b.label}</span>
             <div className="h-1 w-8 overflow-hidden rounded-full bg-zinc-800">
               <div className={`h-full rounded-full ${b.tint}`} style={{ width: `${Math.round(v * 100)}%` }} />
