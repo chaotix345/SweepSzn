@@ -77,12 +77,12 @@ export default function BpLeaderboard({ date, trace, blueprint, usedHints = fals
   return (
     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-bold text-zinc-200">📐 Blueprint — today&apos;s board</div>
+        <div className="text-sm font-bold text-cyan-300">📐 Blueprint — today&apos;s board</div>
         <div className="text-xs text-zinc-500">wins × execution</div>
       </div>
       {enabled ? (
         <>
-          <div className="mt-3 flex flex-wrap gap-1 rounded-lg bg-zinc-950/60 p-1 text-xs font-semibold">
+          <div role="tablist" aria-label="Blueprint objective" className="mt-3 flex flex-wrap gap-1 rounded-lg bg-zinc-950/60 p-1 text-xs font-semibold">
             <Chip active={tab === "all"} onClick={() => setTab("all")} label="🏆 All" title="Best blueprint-adjusted score across every objective" />
             {BLUEPRINTS.map((b) => (
               <Chip key={b.key} active={tab === b.key} onClick={() => setTab(b.key)} label={`${b.emoji} ${b.label.split(" ")[0]}`} title={b.label} />
@@ -116,7 +116,7 @@ export default function BpLeaderboard({ date, trace, blueprint, usedHints = fals
 
 function Chip({ active, onClick, label, title }: { active: boolean; onClick: () => void; label: string; title: string }) {
   return (
-    <button onClick={onClick} title={title} aria-label={title} aria-pressed={active}
+    <button onClick={onClick} title={title} aria-label={title} role="tab" aria-selected={active}
       className={`rounded-md px-2 py-1.5 ${active ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>{label}</button>
   );
 }
@@ -134,7 +134,7 @@ function Board({ view, uid }: { view: BpBoardView; uid: string }) {
       <div className="mb-1 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-zinc-500">
         <span>Today&apos;s top {Math.min(rows.length, 100)}</span><span>{view.total} {view.bp === "all" ? "played" : "on this blueprint"}</span>
       </div>
-      <div className="max-h-72 space-y-1 overflow-y-auto">
+      <div className="max-h-[min(18rem,55dvh)] space-y-1 overflow-y-auto">
         {rows.map((r) => <Row key={r.uid} r={r} me={r.uid === uid} showBp={view.bp === "all"} />)}
         {youOutside && view.you && <Row r={view.you} me showBp={view.bp === "all"} />}
       </div>
@@ -147,8 +147,8 @@ function Row({ r, me, showBp }: { r: BpBoardRow; me?: boolean; showBp: boolean }
   const hinted = r.lineup.includes("h~");
   return (
     <Link href={`/r/${r.lineup}`}
-      className={`flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : "bg-zinc-950/50 hover:bg-zinc-800/60"}`}>
-      <span className="w-7 shrink-0 text-right text-xs font-bold tabular-nums text-zinc-500">{r.rank}</span>
+      className={`flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : r.rank === 1 ? "bg-gold/5 ring-1 ring-gold/25" : "bg-zinc-950/50 hover:bg-zinc-800/60"}`}>
+      <span className={`w-7 shrink-0 text-right text-xs font-bold tabular-nums ${r.rank === 1 ? "text-gold" : r.rank === 2 ? "text-zinc-300" : r.rank === 3 ? "text-amber-600" : "text-zinc-500"}`}>{r.rank}</span>
       <span className="min-w-0 flex-1 truncate font-semibold text-zinc-200">
         {r.name}{me && <span className="ml-1 text-[10px] text-orange-300">you</span>}
         {showBp && <span className="ml-1.5 text-[10px]" title={blueprintDef(r.bp).label}>{blueprintDef(r.bp).emoji}</span>}
@@ -158,7 +158,7 @@ function Row({ r, me, showBp }: { r: BpBoardRow; me?: boolean; showBp: boolean }
         {r.score % 1 === 0 ? r.score : r.score.toFixed(1)}
         <span className={`ml-1 text-[10px] font-semibold ${gradeText(r.grade)}`}>{r.grade}</span>
       </span>
-      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-zinc-500">{r.wins}-{r.losses}</span>
+      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-zinc-500"><span className="text-green-400">{r.wins}</span>-<span className="text-red-400">{r.losses}</span></span>
     </Link>
   );
 }
