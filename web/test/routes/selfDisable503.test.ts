@@ -25,6 +25,9 @@ const { GET: notificationsGET } = await import("@/app/api/notifications/route");
 const { POST: notificationsReadPOST } = await import("@/app/api/notifications/read/route");
 const { GET: boardAlltimeGET } = await import("@/app/api/board/alltime/route");
 const { GET: boardWeeklyGET } = await import("@/app/api/board/weekly/route");
+const { GET: profileGET } = await import("@/app/api/profile/route");
+const { POST: profileNamePOST } = await import("@/app/api/profile/name/route");
+const { POST: profileSyncPOST } = await import("@/app/api/profile/sync/route");
 const { POST: evPOST } = await import("@/app/api/ev/route");
 const { POST: spinPOST } = await import("@/app/api/spin/route");
 const { POST: evaluatePOST } = await import("@/app/api/evaluate/route");
@@ -162,6 +165,30 @@ describe("self-disable 503: redis-gated routes return 503 when Redis env is abse
     );
     expect(status).toBe(503);
     expect(body).toMatchObject({ error: "leaderboard not configured" });
+  });
+
+  // ── profile (isRedisEnabled gate) ─────────────────────────────────────────
+
+  it("GET /api/profile → 503", async () => {
+    const { status, body } = await readJson(await profileGET());
+    expect(status).toBe(503);
+    expect(body).toMatchObject({ error: "not configured" });
+  });
+
+  it("POST /api/profile/name → 503", async () => {
+    const { status, body } = await readJson(
+      await profileNamePOST(req("/api/profile/name", { body: { name: "X" }, headers: { "x-requested-with": "fetch" } })),
+    );
+    expect(status).toBe(503);
+    expect(body).toMatchObject({ error: "not configured" });
+  });
+
+  it("POST /api/profile/sync → 503", async () => {
+    const { status, body } = await readJson(
+      await profileSyncPOST(req("/api/profile/sync", { body: {}, headers: { "x-requested-with": "fetch" } })),
+    );
+    expect(status).toBe(503);
+    expect(body).toMatchObject({ error: "not configured" });
   });
 });
 

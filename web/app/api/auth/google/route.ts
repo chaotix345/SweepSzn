@@ -5,6 +5,8 @@ import { isAuthEnabled, authedUid, signSession, verifyNonce, sha256hex, NONCE_CO
 import { setSessionCookie } from "@/lib/authServer";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
+import { upsertProfileOnSignIn } from "@/lib/profileStore";
+import { migratePushSubs } from "@/lib/pushStore";
 
 export const runtime = "nodejs";
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
@@ -59,5 +61,11 @@ export async function POST(req: Request) {
   await setSessionCookie(await signSession(user));
   c.delete(NONCE_COOKIE);
   after(() => bump(redis, "signin", { uid: user.uid }));
+  // Persist the account's display handle and carry this device's anonymous push subscriptions onto
+  // the account. Best-effort and deferred so neither can slow or fail the sign-in response.
+  after(async () => {
+    await upsertProfileOnSignIn(user.uid, user.name, user.picture ?? "", Date.now());
+    if (user.anon && user.anon !== user.uid) await migratePushSubs(user.anon, user.uid);
+  });
   return NextResponse.json({ user: { uid: user.uid, name: user.name, picture: user.picture } });
 }

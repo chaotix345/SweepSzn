@@ -62,6 +62,26 @@ export async function removeSubscription(uid: string, endpoint: string): Promise
   try { await redis.hdel(keyPush(uid), field(endpoint)); } catch { /* best-effort */ }
 }
 
+// Carry a device's anonymous push subscriptions onto its newly signed-in account so challenge
+// notifications keep arriving (anon uid -> authed uid). Best-effort; respects PUSH_SUB_CAP and
+// drops the old key once copied. Never throws.
+export async function migratePushSubs(fromUid: string, toUid: string): Promise<void> {
+  if (!redis || fromUid === toUid) return;
+  try {
+    const subs = (await redis.hgetall<Record<string, PushSub>>(keyPush(fromUid))) ?? {};
+    const entries = Object.entries(subs);
+    if (!entries.length) return;
+    const have = await redis.hlen(keyPush(toUid));
+    const room = Math.max(0, PUSH_SUB_CAP - have);
+    if (room > 0) {
+      const obj: Record<string, PushSub> = {};
+      for (const [f, s] of entries.slice(0, room)) obj[f] = s;
+      await redis.pipeline().hset(keyPush(toUid), obj).expire(keyPush(toUid), TTL).exec();
+    }
+    await redis.del(keyPush(fromUid));
+  } catch { /* best-effort */ }
+}
+
 // Fan an arbitrary {title, body, url} payload out to all of a uid's devices (the sw.js push
 // handler's exact shape). No-op when push or redis is unavailable; capped at PUSH_SUB_CAP; dead
 // endpoints (404/410 Gone) are pruned. Never throws. Returns whether at least one device was

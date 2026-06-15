@@ -36,13 +36,13 @@ profile:{uid}   HASH  { name: string, picture: string, createdAt: number }
                       No TTL. Written on first sign-in (idempotent hset) and on name update.
                       Authoritative display name across devices.
 
-streak:{uid}    ZSET  member = "YYYY-MM-DD" (canonical zero-padded UTC, same format as dayUTC()/the
-                      daily board key), score = completion ms. No TTL. Written TRUSTED on every authed
-                      Daily submit (zadd the submit's `date`, already ISO). Backfilled (union) by sync.
-                      Current consecutive run computed server-side.
-                      NOTE: lib/streak.ts:utcKey produces a NON-padded form ("2026-6-15"); the sync
-                      endpoint MUST normalize incoming local history dates to zero-padded ISO before
-                      zadd so the two write paths union correctly.
+streak:{uid}    ZSET  member = non-padded UTC day-key "YYYY-M-D" (the form BOTH lib/day.ts:dayUTC and
+                      lib/streak.ts:utcKey already emit — they are identical, so the daily-submit write
+                      and the localStorage backfill union with no conversion), score = completion ms.
+                      No TTL. Written TRUSTED on every authed Daily submit (zadd the submit's `date`).
+                      Backfilled (union) by sync. Consecutive run computed server-side with the same
+                      dayUTC formatter. Sync defensively re-canonicalizes any incoming date through the
+                      dayUTC formula so a stray zero-padded value can't create a duplicate member.
 
 results:{uid}   LIST  JSON ResultEntry (newest-first), LTRIM cap 200. No TTL.
                       Written by the client (signed-in) via /api/profile/sync after each finished game,
@@ -59,7 +59,7 @@ Each new route gets a matching `test/routes/*.test.ts` and a `ROUTE_TO_TEST` ent
 |---|---|---|---|
 | `/api/profile` | GET | session → else 401 | Returns `{ name, picture, streak, results }`. Reads `profile:{uid}`, computes consecutive streak from `streak:{uid}`, reads `results:{uid}` (newest-first). |
 | `/api/profile/name` | POST | session → else 401 | Body `{ name }`. `cleanName()`, `hset profile:{uid} name`, **re-mint session JWT** with the new name (`signSession`+`setSessionCookie`) so the cookie stays in sync without re-login. Returns `{ name }`. CSRF-guarded (`x-requested-with: fetch`), rate-limited. |
-| `/api/profile/sync` | POST | session → else 401 | Body `{ history?: string[], results?: ResultEntry[] }`. Idempotent **union** merge: normalize each history date to zero-padded ISO, then `zadd` into `streak:{uid}`; dedupe results by `mode:encoded`, `lpush`+`ltrim` into `results:{uid}` (cap 200). Used for first-sign-in migration **and** ongoing single-entry pushes. Validates/bounds input (max 400 dates, max 50 results/call). Returns `{ streak, results: count }`. |
+| `/api/profile/sync` | POST | session → else 401 | Body `{ history?: string[], results?: ResultEntry[] }`. Idempotent **union** merge: re-canonicalize each history date through the dayUTC formula, then `zadd` into `streak:{uid}`; dedupe results by `mode:encoded`, `lpush`+`ltrim` into `results:{uid}` (cap 200). Used for first-sign-in migration **and** ongoing single-entry pushes. Validates/bounds input (max 400 dates, max 50 results/call). Returns `{ streak, results: count }`. |
 | `/api/auth/google` | POST | — | **Add:** on success, `hset profile:{uid}` (name/picture; set `createdAt` once via `hsetnx`-style guard); migrate push subscriptions from `push:{session.anon}` → `push:{uid}`. |
 | `/api/daily/submit` | POST | — | **Add (authed path only):** `zadd streak:{uid}` with today's UTC date. (Trusted — submit is verified by `verifyDaily`.) |
 | `/api/board/weekly` | GET | **session → else 401** | Add `getSession()` gate; on 401 return `{ error: "auth_required" }`. Change cache header to `private, no-store` (auth-gated, uncacheable by the CDN). |
