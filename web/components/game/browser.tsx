@@ -115,8 +115,11 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
           return (
             <button key={c.id} onClick={() => onSelect(c)} aria-pressed={sel}
               aria-label={`Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}${showUsage && c.usage != null ? `, ${Math.round(c.usage)} percent usage demand` : ""}${showRowFit ? `, fit ${c.fit!.delta > 0 ? "+" : ""}${c.fit!.delta}${c.fit!.adds.length ? ", adds " + c.fit!.adds.join(" and ") : ""}` : ""}`}
-              className={`mb-1.5 flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition ${
-                sel ? "border-orange-500 bg-orange-500/10" : showRowFit && c.fit!.best ? "border-emerald-600/50 bg-emerald-500/[0.06] hover:border-emerald-500" : fits ? "border-zinc-800 bg-zinc-950/60 hover:border-zinc-600" : "border-zinc-900 bg-zinc-950/40 opacity-55"}`}>
+              className={`mb-1.5 flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition active:scale-[0.98] ${
+                sel ? "border-orange-500 bg-orange-500/10"
+                  : showRowFit && c.fit!.best ? "border-emerald-600/50 bg-emerald-500/[0.06] shadow-[0_0_14px_-4px_rgba(52,211,153,0.45)] hover:-translate-y-px hover:border-emerald-500"
+                  : fits ? "border-zinc-800 bg-zinc-950/60 hover:-translate-y-px hover:border-zinc-600"
+                  : "border-zinc-900 bg-zinc-950/40 opacity-55"}`}>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-semibold">{c.name}</div>
                 <div className="text-[11px] text-zinc-500">
