@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/Button";
+import { XIcon } from "@/components/ui/icons";
 
 // Static credibility stats (mirrors the calibration facts in the homepage SEO copy).
 const STATS: [string, string][] = [
@@ -20,9 +21,20 @@ export default function SiteFooter() {
             <p className="mt-2 max-w-xs text-sm text-zinc-400">
               Can you go 82-0? Draft an all-time NBA five and find out. It&apos;s sweep season.
             </p>
-            <ButtonLink href="/play" size="sm" className="mt-4">
-              Build your five →
-            </ButtonLink>
+            <div className="mt-4 flex items-center gap-4">
+              <ButtonLink href="/play" size="sm">
+                Build your five →
+              </ButtonLink>
+              <a
+                href="https://x.com/SweepSeason"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Follow SweepSzn on X (@SweepSeason)"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-zinc-400 transition hover:text-zinc-100"
+              >
+                <XIcon /> @SweepSeason
+              </a>
+            </div>
           </div>
           <nav className="grid grid-cols-2 gap-x-10 gap-y-2 text-sm">
             <Link href="/play" className="text-zinc-400 hover:text-zinc-100">Play</Link>
