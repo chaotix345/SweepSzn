@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { ButtonLink } from "@/components/ui/Button";
 import ResultPreview from "@/components/ResultPreview";
 import { baseUrl } from "@/lib/site";
 
@@ -142,7 +142,7 @@ export default function HowItWorks() {
       </section>
 
       {/* calibration */}
-      <section className="mt-14 rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+      <section className="mt-14 rounded-2xl border border-zinc-800 border-t-2 border-t-orange-500/50 bg-zinc-900 p-6">
         <h2 className="font-display text-2xl tracking-tight">Calibrated, not guessed</h2>
         <p className="mt-3 text-sm text-zinc-400">
           Every coefficient is fit to real history — <strong className="text-zinc-200">1,170 NBA team-seasons</strong> (1985–2025)
@@ -152,22 +152,21 @@ export default function HowItWorks() {
           Pythagorean expectation (exponent k ≈ 14). The proof it&apos;s honest: stack five ball-dominant scorers and a box-score
           adder calls them historic at 74-8; SweepSzn knows one ball can&apos;t feed them all.
         </p>
-        <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t border-zinc-800 pt-5">
+        <div className="mt-5 grid grid-cols-2 gap-3 border-t border-zinc-800 pt-5 sm:grid-cols-4">
+          <Stat n="1,170" label="real NBA team-seasons" />
           <Stat n="24,687" label="player-seasons" />
-          <Stat n="1,170" label="NBA team-seasons" />
-          <Stat n="5.6" label="win RMSE (out-of-sample, luck-adjusted)" />
+          <Stat n="5.6" label="win RMSE, out-of-sample" />
           <Stat n="k ≈ 14" label="Pythagorean exponent" />
         </div>
       </section>
 
-      <div className="mt-12 text-center">
-        <h2 className="font-display text-3xl tracking-tight">Spin the reels. Draft your five. Go for 82-0.</h2>
-        <Link
-          href="/play"
-          className="mt-5 inline-block rounded-xl bg-orange-500 px-8 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400"
-        >
-          Build your five →
-        </Link>
+      <div className="mt-12 border-t border-zinc-800 pt-10 text-center">
+        <h2 className="font-display text-3xl tracking-tight sm:text-4xl">
+          Spin the reels. Draft your five. Go for <span className="text-gold">82-0</span>.
+        </h2>
+        <div className="mt-5 flex justify-center">
+          <ButtonLink href="/play" size="lg">Build your five →</ButtonLink>
+        </div>
       </div>
     </div>
   );
@@ -176,7 +175,7 @@ export default function HowItWorks() {
 function Step({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
   return (
     <li className="flex gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
-      <div className="font-display text-3xl leading-none text-orange-500/30">{n}</div>
+      <div className="font-display text-3xl leading-none text-orange-500/60">{n}</div>
       <div>
         <div className="text-sm font-black text-zinc-100">{title}</div>
         <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">{children}</p>
@@ -199,8 +198,9 @@ function Principle({ term, children }: { term: string; children: React.ReactNode
 
 function Stat({ n, label }: { n: string; label: string }) {
   return (
-    <span className="text-xs text-zinc-500">
-      <span className="font-mono font-black text-zinc-300">{n}</span> {label}
-    </span>
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-3 text-center">
+      <div className="font-mono text-2xl font-black tabular-nums text-zinc-100">{n}</div>
+      <div className="mt-0.5 text-[11px] leading-tight text-zinc-500">{label}</div>
+    </div>
   );
 }
