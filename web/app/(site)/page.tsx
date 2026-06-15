@@ -62,9 +62,31 @@ export default function Home() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml }} />
       <LandingSection />
-      <section className="mx-auto max-w-2xl px-5 pb-16 text-sm leading-relaxed text-zinc-400">
-        {SEO_COPY}
+      {/* Calibration proof, scoreboard-style, plus the keyword-dense SEO prose kept crawlable inside
+          a <details> (rendered in the DOM, just collapsed) so the page reads premium, not like a wall. */}
+      <section className="mx-auto max-w-3xl px-5 pb-16 sm:px-8">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat n="1,170" label="real NBA team-seasons" />
+          <Stat n="24,687" label="player-seasons" />
+          <Stat n="5.6" label="win RMSE, out-of-sample" />
+          <Stat n="8" label="ways to play" />
+        </div>
+        <details className="mt-6">
+          <summary className="cursor-pointer text-sm font-semibold text-orange-400 hover:text-orange-300">
+            More about the engine
+          </summary>
+          <p className="mt-3 text-sm leading-relaxed text-zinc-500">{SEO_COPY}</p>
+        </details>
       </section>
     </>
+  );
+}
+
+function Stat({ n, label }: { n: string; label: string }) {
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-center">
+      <div className="font-mono text-2xl font-black tabular-nums text-zinc-100">{n}</div>
+      <div className="mt-0.5 text-[11px] leading-tight text-zinc-500">{label}</div>
+    </div>
   );
 }

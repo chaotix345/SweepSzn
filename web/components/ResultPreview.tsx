@@ -19,7 +19,7 @@ const HERO_IDS = [
 ];
 
 
-export default function ResultPreview() {
+export default function ResultPreview({ reveal = false }: { reveal?: boolean } = {}) {
   const players = getPlayersByIds(HERO_IDS);
   const result = evaluateLineup(players, getCoefficients());
   const factors = factorViews(result);
@@ -29,15 +29,15 @@ export default function ResultPreview() {
 
   return (
     <div
-      className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900"
-      style={{ boxShadow: "0 0 44px 0 rgba(255,197,61,0.16)" }}
+      className={`overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 ring-1 ring-gold/20 ${reveal ? "animate-gold-pulse" : ""}`}
+      style={{ boxShadow: "0 0 60px 0 rgba(255,197,61,0.32)" }}
     >
       {/* record hero */}
       <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
         <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
           example result · projected record
         </div>
-        <div className={`mt-1 font-display text-7xl tabular-nums ${gradeColor}`}>
+        <div className={`mt-1 font-display text-8xl tabular-nums sm:text-9xl ${gradeColor} ${reveal ? "animate-record-slam" : ""}`}>
           {result.wins}<span className="text-zinc-600">–</span>{result.losses}
         </div>
         <div className="mt-1 text-lg font-bold tracking-wide">
