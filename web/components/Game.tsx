@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { buildFocusTrapHandler } from "@/components/game/useFocusTrap";
 import { type Mode, MODE_LABEL } from "@/components/game/types";
 import { Shell } from "@/components/game/Shell";
@@ -53,6 +53,13 @@ function todaySeed() {
 }
 const rand = () => Math.floor(Math.random() * 1e9);
 
+// First-run levers tip (R6): hydration-safe "seen" read. Server snapshot is "seen" (true) so the
+// server renders nothing; the client reads the real flag and useSyncExternalStore reconciles without
+// a hydration mismatch (same pattern ResultCard uses for the Web Share capability check).
+const subscribeNoop = () => () => {};
+const getTipSeen = () => { try { return !!localStorage.getItem("szn_levers_tip_seen"); } catch { return true; } };
+const getTipSeenServer = () => true;
+
 // Hints are a limited resource: this many assisted picks per game (Classic only), so the engine's
 // fit grade can't be used to mindlessly auto-pick all five. Tune here (1 = strict, 3 = friendly).
 const HINT_BUDGET = 2;
@@ -77,6 +84,11 @@ export default function Game() {
   const [restoring, setRestoring] = useState(false);           // briefly true while a refresh rebuilds a finished result
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // R6: first-run scoring primer — dismissible, localStorage-gated, never blocks play (no modal).
+  // tipSeen is read hydration-safely; tipDismissed covers the in-session dismiss.
+  const tipSeen = useSyncExternalStore(subscribeNoop, getTipSeen, getTipSeenServer);
+  const [tipDismissed, setTipDismissed] = useState(false);
+  const showLeversTip = !tipSeen && !tipDismissed;
   // Hints are OFF by default for everyone, every session, every pick — never persisted. In Classic you
   // spend a hint to REVEAL the engine's fit grades for the current pick (HINT_BUDGET per game). Revealing
   // charges immediately, so there's no "peek, then toggle off, then pick" to dodge the cost.
@@ -114,6 +126,11 @@ export default function Game() {
   const openSlots = useMemo(() => SLOTS.filter((s) => !roster[s]), [roster]);
 
   useEffect(() => () => { if (tickRef.current) clearInterval(tickRef.current); }, []);
+
+  const dismissLeversTip = useCallback(() => {
+    try { localStorage.setItem("szn_levers_tip_seen", "1"); } catch { /* no storage */ }
+    setTipDismissed(true);
+  }, []);
 
   // move keyboard focus into the mobile position sheet when it opens, and restore it to the
   // triggering element when it closes (paired with the Tab trap in the sheet's onKeyDown below)
@@ -522,13 +539,14 @@ export default function Game() {
   const canPlaceAny = current ? current.candidates.some((c) => openSlots.some((s) => c.eligible.includes(s))) : true;
   const hideIQ = mode === "hoopiq";
   const reelMasked = (locked: boolean) => hideIQ && !(spinning && !locked);
-  // Live usage budget: always on for USAGE DISCIPLINE (its grade axis), and in every other
-  // stats-visible mode once two players are placed — overload is the single biggest penalty on
-  // elite drafts, and feeling the budget fill BEFORE the reveal beats learning it after.
-  // HoopIQ stays bar-free (its premise is drafting blind). Usage is intrinsic public player data,
-  // not a seed-relative hint, so competitive seeds are unaffected (DESIGN.md §12).
+  // Live usage budget: shown from the very first pick in every stats-visible mode so the cap's
+  // EXISTENCE is disclosed before the anchor pick — not sprung at round 3, after the two most
+  // consequential picks. It reads an empty "0% / budget" at the start, then fills live as players
+  // are placed; USAGE DISCIPLINE adds its A+/A grade lines. HoopIQ stays bar-free (its premise is
+  // drafting blind). Usage is intrinsic public player data, not a seed-relative hint, so competitive
+  // seeds are unaffected (DESIGN.md §12).
   const discBar = mode === "blueprint" && blueprint === "discipline";
-  const showUsageBar = discBar || (!hideIQ && drafted.length >= 2);
+  const showUsageBar = discBar || !hideIQ;
 
   return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart={filled > 0 || !!current}>
@@ -555,6 +573,26 @@ export default function Game() {
       )}
       {mode === "surgeon" && (
         <p className="mt-2 text-center text-[11px] text-rose-400/80">🩺 Draft five — then the engine diagnoses your worst factor and deals one fix.</p>
+      )}
+      {/* First-run scoring primer (R6): names the real levers honestly so new players don't learn the
+          mechanics only by losing. Skipped where it would conflict or duplicate — HoopIQ is deliberately
+          blind, Blueprint has its own objective dialog, Surgeon's diagnosis step teaches the same vocab. */}
+      {showLeversTip && mode !== "hoopiq" && mode !== "blueprint" && mode !== "surgeon" && (
+        <details open className="mx-auto mt-3 w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-left">
+          <summary className="cursor-pointer text-xs font-bold text-zinc-300">New here? How your five is scored</summary>
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+            The engine simulates 82 games and weighs several things at once: <strong className="text-zinc-300">star offense</strong> and{" "}
+            <strong className="text-zinc-300">defense</strong>, floor <strong className="text-zinc-300">spacing</strong>, and{" "}
+            <strong className="text-zinc-300">usage overload</strong> — one ball can&apos;t feed five high-usage scorers. Two more quietly
+            decide seasons: <strong className="text-zinc-300">interior size</strong> (rim protection) and{" "}
+            <strong className="text-zinc-300">perimeter defense</strong> — a five with neither bleeds real wins. Pre-1985 box stats are
+            discounted, too. The bottom line is fit, not PPG.
+          </p>
+          <div className="mt-2 flex items-center gap-3">
+            <button onClick={dismissLeversTip} className="rounded-md bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700">Got it</button>
+            <a href="/how-it-works" className="text-[11px] font-semibold text-orange-400 hover:underline">Full breakdown →</a>
+          </div>
+        </details>
       )}
       {/* USAGE DISCIPLINE drafts to a non-obvious budget — the live bar is the spec's fix.
           Everywhere else the bar pre-explains the engine's dominant penalty (see showUsageBar). */}
@@ -602,7 +640,7 @@ export default function Game() {
 
         {/* court (below candidates on mobile, right on desktop) */}
         <div className="order-last">
-          <Court roster={roster} selSlot={selSlot} isTarget={slotTarget} onSlot={clickSlot} maskColors={hideIQ} />
+          <Court roster={roster} selSlot={selSlot} isTarget={slotTarget} onSlot={clickSlot} maskColors={hideIQ} idle={!selPlayer && !selSlot} />
           {selPlayer && (
             <p role="status" aria-live="polite" className="mt-2 hidden text-center text-xs font-semibold text-orange-400 lg:block">
               Placing {displayName(selPlayer.name)} — tap a glowing position

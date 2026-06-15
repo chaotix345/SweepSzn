@@ -7,6 +7,12 @@ import type { Mode } from "@/components/game/types";
 type Spin = { team: string; decade: string; candidates: DraftCandidate[] };
 export type SortKey = "fit" | "ppg" | "rpg" | "apg" | "az";
 
+// Decades that can contain pre-1985 players, whose box dominance the engine discounts (eraStrength,
+// fullYear 1985). The badge tooltip discloses the RULE at draft time — it never shows a per-player
+// number, so it stays a knowledge prompt ("older box scores are inflated") not solvable arithmetic.
+const ERA_ADJUSTED = new Set(["1960s", "1970s", "1980s"]);
+const ERA_ADJ_TIP = "Pre-1985 box stats are era-adjusted — discounted for the weaker, shallower early league.";
+
 // color the fit swing: green shades by tier when it helps, muted when it doesn't move the needle
 export function fitColor(f: CandidateFit): string {
   if (f.delta <= 0) return "text-zinc-500";
@@ -34,9 +40,11 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
   const showFit = revealed && canHint;
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<"All" | "G" | "F" | "C">("All");
-  const [sort, setSort] = useState<SortKey>(showFit ? "fit" : hideStats ? "az" : "ppg");
-  // if Hints is switched off mid-spin while sorted by fit, fall back without resetting user state
-  const effSort: SortKey = sort === "fit" && !showFit ? (hideStats ? "az" : "ppg") : sort;
+  // Neutral default sort (A–Z): PPG-default actively steered players toward the high-scorer trap the
+  // engine punishes. Keep PPG as an option — just don't make the trap the path of least resistance.
+  const [sort, setSort] = useState<SortKey>(showFit ? "fit" : "az");
+  // if Hints is switched off mid-spin while sorted by fit, fall back to the neutral default
+  const effSort: SortKey = sort === "fit" && !showFit ? "az" : sort;
 
   const list = useMemo(() => {
     const inGroup = (c: DraftCandidate) =>
@@ -61,7 +69,8 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
         ) : (
           <>
             <span className="rounded-md px-2 py-1 text-xs font-black" style={{ background: c0.bg, color: c0.text }}>{spin.team}</span>
-            <span className="rounded-md bg-violet-500/20 px-2 py-1 text-xs font-bold text-violet-300">{eraLabel(spin.decade)}</span>
+            <span title={ERA_ADJUSTED.has(spin.decade) ? ERA_ADJ_TIP : undefined}
+              className="rounded-md bg-violet-500/20 px-2 py-1 text-xs font-bold text-violet-300">{eraLabel(spin.decade)}{ERA_ADJUSTED.has(spin.decade) && <span className="ml-1 opacity-70" aria-hidden>✳</span>}</span>
           </>
         )}
         <div className="ml-auto flex gap-1">
@@ -90,7 +99,7 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
           <select value={effSort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort players"
             className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-300 outline-none">
             {showFit && <option value="fit">Best fit</option>}
-            <option value="ppg">PPG</option><option value="rpg">RPG</option><option value="apg">APG</option><option value="az">A–Z</option>
+            <option value="az">A–Z</option><option value="ppg">PPG</option><option value="rpg">RPG</option><option value="apg">APG</option>
           </select>
         )}
       </div>
@@ -113,7 +122,7 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
                 <div className="text-[11px] text-zinc-500">
                   {c.eligible.join(" · ")}
                   {/* Prime pools span all eras — show each player's peak decade on the row */}
-                  {spin.decade === "PRIME" && <span className="ml-1 text-violet-400/80">· {eraLabel(c.decade)}</span>}
+                  {spin.decade === "PRIME" && <span className="ml-1 text-violet-400/80" title={ERA_ADJUSTED.has(c.decade) ? ERA_ADJ_TIP : undefined}>· {eraLabel(c.decade)}{ERA_ADJUSTED.has(c.decade) && <span className="ml-0.5 opacity-70" aria-hidden>✳</span>}</span>}
                   {!fits && <span className="ml-1 text-zinc-500">· no open slot</span>}
                 </div>
                 {!hideStats && c.traits && c.traits.length > 0 && (
