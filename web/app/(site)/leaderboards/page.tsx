@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { ButtonLink } from "@/components/ui/Button";
 import Leaderboard from "@/components/Leaderboard";
 import { dayUTC } from "@/lib/day";
 
@@ -18,7 +18,7 @@ export default function Leaderboards() {
   return (
     <div className="mx-auto max-w-2xl px-5 py-12 sm:py-16">
       <p className="text-xs font-bold uppercase tracking-widest text-orange-400">Leaderboards</p>
-      <h1 className="mt-2 font-display text-4xl tracking-tight sm:text-5xl">Who&apos;s gone closest to 82-0?</h1>
+      <h1 className="mt-2 font-display text-4xl tracking-tight sm:text-5xl lg:text-6xl">Who&apos;s gone closest to <span className="whitespace-nowrap">82-0?</span></h1>
       <p className="mt-4 max-w-xl text-base text-zinc-400">
         In Daily mode everyone gets the same spins, so the board is a pure test of judgment. Weekly sums your best
         daily wins; All-time is your career total. Play today&apos;s Daily to post a score.
@@ -30,13 +30,8 @@ export default function Leaderboards() {
 
       <Leaderboard date={date} trace={[]} readOnly />
 
-      <div className="mt-6 text-center">
-        <Link
-          href="/play"
-          className="inline-block rounded-xl bg-orange-500 px-7 py-3 text-base font-black text-black transition hover:bg-orange-400"
-        >
-          Play today&apos;s Daily →
-        </Link>
+      <div className="mt-6 flex justify-center">
+        <ButtonLink href="/play" size="lg">Play today&apos;s Daily →</ButtonLink>
       </div>
     </div>
   );
