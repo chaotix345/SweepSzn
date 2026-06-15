@@ -83,6 +83,15 @@ body {
 }
 .animate-menu-down { animation: menuDown 180ms ease-out both; }
 
+/* Reel "click into place" — the slot value thuds down as it lands. Cosmetic only; the spin
+   result and the timing floor are unchanged (82-0 parity). Supports, never upstages, the reveal. */
+@keyframes reelSnap {
+  0% { transform: scale(1.14); }
+  55% { transform: scale(0.97); }
+  100% { transform: scale(1); }
+}
+.animate-reel-snap { animation: reelSnap 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 /* Visible keyboard focus across the dark UI (action-orange ring). No fixed border-radius —
    the outline follows each element's own corners, so pills and circles aren't clipped square. */
 :focus-visible {

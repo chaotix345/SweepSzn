@@ -18,9 +18,10 @@ export function Reel({ kind, value, sub, color, locked, masked, spinning, prime 
           ? "shadow-[0_0_22px_-6px_rgba(255,106,0,0.55)]"
           : "shadow-[0_0_22px_-6px_rgba(139,92,246,0.55)]";
   return (
-    <div className={`relative w-32 rounded-xl border-2 ${ring} bg-zinc-900 px-3 py-3 text-center transition-shadow sm:w-40 ${glow}`}>
+    <div className={`relative w-32 rounded-xl border-2 ${ring} bg-zinc-900 px-3 py-3 text-center transition-[box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] sm:w-40 ${glow}`}>
       <div className={`text-[10px] font-bold uppercase tracking-widest ${tag}`}>{prime ? "ALL ERAS" : locked ? "🔒 LOCKED" : kind}</div>
-      <div className="text-3xl font-black leading-tight sm:text-4xl">{masked ? "???" : value}</div>
+      {/* re-key on the spinning→settled flip so the snap animation replays exactly when the value lands */}
+      <div key={`${spinning ? 1 : 0}:${value}`} className={`text-3xl font-black leading-tight sm:text-4xl ${!spinning && !masked ? "animate-reel-snap" : ""}`}>{masked ? "???" : value}</div>
       <div className="truncate text-[10px] text-zinc-500">{masked ? "hidden" : sub}</div>
       {/* announce the settled reel once (stay quiet while cycling and when the value is masked) */}
       <span className="sr-only" aria-live="polite" aria-atomic="true">{spinning || masked ? "" : `${kind}: ${value}`}</span>
