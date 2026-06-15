@@ -292,6 +292,8 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
       </div>
       {open && !canNative && (
         <div id="result-share-panel" role="menu" className="fixed inset-x-0 bottom-0 z-50 max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-zinc-700 bg-zinc-900 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl sm:absolute sm:inset-x-auto sm:bottom-full sm:left-0 sm:z-10 sm:mb-2 sm:w-full sm:rounded-xl sm:border sm:p-2 sm:pb-2 sm:shadow-xl">
+          {/* grab handle — signals the sheet is a dismissable bottom sheet on mobile */}
+          <div aria-hidden className="mx-auto mb-2 h-1 w-10 rounded-full bg-zinc-600 sm:hidden" />
           <button onClick={copy} role="menuitem" className="mb-1 w-full rounded-lg bg-zinc-800 py-2 text-xs font-semibold hover:bg-zinc-700">
             {copied ? "Copied to clipboard!" : copyErr ? "Copy failed — use a link below" : "Copy result"}
           </button>

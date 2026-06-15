@@ -6,7 +6,7 @@ import { Shell } from "@/components/game/Shell";
 import { ModeSelect } from "@/components/game/ModeSelect";
 import { Reel } from "@/components/game/Reel";
 import { UsageBar, SkipBtn } from "@/components/game/controls";
-import { Court } from "@/components/game/court";
+import { Court, MiniRoster } from "@/components/game/court";
 import { Browser } from "@/components/game/browser";
 import { usePickem } from "@/components/game/usePickem";
 import { PickemOverlay } from "@/components/game/PickemOverlay";
@@ -644,6 +644,8 @@ export default function Game() {
       <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_minmax(300px,380px)]">
         {/* candidate browser (first on mobile + desktop-left) */}
         <div className="order-first">
+          {/* mobile: your five at a glance, directly above the candidates (the half-court is below the fold) */}
+          <MiniRoster roster={roster} maskColors={hideIQ} />
           {current ? (
             <Browser key={`${current.team}|${current.decade}|${roundNum}`} spin={current} mode={mode} selId={selPlayer?.id ?? null}
               hintsLeft={Math.max(0, HINT_BUDGET - hintsUsed)} onReveal={revealHint}
@@ -708,7 +710,7 @@ export default function Game() {
               const tag = selPlayer ? (occupied ? "Filled" : target ? "" : "N/A") : target ? "swap" : occupied && s === selSlot ? "here" : "";
               return (
                 <button key={s} disabled={!target} onClick={() => clickSlot(s)}
-                  className={`flex flex-col items-center justify-center rounded-lg py-2.5 text-sm font-bold ${
+                  className={`flex min-h-12 flex-col items-center justify-center rounded-lg py-3 text-sm font-bold transition active:scale-95 ${
                     target ? "bg-orange-500 text-black" : "bg-zinc-800 text-zinc-600"}`}>
                   <span>{s}</span>{tag && <span className="text-[8px] font-semibold uppercase">{tag}</span>}
                 </button>

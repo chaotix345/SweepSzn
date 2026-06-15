@@ -10,6 +10,29 @@ export const COURT: Record<Slot, { left: number; top: number }> = {
   SF: { left: 15, top: 49 }, SG: { left: 79, top: 49 }, PG: { left: 47, top: 68 },
 };
 
+// Compact lineup-status strip for mobile: your five at a glance, pinned above the candidate browser
+// so you can see what you've drafted while you pick (the half-court sits below the fold on phones).
+// Display-only — placement still happens via the bottom "choose position" sheet.
+export function MiniRoster({ roster, maskColors }: { roster: Roster; maskColors?: boolean }) {
+  return (
+    <div className="mb-3 flex items-stretch gap-1.5 lg:hidden" role="img" aria-label={`Lineup so far: ${SLOTS.map((s) => (roster[s] ? `${s} ${roster[s]!.name}` : `${s} open`)).join(", ")}`}>
+      {SLOTS.map((s) => {
+        const p = roster[s];
+        const c = p ? (maskColors ? { bg: "#3f3f46", text: "#e4e4e7" } : teamColors(p.team)) : null;
+        return p && c ? (
+          <span key={`${s}-${p.id}`} className="animate-token-snap flex h-10 flex-1 flex-col items-center justify-center rounded-lg text-[10px] font-black leading-none shadow"
+            style={{ background: c.bg, color: c.text }}>
+            <span>{initials(p.name)}</span>
+            <span className="mt-0.5 text-[7px] opacity-80">{s}</span>
+          </span>
+        ) : (
+          <span key={s} className="flex h-10 flex-1 items-center justify-center rounded-lg border border-dashed border-zinc-700 text-[10px] font-bold text-zinc-600">{s}</span>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Court({ roster, selSlot, isTarget, onSlot, maskColors, idle }: {
   roster: Roster; selSlot: Slot | null; isTarget: (s: Slot) => boolean; onSlot: (s: Slot) => void; maskColors?: boolean;
   // idle = no pick/swap in progress; filled slots then advertise that tapping picks them up to move/swap
