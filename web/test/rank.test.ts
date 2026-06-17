@@ -20,6 +20,7 @@ describe("compareSzn — fame-first board ranking", () => {
     const arr = [P(undefined, undefined), P(0.1, 0), P(undefined, 5)];
     arr.sort(compareSzn);
     expect(arr[0].fame).toBe(0.1);        // any fame beats none
+    expect(arr[1].peak_score).toBe(5);  // undefined-fame tie broken by peak_score
     expect(arr[2].fame).toBeUndefined();  // zero fame + zero peak is last
   });
 });
