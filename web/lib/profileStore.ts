@@ -16,6 +16,10 @@ const keyStreak = (uid: string) => `streak:${uid}`;
 const keyResults = (uid: string) => `results:${uid}`;
 
 export const RESULTS_CAP = 200;
+// Streaks only need the most-recent consecutive run, bounded by the account's age, so cap the
+// no-TTL ZSET at the newest STREAK_CAP day-keys (matches the client's localStorage slice(-400)).
+// Bounds storage and the getStreakCount read against a hostile sync that floods thousands of dates.
+export const STREAK_CAP = 400;
 const DAY_MS = 86_400_000;
 
 // Mirrors lib/resultHistory.ts ResultEntry (mode kept as a plain string here — the route validates
@@ -65,6 +69,14 @@ export function streakFromDates(dates: string[], now: number): number {
 
 // --- streak ---
 
+// Bound the no-TTL ZSET to the newest STREAK_CAP day-keys (score = completion ms, so the
+// lowest-ranked are the oldest). Only the bulk sync path needs this — a verified daily submit adds
+// at most one day per UTC day and can't flood, so the hot submit path skips the extra round trip.
+async function trimStreak(uid: string): Promise<void> {
+  if (!redis) return;
+  await redis.zremrangebyrank(keyStreak(uid), 0, -(STREAK_CAP + 1));
+}
+
 // Trusted write from a verified daily submit. score = completion ms; member identity is the day-key.
 export async function recordStreakDate(uid: string, date: string, ts: number): Promise<void> {
   if (!redis) return;
@@ -86,12 +98,17 @@ export async function syncStreakDates(uid: string, dates: string[]): Promise<voi
     entries.push({ score: p.ms, member: p.key });
   }
   // zadd's typing requires at least one explicit member after the key — pass the head, spread the rest.
-  if (entries.length) await redis.zadd(keyStreak(uid), entries[0], ...entries.slice(1));
+  if (entries.length) {
+    await redis.zadd(keyStreak(uid), entries[0], ...entries.slice(1));
+    await trimStreak(uid);
+  }
 }
 
 export async function getStreakCount(uid: string, now: number): Promise<number> {
   if (!redis) return 0;
-  const members = (await redis.zrange<(string | number)[]>(keyStreak(uid), 0, -1)) ?? [];
+  // Only the newest STREAK_CAP day-keys can extend a current streak — read that bounded window
+  // (highest completion-ms first), not the whole ZSET.
+  const members = (await redis.zrange<(string | number)[]>(keyStreak(uid), 0, STREAK_CAP - 1, { rev: true })) ?? [];
   return streakFromDates(members.map(String), now);
 }
 
