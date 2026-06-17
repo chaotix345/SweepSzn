@@ -344,4 +344,19 @@ describe("ResultCard — one-tap share CTAs", () => {
     expect(decodeURIComponent(x)).toContain("/r/");
     expect(decodeURIComponent(bsky)).toContain("/r/");
   });
+
+  // Voice discipline (X content plan): the account posts with NO hashtags, so a user-shared
+  // result must not auto-append them to the tweet.
+  it("the X intent href does NOT append hashtags", () => {
+    const { container } = renderCard();
+    const x = container.querySelector('a[aria-label="Post to X"]')?.getAttribute("href") ?? "";
+    expect(x).not.toContain("hashtags=");
+  });
+});
+
+describe("ResultCard — shareable card image (screenshots are the product)", () => {
+  it("renders a 'Save card image' button so the OG card can be attached, not just linked", () => {
+    const { container } = renderCard();
+    expect(container.querySelector('button[aria-label="Save card image"]')).toBeTruthy();
+  });
 });

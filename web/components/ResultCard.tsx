@@ -5,7 +5,7 @@ import { ev } from "@/lib/ev";
 import { getUid } from "@/lib/streak";
 import type { LineupResult, Player, PlayerBreakdown, Slot } from "@/lib/types";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
-import { encodeLineup } from "@/lib/share";
+import { encodeLineup, cardImageUrl } from "@/lib/share";
 import { bpCode, type BlueprintView } from "@/lib/blueprint";
 import { factorViews, lineupRoles, headline, historyAnchor, playerContribRows, type ContribRow } from "@/lib/explain";
 import { WIN_GRADES, weakestSlot } from "@/lib/engine";
@@ -35,6 +35,58 @@ function shareNudge(result: LineupResult): string {
 }
 
 const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1));
+
+// Saveable/copyable breakdown card. The OG route already renders a clean 1200×630 PNG; this
+// fetches it so a user (or the launch content workflow) can attach the card as a native image
+// instead of relying on a link unfurl. Copy-to-clipboard appears only where the browser supports
+// writing an image Blob (desktop) — the X-compose paste flow; download works everywhere.
+function SaveCardImage({ path }: { path: string }) {
+  const [state, setState] = useState<"idle" | "busy" | "saved" | "copied" | "error">("idle");
+  const canCopyImage =
+    typeof window !== "undefined" && typeof ClipboardItem !== "undefined" && typeof navigator !== "undefined" && !!navigator.clipboard?.write;
+  const flash = (s: "saved" | "copied" | "error") => { setState(s); setTimeout(() => setState("idle"), 2000); };
+  const fetchCard = async (): Promise<Blob> => {
+    const res = await fetch(new URL(cardImageUrl(path), window.location.origin).toString());
+    if (!res.ok) throw new Error(`og ${res.status}`);
+    return res.blob();
+  };
+  const save = async () => {
+    setState("busy");
+    try {
+      const blob = await fetchCard();
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href; a.download = "sweepszn-card.png";
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(href);
+      track("share", { target: "image-save" }); ev("share", { uid: getUid() });
+      flash("saved");
+    } catch { flash("error"); }
+  };
+  const copy = async () => {
+    setState("busy");
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": fetchCard() })]);
+      track("share", { target: "image-copy" }); ev("share", { uid: getUid() });
+      flash("copied");
+    } catch { flash("error"); }
+  };
+  const label = state === "busy" ? "Preparing…" : state === "saved" ? "Saved ✓" : state === "error" ? "Try again" : "Save card image";
+  return (
+    <div className="mt-2.5 flex gap-2">
+      <button onClick={save} aria-label="Save card image"
+        className="min-w-0 flex-1 rounded-xl border border-zinc-700 py-2 text-xs font-semibold text-zinc-300 transition hover:border-zinc-500 hover:text-white">
+        ↓ {label}
+      </button>
+      {canCopyImage && (
+        <button onClick={copy} aria-label="Copy card image to clipboard"
+          className="shrink-0 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:border-zinc-500 hover:text-white">
+          {state === "copied" ? "Copied ✓" : "Copy"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default function ResultCard({
   result, players, slots, mode, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint, lbRank,
@@ -213,6 +265,7 @@ export default function ResultCard({
             <Button variant="secondary" onClick={onReset} className="flex-1">Build Another</Button>
           )}
         </div>
+        <SaveCardImage path={sharePath} />
       </div>
     </div>
   );
@@ -268,7 +321,8 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
     try { await (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }).share?.({ title: "SweepSzn", text, url }); track("share", { target: "native" }); ev("share", { uid: getUid() }); } catch { /* dismissed */ }
   };
   const links: [string, string][] = [
-    ["X", `https://twitter.com/intent/tweet?text=${t}&url=${u}&hashtags=NBA,82and0`],
+    // No hashtags — the @SweepSeason account posts without them, so user shares stay on-voice.
+    ["X", `https://twitter.com/intent/tweet?text=${t}&url=${u}`],
     ["Bluesky", `https://bsky.app/intent/compose?text=${t}%20${u}`],
     ["WhatsApp", `https://wa.me/?text=${t}%20${u}`],
     ["Reddit", `https://www.reddit.com/submit?title=${t}&url=${u}`],

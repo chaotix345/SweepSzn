@@ -37,7 +37,8 @@ export const metadata: Metadata = {
   title,
   description,
   openGraph: { title, description, siteName: SITE_NAME, type: "website" },
-  twitter: { card: "summary_large_image", title, description },
+  twitter: { card: "summary_large_image", title, description, site: "@SweepSeason", creator: "@SweepSeason" },
+  icons: { icon: "/icon.svg", apple: "/apple-icon.png" },
 };
 
 export default function RootLayout({

@@ -39,3 +39,11 @@ export function decodeShare(segment: string): { ids: string[]; hinted: boolean; 
 export function decodeLineup(segment: string): string[] {
   return decodeShare(segment).ids;
 }
+
+// The dynamic OG card (1200×630 PNG) for a share path is served by that route's opengraph-image
+// handler at `<path>/opengraph-image`. Exposing it as a saveable/copyable image turns every result
+// into an attachable asset — the launch content workflow needs the card as a file, not just a
+// link unfurl ("screenshots are the product"). Works for /r/ and /pe/ share paths alike.
+export function cardImageUrl(sharePath: string): string {
+  return `${sharePath.replace(/\/+$/, "")}/opengraph-image`;
+}
