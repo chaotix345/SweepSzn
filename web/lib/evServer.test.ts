@@ -74,7 +74,7 @@ describe("bump", () => {
     expect(fake.hashes.get("ev:mode:2026-6-9")).toBe(undefined);
   });
 
-  it("submit with uid, no mode: increments counter and active set but not mode hash", async () => {
+  it("submit with uid, no mode: increments counter and active set but not mode/submode hash", async () => {
     const fake = createRedisFake();
     await bump(fake as unknown as Redis, "submit", { uid: "abcdefgh", day: "2026-6-9" });
 
@@ -82,8 +82,32 @@ describe("bump", () => {
     expect(Number(fake.strings.get("ev:submit:2026-6-9"))).toBe(1);
     // submit adds uid to active set
     expect(fake.sets.get("ev:active:2026-6-9")?.has("abcdefgh")).toBe(true);
-    // submit does NOT touch mode hash
+    // submit does NOT touch the play-mode hash
     expect(fake.hashes.get("ev:mode:2026-6-9")).toBe(undefined);
+    // submit with no mode does NOT touch the submit-mode hash
+    expect(fake.hashes.get("ev:submode:2026-6-9")).toBe(undefined);
+  });
+
+  it("submit with uid + mode: increments submode hash, counter, active set; leaves play-mode hash untouched", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "submit", { uid: "abcdefgh", mode: "daily", day: "2026-6-9" });
+
+    // submit counter incremented
+    expect(Number(fake.strings.get("ev:submit:2026-6-9"))).toBe(1);
+    // submit-mode hash incremented (distinct from the play-mode hash)
+    expect(Number(fake.hashes.get("ev:submode:2026-6-9")?.get("daily"))).toBe(1);
+    // uid added to active set
+    expect(fake.sets.get("ev:active:2026-6-9")?.has("abcdefgh")).toBe(true);
+    // the play-mode hash must NOT be written for a submit
+    expect(fake.hashes.get("ev:mode:2026-6-9")).toBe(undefined);
+    // submode hash carries EV_TTL
+    expect(fake.calls.includes(`expire ev:submode:2026-6-9 ${EV_TTL}`)).toBe(true);
+  });
+
+  it("submit with an invalid mode: no submode hash written", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "submit", { uid: "abcdefgh", mode: "nope", day: "2026-6-9" });
+    expect(fake.hashes.get("ev:submode:2026-6-9")).toBe(undefined);
   });
 
   it("null redis no-ops without throwing", async () => {

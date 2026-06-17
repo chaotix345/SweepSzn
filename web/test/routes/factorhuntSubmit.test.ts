@@ -340,6 +340,8 @@ describe("POST /api/factorhunt/submit — after() side effects", () => {
     const counterKey = `ev:submit:${day}`;
     const count = ctx.redis!.strings.get(counterKey);
     expect(Number(count)).toBeGreaterThanOrEqual(1);
+    // submit is mode-tagged → admin can compute play→submit conversion per mode
+    expect(Number(ctx.redis!.hashes.get(`ev:submode:${day}`)?.get("factorhunt"))).toBeGreaterThanOrEqual(1);
   });
 });
 

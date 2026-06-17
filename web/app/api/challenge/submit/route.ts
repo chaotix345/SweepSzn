@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   // the creator drafted with hints); it's ignored by submitChallenge for an already-claimed challenge.
   const out = await submitChallenge(id, row, v.result, v.result.grade, { seed, hinted: !stored && body.usedHints === true });
   if (!out) return NextResponse.json({ error: "challenges not configured" }, { status: 503 });
-  after(() => bump(redis, "submit", { uid }));
+  after(() => bump(redis, "submit", { uid, mode: "challenge" }));
 
   if (out.role === "creator") {
     const res: ChallengeSubmitResponse = { role: "creator", id, board: out.board };

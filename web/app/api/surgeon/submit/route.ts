@@ -125,7 +125,7 @@ export async function POST(req: Request) {
     await removeSurgeonEntry(date, session.anon);
   }
   const view = await submitSurgeonScore(date, row, sortScore);
-  after(() => bump(redis, "submit", { uid }));
+  after(() => bump(redis, "submit", { uid, mode: "surgeon" }));
   // the locked swap is echoed so a replayed lineup renders ITS result, not the requested retry
   return NextResponse.json({
     view, delta, card, swap: { outId: swap.outId, inId: swap.inId },

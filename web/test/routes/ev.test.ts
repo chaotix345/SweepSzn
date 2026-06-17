@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { enableRedisEnv, freshFake, ctx, req, exhaustRateLimit } from "@/test/routeHarness";
+import { enableRedisEnv, freshFake, ctx, req, exhaustRateLimit, flushAfter } from "@/test/routeHarness";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -20,7 +20,14 @@ function dayUTC(): string {
   return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
 }
 
-const post = (body: unknown) => POST(req("/api/ev", { body }));
+// The route fires its bump() inside after(), so the counter writes are deferred until the response
+// is sent. flushAfter() runs the queued tasks; the helper flushes so the write-assertion tests below
+// observe the effects, exactly as production does post-response.
+const post = async (body: unknown) => {
+  const res = await POST(req("/api/ev", { body }));
+  await flushAfter();
+  return res;
+};
 
 beforeEach(() => { freshFake(); });
 
@@ -28,6 +35,18 @@ describe("POST /api/ev", () => {
   it("always returns 204", async () => {
     const res = await post({ ev: "play", uid: "user-abc00001", mode: "daily" });
     expect(res.status).toBe(204);
+  });
+
+  it("returns 204 before the beacon write is flushed (deferred via after())", async () => {
+    // Call the route directly (not the flushing helper) to observe the pre-flush state.
+    const res = await POST(req("/api/ev", { body: { ev: "play", uid: "user-deferred1", mode: "daily" } }));
+    expect(res.status).toBe(204);
+    const day = dayUTC();
+    // the counter write is queued in after(), not yet executed
+    expect(ctx.redis!.strings.has(`ev:play:${day}`)).toBe(false);
+    // once the after() tasks run, the write lands
+    await flushAfter();
+    expect(Number(ctx.redis!.strings.get(`ev:play:${day}`))).toBe(1);
   });
 
   it("returns 204 for a non-JSON body (fire-and-forget, never throws)", async () => {
@@ -156,6 +175,7 @@ describe("POST /api/ev", () => {
     await post({ ev: "signin" }); // signin is not a valid beacon ev
     await post({});
     await POST(req("/api/ev", { rawBody: "{not json}", method: "POST" }));
+    await flushAfter();
     const day = dayUTC();
     expect(ctx.redis!.strings.has(`ev:play:${day}`)).toBe(false);
     expect(ctx.redis!.strings.has(`ev:share:${day}`)).toBe(false);
@@ -177,6 +197,7 @@ describe("POST /api/ev", () => {
   it("silently drops (204, no write) once the per-IP bucket is exhausted — the beacon contract never exposes outcomes", async () => {
     exhaustRateLimit("rl:ev:9.9.9.9", 60);
     const res = await POST(req("/api/ev", { body: { ev: "play", uid: "user-abc00099", mode: "daily" }, ip: "9.9.9.9" }));
+    await flushAfter();
     expect(res.status).toBe(204);
     expect(ctx.redis!.strings.has(`ev:play:${dayUTC()}`)).toBe(false);
   });

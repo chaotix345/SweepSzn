@@ -388,6 +388,8 @@ describe("POST /api/blueprint/submit — after() side effects", () => {
     const counterKey = `ev:submit:${day}`;
     const val = ctx.redis!.strings.get(counterKey);
     expect(Number(val)).toBeGreaterThanOrEqual(1);
+    // submit is mode-tagged → admin can compute play→submit conversion per mode
+    expect(Number(ctx.redis!.hashes.get(`ev:submode:${day}`)?.get("blueprint"))).toBeGreaterThanOrEqual(1);
   });
 });
 

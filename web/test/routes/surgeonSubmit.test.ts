@@ -412,5 +412,7 @@ describe("POST /api/surgeon/submit — after() side effects", () => {
     const day = `${now2.getUTCFullYear()}-${now2.getUTCMonth() + 1}-${now2.getUTCDate()}`;
     const count = ctx.redis!.strings.get(`ev:submit:${day}`);
     expect(Number(count)).toBeGreaterThanOrEqual(1);
+    // submit is mode-tagged → admin can compute play→submit conversion per mode
+    expect(Number(ctx.redis!.hashes.get(`ev:submode:${day}`)?.get("surgeon"))).toBeGreaterThanOrEqual(1);
   });
 });
