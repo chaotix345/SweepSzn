@@ -7,6 +7,7 @@ import type { RankCard } from "@/lib/rankShare";
 import { getUid, getName, setName as persistName, recordDailyDone, getStreak, msToNextUtcMidnight } from "@/lib/streak";
 import { useSession } from "@/lib/useSession";
 import RankShareButton from "@/components/RankShareButton";
+import PushPrompt from "@/components/PushPrompt";
 import { dayUTC } from "@/lib/day";
 import { fetchProfile } from "@/lib/account";
 import { AUTH_ENABLED } from "@/lib/authClient";
@@ -212,6 +213,10 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
             )
           )}
 
+          {/* Streak-saver opt-in: Daily is ~95% of plays and the only place the 21:00 UTC streak cron
+              can reach a player. Surfaced right after the submit, next to the streak. Self-disables. */}
+          {tab === "daily" && submitted && <PushPrompt context="streak" />}
+
           {err && <div className="mt-2 text-xs text-red-400">{err}</div>}
 
           {tab === "daily" && view && <Board view={view} uid={effectiveUid} />}
@@ -313,17 +318,31 @@ function AggBoard({ view, uid, scope }: { view: AggBoardView | null; uid: string
   );
 }
 
-// Signed-out state for the weekly / all-time tabs (those boards are sign-in gated).
+// Signed-out state for the weekly / all-time tabs (those boards are sign-in gated). Signed-out players
+// can't fetch the real board (the GET 401s), so we show a BLURRED ghost board behind the CTA — a teaser
+// that conveys "there's a live board here" + the reason to sign in, instead of a bare dead end.
 function SignInGate({ scope, onSignIn }: { scope: "week" | "alltime"; onSignIn: () => void }) {
   if (!AUTH_ENABLED) return null; // no sign-in configured → nothing to prompt
   const label = scope === "week" ? "weekly" : "all-time";
+  const ghost: [number, string][] = [[1, "1,240"], [2, "1,190"], [3, "1,155"]];
   return (
-    <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 text-center">
-      <div className="text-sm font-semibold text-zinc-200">Sign in to see the {label} board</div>
-      <div className="mx-auto mt-1 max-w-xs text-xs text-zinc-500">The {label} leaderboard is for signed-in players — your ranks then follow you across every device.</div>
-      <button onClick={onSignIn} className="mt-3 rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-black transition hover:bg-orange-400">
-        Sign in with Google
-      </button>
+    <div className="relative mt-3 overflow-hidden rounded-xl border border-zinc-800">
+      <div aria-hidden className="select-none space-y-1 p-2 blur-sm">
+        {ghost.map(([rank, wins]) => (
+          <div key={rank} className={`flex items-center gap-3 rounded-lg bg-zinc-950/50 px-2.5 py-1.5 text-sm ${rank === 1 ? "ring-1 ring-gold/25" : ""}`}>
+            <span className={`w-7 shrink-0 text-right text-xs font-bold tabular-nums ${medalText(rank)}`}>{rank}</span>
+            <span className="min-w-0 flex-1 truncate font-semibold text-zinc-400">player {rank}</span>
+            <span className="shrink-0 font-bold tabular-nums text-zinc-300">{wins}<span className="ml-1 text-xs font-normal text-zinc-500">wins</span></span>
+          </div>
+        ))}
+      </div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/70 p-4 text-center">
+        <div className="text-sm font-semibold text-zinc-100">Sign in to see the {label} board</div>
+        <div className="mx-auto mt-1 max-w-xs text-xs text-zinc-400">The {label} leaderboard is for signed-in players — your ranks then follow you across every device.</div>
+        <button onClick={onSignIn} className="mt-3 rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-black transition hover:bg-orange-400">
+          Sign in with Google
+        </button>
+      </div>
     </div>
   );
 }
