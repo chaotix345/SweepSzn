@@ -57,12 +57,14 @@ desktop centers; position sheet pins without relying on auto-scroll.
 - [x] `controls.tsx` SkipBtn `rounded-full` → `rounded-xl`; SurgeonDialog name input `aria-label`
 - [~] Broad emoji `aria-hidden` sweep DEFERRED (low impact, many sites) — fold into a later a11y pass.
 
-## Wave 4 — Mobile ergonomics + advanced-mode gaps + share polish (low risk)
+## Wave 4 — Mobile ergonomics + advanced-mode gaps ✅ DONE (low risk)
 
-- [ ] 44px touch targets (browse filters/Hints, AuthControl, FiveStrip tokens/text)
-- [ ] `browse.tsx` list `max-h-[min(420px,50dvh)]` + `overscroll-contain`; blur input before select
-- [ ] FactorHunt fetching state (no dead button); mode-aware simulate copy
-- [ ] mobile share hierarchy: X/Share full-width primary on mobile; SurgeonResult save-card image
+- [x] Touch targets: browse filter (All/G/F/C) + Hints → `min-h-9`; AuthControl sign-in `min-h-11` + avatar `h-11`; FiveStrip tokens `h-10` + larger text
+- [x] `browse.tsx` list `max-h-[min(420px,50dvh)]` + `overscroll-contain` (no nested-scroll trap on short screens)
+- [x] No-slot guard: players with no open eligible slot are no longer selectable into a dead "tap a glowing position" state (`aria-disabled` + `cursor-not-allowed` + tooltip)
+- [x] FactorHunt fetching state: `fhFetching` drives a "Building your question…" disabled label (was a dead button during the choices fetch); mode-aware simulate copy shipped in Wave 2
+- [x] `SaveCardImage` exported + added to `SurgeonResult` (parity with the main reveal's shareable card)
+- [~] Mobile share-hierarchy reorder SKIPPED — the share row is already strong (Share + X + Bluesky quick-links + mobile bottom-sheet). PushPrompt streak-framing → Wave 6.
 
 ## Wave 5 — Mode picker returning-user experience (low risk)
 

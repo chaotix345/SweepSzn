@@ -40,7 +40,7 @@ const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1))
 // fetches it so a user (or the launch content workflow) can attach the card as a native image
 // instead of relying on a link unfurl. Copy-to-clipboard appears only where the browser supports
 // writing an image Blob (desktop) — the X-compose paste flow; download works everywhere.
-function SaveCardImage({ path }: { path: string }) {
+export function SaveCardImage({ path }: { path: string }) {
   const [state, setState] = useState<"idle" | "busy" | "saved" | "copied" | "error">("idle");
   const canCopyImage =
     typeof window !== "undefined" && typeof ClipboardItem !== "undefined" && typeof navigator !== "undefined" && !!navigator.clipboard?.write;

@@ -297,7 +297,7 @@ export default function Game() {
   }, [mode, seed, blueprint, user]);
 
   // Factor Hunt: hook placed after simulate so beginFhPrediction can close over the stable callback.
-  const { fhStep, fhPick, setFhPick, fhPrediction, setFhPrediction, fhRef, beginFhPrediction, lockFh, reset: resetFh } = useFactorHunt(seed, simulate, setError);
+  const { fhStep, fhPick, setFhPick, fhPrediction, setFhPrediction, fhRef, beginFhPrediction, lockFh, fhFetching, reset: resetFh } = useFactorHunt(seed, simulate, setError);
 
   // start() placed after all per-mode hook calls so it can close over their stable reset functions
   // without triggering react-hooks/immutability (resetFh, resetPickem, resetBp, resetSg all have []
@@ -662,9 +662,9 @@ export default function Game() {
               {allFilled ? (
                 <>
                   <p className="mb-3 text-sm text-zinc-400">Your starting five is set.</p>
-                  <button onClick={() => finishDraft(roster)} disabled={loading}
+                  <button onClick={() => finishDraft(roster)} disabled={loading || fhFetching}
                     className="rounded-xl bg-orange-500 px-6 py-2.5 font-bold text-black hover:bg-orange-400 disabled:opacity-50">
-                    {mode === "factorhunt" ? "Lock Five → Predict" : mode === "surgeon" ? "Lock Five → Diagnose" : "Simulate Season"}
+                    {fhFetching ? "Building your question…" : mode === "factorhunt" ? "Lock Five → Predict" : mode === "surgeon" ? "Lock Five → Diagnose" : "Simulate Season"}
                   </button>
                 </>
               ) : (
