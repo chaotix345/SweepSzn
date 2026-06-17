@@ -55,6 +55,17 @@ describe("profileStore — redis-backed", () => {
     expect(await store.getStreakCount(uid, now)).toBe(store.STREAK_CAP);
   });
 
+  it("syncStreakDates dedupes within the batch and drops out-of-range years (bounds the no-TTL ZSET)", async () => {
+    const uid = "uyear";
+    await store.syncStreakDates(uid, ["2026-6-1", "2026-6-1", "1999-1-1", "2101-1-1", "2026-6-2"]);
+    const z = ctx.redis!.zsets.get(`streak:${uid}`)!;
+    expect(z.size).toBe(2); // dupe collapsed, both out-of-range years rejected
+    expect(z.has("2026-6-1")).toBe(true);
+    expect(z.has("2026-6-2")).toBe(true);
+    expect(z.has("1999-1-1")).toBe(false);
+    expect(z.has("2101-1-1")).toBe(false);
+  });
+
   it("syncStreakDates caps the streak ZSET at STREAK_CAP", async () => {
     const uid = "usync";
     const dates: string[] = [];
