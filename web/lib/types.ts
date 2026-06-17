@@ -51,6 +51,7 @@ export interface Player {
   z?: ZScores;
   defense_estimated?: boolean;
   peak_score?: number;
+  fame?: number; // accolade-based recognizability score (data/build_fame.py); drives the "Top" sort
 }
 
 // Roster-aware "reveal before confirm" signal: how much this candidate would help the
