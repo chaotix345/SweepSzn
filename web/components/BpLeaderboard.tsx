@@ -7,6 +7,7 @@ import { BLUEPRINTS, blueprintDef, type BlueprintKey, type BpBoardView, type BpB
 import { getUid, getName, setName as persistName } from "@/lib/streak";
 import { useSessionContext } from "@/components/SessionProvider";
 import { dayUTC } from "@/lib/day";
+import { gradeColor } from "@/lib/grades";
 
 // Blueprint daily board — FhLeaderboard's slim shape (no streak, no weekly/all-time, no sign-in
 // claim: bp scores carry a cosmetic execution multiplier and stay out of the aggregates). The
@@ -15,10 +16,7 @@ import { dayUTC } from "@/lib/day";
 
 const serverDate = dayUTC;
 type BoardTab = BlueprintKey | "all";
-// grade colors: DESIGN.md single-source rule (mirrors ResultCard/ResultsHistory/og GRADE maps)
-const gradeText = (g: string) =>
-  g === "S" || g === "A+" ? "text-gold" : g.startsWith("A") ? "text-green-400" : g.startsWith("B") ? "text-blue-400"
-  : g.startsWith("C") ? "text-amber-400" : g.startsWith("D") ? "text-slate-400" : "text-red-400";
+const gradeText = gradeColor; // single source of truth — DESIGN.md grade-color scale
 
 export default function BpLeaderboard({ date, trace, blueprint, usedHints = false, readOnly = false }: {
   date: string; trace: DraftStep[]; blueprint: BlueprintKey; usedHints?: boolean; readOnly?: boolean;

@@ -124,7 +124,7 @@ export default function ResultCard({
   return (
     <div className={`mt-4 overflow-hidden rounded-2xl border bg-zinc-900 ${elite ? "border-gold/30 ring-1 ring-gold/25 animate-gold-pulse" : "animate-rise-in border-zinc-800"}`}>
       {/* hero — the buzzer moment: the record slams in; elite grades get the gold trophy glow */}
-      <div className="relative isolate bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
+      <div aria-live="polite" aria-atomic="true" className="relative isolate bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
         {/* elite-only radial gold wash behind the record — gold stays reserved for S/A+ / 82-0 */}
         {elite && <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-gold-glow" />}
         <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{mode} · simulated record</div>

@@ -49,7 +49,7 @@ export function FhDialog({ fhStep, fhPick, setFhPick, lockFh, dialogRef }: {
           ))}
         </div>
         <button onClick={() => fhPick && lockFh(fhPick)} disabled={!fhPick}
-          className="mt-4 w-full rounded-xl bg-violet-500 py-3 text-base font-black text-black hover:bg-violet-400 disabled:opacity-40">
+          className="mt-4 w-full rounded-xl bg-orange-500 py-3 text-base font-black text-black hover:bg-orange-400 disabled:opacity-40">
           🔒 Lock prediction — ×1.05 if right
         </button>
         <button onClick={() => lockFh(null)} className="mt-2 w-full py-1 text-xs text-zinc-500 hover:text-zinc-300">

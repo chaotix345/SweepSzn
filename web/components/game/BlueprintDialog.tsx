@@ -47,7 +47,7 @@ export function BlueprintDialog({ bpPick, setBpPick, onCommit, onCancel, dialogR
           ))}
         </div>
         <button onClick={() => bpPick && onCommit(bpPick)} disabled={!bpPick}
-          className="mt-4 w-full rounded-xl bg-cyan-500 py-3 text-base font-black text-black hover:bg-cyan-400 disabled:opacity-40">
+          className="mt-4 w-full rounded-xl bg-orange-500 py-3 text-base font-black text-black hover:bg-orange-400 disabled:opacity-40">
           🔒 Commit — spin the reels
         </button>
         <button onClick={onCancel} className="mt-2 w-full py-1 text-xs text-zinc-500 hover:text-zinc-300">

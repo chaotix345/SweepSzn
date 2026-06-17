@@ -40,7 +40,7 @@ export default function RankShareButton({ card }: { card: RankCard }) {
     try { await (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }).share?.({ title: "SweepSzn", text, url }); track("share_rank", { target: "native", scope: card.scope }); ev("share", { uid: getUid() }); } catch { /* dismissed */ }
   };
   const links: [string, string][] = [
-    ["X", `https://twitter.com/intent/tweet?text=${t}&url=${u}&hashtags=NBA,82and0`],
+    ["X", `https://twitter.com/intent/tweet?text=${t}&url=${u}`],
     ["WhatsApp", `https://wa.me/?text=${t}%20${u}`],
     ["Reddit", `https://www.reddit.com/submit?title=${t}&url=${u}`],
   ];

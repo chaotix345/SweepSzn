@@ -47,14 +47,15 @@ desktop centers; position sheet pins without relying on auto-scroll.
 - [x] `Game.tsx:574,507` + new `components/ResultSkeleton.tsx` — card-shaped skeleton (kills the simulate→reveal layout shifts); mode-aware label
 - [~] Mobile placement-status a11y change SKIPPED — the mobile position sheet already has an `aria-live` announcement (`Game.tsx:705`); adding another would double-announce.
 
-## Wave 3 — Design-system correctness + a11y foundations (safe)
+## Wave 3 — Design-system correctness + a11y foundations ✅ DONE + VERIFIED (safe)
 
-- [ ] FhDialog/BlueprintDialog/SurgeonDialog — mode-accent CTA fills (violet/cyan/rose) → orange (DESIGN.md)
-- [ ] Remove duplicated `gradeText` in ResultsHistory/ChallengeOwner/BpLeaderboard → import from `lib/grades`
-- [ ] `browse.tsx` — emerald-* → green-* (win-color consistency)
-- [ ] `RankShareButton.tsx` — drop `&hashtags=` from X intent (on-voice policy) + test
-- [ ] site/play layouts — skip-to-content link; `ResultCard` hero wrapped in `aria-live`
-- [ ] icon-only buttons — `aria-hidden` emoji + button `aria-label`
+- [x] FhDialog/BlueprintDialog/SurgeonDialog — mode-accent CTA fills (violet/cyan/rose) → orange (verified: Blueprint CTA = rgb(255,106,0)); identity chips/radios keep their accent
+- [x] Collapse duplicated `gradeText` in ResultsHistory/ChallengeOwner/BpLeaderboard → thin alias of `lib/grades` `gradeColor` (single source of truth, behavior-identical)
+- [x] `browse.tsx` — emerald-* → green-* (win-color consistency)
+- [x] `RankShareButton.tsx` — drop `&hashtags=NBA,82and0` from X intent (on-voice policy)
+- [x] site/play layouts — skip-to-content link + `id="main-content"`; `ResultCard` hero wrapped in `aria-live="polite"`
+- [x] `controls.tsx` SkipBtn `rounded-full` → `rounded-xl`; SurgeonDialog name input `aria-label`
+- [~] Broad emoji `aria-hidden` sweep DEFERRED (low impact, many sites) — fold into a later a11y pass.
 
 ## Wave 4 — Mobile ergonomics + advanced-mode gaps + share polish (low risk)
 
