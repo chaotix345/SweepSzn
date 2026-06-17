@@ -130,5 +130,16 @@ def main():
     for name, f in top:
         print(f"  {f:8.2f}  {name}")
 
+    # Self-monitor: accolade keys that matched NO player row. Most are legitimate (players outside
+    # the draftable pool — pre-1960s, defunct franchises, or never a 25-game peak). But a HIGH-fame
+    # unmatched key signals a name/slug mismatch (e.g. enrich_players.mjs normalized a name) silently
+    # zeroing a real star's fame — investigate any current-era star that appears here.
+    matched = {p.get("person_id") or slug(p["name"]) for p in players}
+    unmatched = sorted(((score(d), k) for k, d in fame.items() if k not in matched), reverse=True)
+    print(f"unmatched accolade keys: {len(unmatched)} (expected: players outside the draftable pool)")
+    print("  highest-fame unmatched (a current-era star here = slug mismatch to fix):")
+    for f, k in unmatched[:15]:
+        print(f"    {f:8.2f}  {k}")
+
 if __name__ == "__main__":
     main()
