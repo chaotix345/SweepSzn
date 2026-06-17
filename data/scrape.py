@@ -36,6 +36,8 @@ for y in YEARS:
         (f"https://www.basketball-reference.com/leagues/NBA_{y}_per_game.html", f"{RAW}/NBA_{y}_per_game.html"),
         (f"https://www.basketball-reference.com/leagues/NBA_{y}_advanced.html", f"{RAW}/NBA_{y}_advanced.html"),
         (f"https://www.basketball-reference.com/leagues/NBA_{y}.html", f"{RAW}/NBA_{y}.html"),
+        (f"https://www.basketball-reference.com/awards/awards_{y}.html", f"{RAW}/awards_{y}.html"),
+        (f"https://www.basketball-reference.com/allstar/NBA_{y}.html", f"{RAW}/allstar_{y}.html"),
     ]
     for url, dest in targets:
         total += 1
