@@ -36,16 +36,16 @@ desktop centers; position sheet pins without relying on auto-scroll.
 - [x] `app/r/[lineup]/page.tsx` — add "Build your own →" CTA in the shared-result header (above-the-fold)
 - [ ] `Shell.tsx` + Game.tsx call sites — "← Modes" escape link (deferred: needs state-reset care)
 
-## Wave 2 — Selection handoff, jargon reduction, loading skeleton (safe)
+## Wave 2 — Selection handoff, jargon reduction, loading skeleton ✅ DONE + VERIFIED (safe)
 
-- [ ] `browse.tsx` — sticky "Now tap a glowing position →" banner when a player is selected (desktop)
-- [ ] `Game.tsx:687` — placement status text `hidden lg:block` → `sr-only lg:not-sr-only` (mobile a11y)
-- [ ] `Game.tsx:660` — add an in-context SPIN button inside the "Spin for round N" waiting block
-- [ ] `ResultCard.tsx` — title tooltips on ORtg/DRtg/Net chips; "projected record" → "simulated record"
-- [ ] `controls.tsx` — "budget 110" → "limit 110"; "pts of offense" → "efficiency drops at reveal"
-- [ ] `ModeSelect.tsx` / `BlueprintDialog.tsx` / `PickemOverlay.tsx` — plain-English mode/mechanic copy
-- [ ] `Leaderboard.tsx` — Net column header + tooltip + green/red coloring
-- [ ] `Game.tsx:574,507` — `<ResultSkeleton/>` reserving full ResultCard height (kills two big layout shifts)
+- [x] `browse.tsx` — sticky "Now tap a glowing position on the court →" banner when a player is selected (desktop)
+- [x] `Game.tsx` — in-context "🎰 Spin · round N" button inside the "Spin for round N" waiting block
+- [x] `ResultCard.tsx` — title tooltips on ORtg/DRtg/Net chips; "projected record" → "simulated record"
+- [x] `controls.tsx` — "Usage budget / budget 110" → "Usage limit / limit 110"; "pts of offense" → "points of scoring"
+- [x] `ModeSelect.tsx` (FH desc) / `BlueprintDialog.tsx` (formula) / `PickemOverlay.tsx` (question + context) — plain-English copy
+- [x] `Leaderboard.tsx` — Net column header label + tooltip (kept net muted to preserve W–L primacy, not green/red)
+- [x] `Game.tsx:574,507` + new `components/ResultSkeleton.tsx` — card-shaped skeleton (kills the simulate→reveal layout shifts); mode-aware label
+- [~] Mobile placement-status a11y change SKIPPED — the mobile position sheet already has an `aria-live` announcement (`Game.tsx:705`); adding another would double-announce.
 
 ## Wave 3 — Design-system correctness + a11y foundations (safe)
 

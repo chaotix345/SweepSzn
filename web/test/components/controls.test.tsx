@@ -25,6 +25,6 @@ describe("UsageBar — penalise-not-block disclosure (R3)", () => {
 
   it("when over budget, still shows the existing over-budget cost line", () => {
     render(<UsageBar total={130} />);
-    expect(screen.getByText(/over budget/i)).toBeTruthy();
+    expect(screen.getByText(/over the limit/i)).toBeTruthy();
   });
 });

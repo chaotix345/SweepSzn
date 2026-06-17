@@ -10,6 +10,7 @@ import { Court, MiniRoster } from "@/components/game/court";
 import { Browser } from "@/components/game/browser";
 import { usePickem } from "@/components/game/usePickem";
 import { PickemOverlay } from "@/components/game/PickemOverlay";
+import ResultSkeleton from "@/components/ResultSkeleton";
 import { useFactorHunt } from "@/components/game/useFactorHunt";
 import { FhDialog } from "@/components/game/FhDialog";
 import { useBlueprint } from "@/components/game/useBlueprint";
@@ -504,7 +505,7 @@ export default function Game() {
     return () => prev?.focus?.();
   }, [sgPool, sgRef]);
 
-  if (restoring) return <div className="mx-auto max-w-4xl px-4 py-24 text-center text-sm text-zinc-400 animate-pulse">Loading your result…</div>;
+  if (restoring) return <div className="mx-auto max-w-4xl px-4 py-6"><ResultSkeleton label="Loading your result…" /></div>;
   if (!mode) {
     if (ownerId) return (
       <div className="mx-auto max-w-xl px-4 py-8">
@@ -571,7 +572,7 @@ export default function Game() {
   );
   if (loading) return (
     <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} showRestart>
-      <div className="py-24 text-center text-sm text-zinc-400 animate-pulse">Simulating season…</div>
+      <ResultSkeleton label={mode === "surgeon" ? "Diagnosing your lineup…" : mode === "factorhunt" ? "Building your question…" : "Running all 82 games…"} />
     </Shell>
   );
 
@@ -667,7 +668,13 @@ export default function Game() {
                   </button>
                 </>
               ) : (
-                <p className="text-sm text-zinc-500">{filled === 0 ? "Spin to draft your first player." : `Spin for round ${roundNum} of 5.`}</p>
+                <>
+                  <p className="text-sm text-zinc-500">{filled === 0 ? "Spin to draft your first player." : `Spin for round ${roundNum} of 5.`}</p>
+                  <button onClick={spin} disabled={spinning}
+                    className="mt-3 rounded-xl bg-orange-500 px-6 py-2.5 font-bold text-black transition hover:bg-orange-400 disabled:opacity-50">
+                    {spinning ? "Spinning…" : filled === 0 ? "🎰 Spin" : `🎰 Spin · round ${roundNum}`}
+                  </button>
+                </>
               )}
               {error && <p className="mt-3 text-xs text-red-400">{error}</p>}
             </div>

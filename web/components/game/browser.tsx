@@ -169,6 +169,11 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
         })}
         {list.length === 0 && <div className="py-8 text-center text-xs text-zinc-500">No players match.</div>}
       </div>
+      {selId && (
+        <div className="sticky bottom-0 hidden border-t border-orange-500/30 bg-zinc-900/90 py-2 text-center text-xs font-bold text-orange-400 backdrop-blur lg:block">
+          Now tap a glowing position on the court →
+        </div>
+      )}
     </div>
   );
 }

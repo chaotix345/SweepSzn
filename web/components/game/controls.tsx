@@ -16,20 +16,20 @@ export function UsageBar({ total, discipline = false }: { total: number; discipl
   return (
     <div className="mx-auto mt-3 w-full max-w-sm">
       <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wide text-zinc-500">
-        <span>⚖️ Usage budget</span>
+        <span>⚖️ Usage limit</span>
         <span className={`tabular-nums ${total <= 90 ? "text-green-400" : total <= 95 ? "text-lime-400" : total <= BUDGET ? "text-amber-400" : "text-red-400"}`}>
-          {total.toFixed(1)}% {discipline ? "/ A+ ≤90" : `/ budget ${BUDGET}`}
+          {total.toFixed(1)}% {discipline ? "/ A+ ≤90" : `/ limit ${BUDGET}`}
         </span>
       </div>
       <div className="relative h-2.5 overflow-hidden rounded-full bg-zinc-800" role="img"
         aria-label={`Total usage demand ${total.toFixed(1)} percent — ${discipline ? "A+ at 90 or under, " : ""}the engine's overload penalty starts past ${BUDGET}`}>
         <div className={`h-full ${color} transition-all`} style={{ width: `${pct}%` }} />
         {discipline && <div className="absolute inset-y-0 w-px bg-zinc-400/70" style={{ left: mark(95) }} title="A grade line (95)" />}
-        <div className="absolute inset-y-0 w-px bg-red-400/70" style={{ left: mark(BUDGET) }} title={`Engine overload budget (${BUDGET})`} />
+        <div className="absolute inset-y-0 w-px bg-red-400/70" style={{ left: mark(BUDGET) }} title={`Engine overload limit (${BUDGET})`} />
       </div>
       {over > 0 ? (
         <p className="mt-1 text-center text-[10px] text-red-400/80">
-          Over budget — forcing this much ball-dominance costs ~{(over * GAMMA).toFixed(1)} pts of offense at reveal.
+          Over the limit — forcing this much ball-dominance costs about {(over * GAMMA).toFixed(1)} points of scoring at reveal.
         </p>
       ) : !discipline ? (
         // Disclose the RULE before the line is crossed: going over the budget is a penalty, not a hard cap.

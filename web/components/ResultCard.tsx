@@ -127,7 +127,7 @@ export default function ResultCard({
       <div className="relative isolate bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
         {/* elite-only radial gold wash behind the record — gold stays reserved for S/A+ / 82-0 */}
         {elite && <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-gold-glow" />}
-        <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{mode} · projected record</div>
+        <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{mode} · simulated record</div>
         <div className={`mt-1 font-display text-7xl tabular-nums sm:text-8xl ${gradeColor} animate-record-slam`}>
           {result.wins}<span className="text-zinc-600">–</span>{result.losses}
         </div>
@@ -185,10 +185,10 @@ export default function ResultCard({
         <GradeLadder wins={result.wins} grade={result.grade} />
         <p className="mx-auto mt-3 max-w-md text-base font-medium text-zinc-200">{headline(result)}</p>
         <div className="mt-4 flex justify-center gap-2 text-sm">
-          <Metric label="ORtg" value={result.ortg.toFixed(1)} />
-          <Metric label="DRtg" value={result.drtg.toFixed(1)} />
+          <Metric label="ORtg" value={result.ortg.toFixed(1)} title="Offensive Rating — points scored per 100 possessions" />
+          <Metric label="DRtg" value={result.drtg.toFixed(1)} title="Defensive Rating — points allowed per 100 possessions" />
           <Metric label="Net" value={`${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`}
-            color={result.netRtg >= 0 ? "text-green-400" : "text-red-400"} />
+            color={result.netRtg >= 0 ? "text-green-400" : "text-red-400"} title="Net Rating — offense minus defense, per 100 possessions" />
         </div>
       </div>
 
@@ -430,9 +430,9 @@ function BlueprintStrip({ result, bp }: { result: LineupResult; bp: BlueprintVie
   );
 }
 
-function Metric({ label, value, color = "text-zinc-200" }: { label: string; value: string; color?: string }) {
+function Metric({ label, value, color = "text-zinc-200", title }: { label: string; value: string; color?: string; title?: string }) {
   return (
-    <div className="rounded-lg bg-zinc-800/60 px-3 py-1.5">
+    <div title={title} className="rounded-lg bg-zinc-800/60 px-3 py-1.5">
       <span className="text-zinc-500">{label} </span><b className={`tabular-nums ${color}`}>{value}</b>
     </div>
   );
