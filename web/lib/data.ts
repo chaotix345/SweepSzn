@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Player, Coefficients, DraftCandidate, CandidateFit, Slot } from "./types";
 import { DEFAULT_COEFFICIENTS, quickScore, playerFeatures } from "./engine";
-import { buildPrimePools, type PrimePools } from "./prime";
+import { buildPrimePools, compareSzn, type PrimePools } from "./prime";
 import { playerTraits } from "./traits";
 import { mulberry32, strSeed } from "./rng";
 
@@ -88,12 +88,12 @@ export function getDraftablePool(prime: boolean, topK = 250): Player[] {
   return [...pool].sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0)).slice(0, topK);
 }
 
-function toCandidate(p: Player, fit?: CandidateFit, usage?: number): DraftCandidate {
+function toCandidate(p: Player, fit?: CandidateFit, usage?: number, rank?: number): DraftCandidate {
   return {
     id: p.id, person_id: p.person_id, name: p.name, year: p.year, decade: p.decade, team: p.team,
     pos: p.pos, eligible: (p.eligible && p.eligible.length ? p.eligible : [p.pos as Slot]),
     pts: p.pts, trb: p.trb, ast: p.ast, stl: p.stl, blk: p.blk, defense_estimated: p.defense_estimated, fit, usage,
-    traits: playerTraits(p),
+    traits: playerTraits(p), rank,
   };
 }
 
@@ -202,7 +202,7 @@ function selectSpin(seed: string, round: number, opts: SpinOptions): { team: str
 
   const pool = (draftIndex.get(`${team}|${decade}`) ?? [])
     .filter(available)
-    .sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0));
+    .sort(compareSzn);
   return { team, decade, pool };
 }
 
@@ -228,7 +228,7 @@ export function spin(seed: string, round: number, opts: SpinOptions = {}, wantFi
   const fits = showFit ? computeFits(drafted, pool, coeff) : null;
   // send unrounded usage so the live budget bar sums the SAME floats blueprintMetric grades on —
   // a per-player round here could straddle the A+/A boundary the bar tells the player they hit
-  const candidates = pool.map((p) => toCandidate(p, fits?.get(p.id), playerFeatures(p, coeff).usage));
+  const candidates = pool.map((p, i) => toCandidate(p, fits?.get(p.id), playerFeatures(p, coeff).usage, i));
   return { team, decade, candidates };
 }
 
@@ -267,7 +267,7 @@ function selectPrimeSpin(seed: string, round: number, opts: SpinOptions): { team
   if (!usable.length) usable = teams.filter((t) => t !== opts.excludeTeam);
   if (!usable.length) usable = teams;
   const team = pick(usable);
-  return { team, pool: (byTeam.get(team) ?? []).filter(available) }; // pool pre-sorted by peak_score
+  return { team, pool: (byTeam.get(team) ?? []).filter(available) }; // pool pre-sorted by compareSzn
 }
 
 // Prime spin: ERA is locked to "PRIME"; candidates carry their own peak decade for display.
@@ -281,7 +281,7 @@ export function primeSpin(seed: string, round: number, opts: SpinOptions = {}, w
   const drafted = showFit && excludeIds.size ? [...excludeIds].map((id) => byId.get(id)).filter((p): p is Player => !!p) : [];
   const fits = showFit ? computeFits(drafted, pool, coeff) : null;
   // usage rides every prime spin too — the live budget bar shows in Prime (it is stats-visible)
-  return { team, decade: "PRIME", candidates: pool.map((p) => toCandidate(p, fits?.get(p.id), playerFeatures(p, coeff).usage)) };
+  return { team, decade: "PRIME", candidates: pool.map((p, i) => toCandidate(p, fits?.get(p.id), playerFeatures(p, coeff).usage, i)) };
 }
 
 export function primeStats() {
