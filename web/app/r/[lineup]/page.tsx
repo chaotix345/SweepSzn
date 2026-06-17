@@ -8,6 +8,7 @@ import { decodeShare } from "@/lib/share";
 import { bpFromCode, gradeBlueprint } from "@/lib/blueprint";
 import { SLOTS, displayName } from "@/lib/teams";
 import ResultCard from "@/components/ResultCard";
+import { ButtonLink } from "@/components/ui/Button";
 
 type Props = { params: Promise<{ lineup: string }> };
 
@@ -56,10 +57,13 @@ export default async function SharedResult({ params }: Props) {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <Link href="/" className="flex items-baseline text-2xl tracking-tight">
-          <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
-          <span className="ml-3 text-sm font-semibold text-zinc-500">a friend shared their five</span>
-        </Link>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <Link href="/" className="flex items-baseline text-2xl tracking-tight">
+            <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
+            <span className="ml-3 text-sm font-semibold text-zinc-500">a friend shared their five</span>
+          </Link>
+          <ButtonLink href="/play" size="sm">Build your own →</ButtonLink>
+        </div>
         <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared prime={data.prime} blueprint={data.blueprint ?? undefined} />
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">

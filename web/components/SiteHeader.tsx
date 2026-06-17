@@ -55,9 +55,11 @@ export default function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <ButtonLink href="/play" size="sm" className="hidden sm:inline-flex">
-            Build your five
-          </ButtonLink>
+          {pathname !== "/play" && (
+            <ButtonLink href="/play" size="sm" className="hidden sm:inline-flex">
+              Build your five
+            </ButtonLink>
+          )}
           <AuthControl />
           <NotificationBell />
           <button

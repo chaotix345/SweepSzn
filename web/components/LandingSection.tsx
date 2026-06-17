@@ -28,14 +28,17 @@ export default function LandingSection() {
             </p>
           </div>
 
-          <div className="order-2 mx-auto w-full max-w-lg lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mx-0">
+          <div className="order-3 mx-auto w-full max-w-lg lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mx-0">
             <ResultPreview reveal />
           </div>
 
-          <div className="order-3 flex flex-col items-center gap-4 lg:order-none lg:col-start-1 lg:row-start-2 lg:items-start">
-            <ButtonLink href="/play" size="lg">
-              Build your five →
-            </ButtonLink>
+          <div className="order-2 flex flex-col items-center gap-4 lg:order-none lg:col-start-1 lg:row-start-2 lg:items-start">
+            <div className="flex flex-col items-center gap-1 lg:items-start">
+              <ButtonLink href="/play" size="lg">
+                Find out →
+              </ButtonLink>
+              <p className="text-xs text-zinc-400">No account needed · free forever</p>
+            </div>
             <TodaysBest />
           </div>
         </div>

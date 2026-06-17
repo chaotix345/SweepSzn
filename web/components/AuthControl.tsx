@@ -33,17 +33,18 @@ export default function AuthControl() {
     setBusy(false); setEditing(false); setOpen(false);
   }, [name, refresh]);
 
-  if (!AUTH_ENABLED || loading) return null; // wait for /api/auth/me — avoids a "Sign in" → avatar flash
+  if (!AUTH_ENABLED) return null; // auth not configured — render nothing, build is unaffected
+  // wait for /api/auth/me — avoids a "Sign in" → avatar flash; hold the space to avoid header reflow
+  if (loading) return <div className="h-9 w-20 animate-pulse rounded-lg bg-zinc-800/60" aria-hidden />;
 
   if (!user) {
     return (
       <button
         onClick={promptSignIn}
-        aria-label="Sign in to sync your record across devices"
+        aria-label="Sign in to save your progress"
         className="rounded-lg border border-orange-500/40 bg-orange-500/10 px-3 py-1.5 text-sm font-semibold text-orange-300 transition hover:border-orange-500/70 hover:bg-orange-500/20"
       >
-        <span className="sm:hidden">Sync</span>
-        <span className="hidden sm:inline">Sync your record</span>
+        Sign in
       </button>
     );
   }
