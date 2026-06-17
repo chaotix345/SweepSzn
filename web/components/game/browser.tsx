@@ -5,7 +5,7 @@ import { TRAIT_META } from "@/lib/traits";
 import type { Mode } from "@/components/game/types";
 
 type Spin = { team: string; decade: string; candidates: DraftCandidate[] };
-export type SortKey = "fit" | "ppg" | "rpg" | "apg" | "az";
+export type SortKey = "szn" | "fit" | "ppg" | "rpg" | "apg" | "az";
 
 // Decades that can contain pre-1985 players, whose box dominance the engine discounts (eraStrength,
 // fullYear 1985). The badge tooltip discloses the RULE at draft time — it never shows a per-player
@@ -40,11 +40,12 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
   const showFit = revealed && canHint;
   const [q, setQ] = useState("");
   const [group, setGroup] = useState<"All" | "G" | "F" | "C">("All");
-  // Neutral default sort (A–Z): PPG-default actively steered players toward the high-scorer trap the
-  // engine punishes. Keep PPG as an option — just don't make the trap the path of least resistance.
-  const [sort, setSort] = useState<SortKey>(showFit ? "fit" : "az");
+  // Default sort "Top" (szn): server-ranked so the recognizable players for this team-era lead
+  // (fame, peak_score tiebreak). Replaces the old A–Z default — fame is archetype-diverse, so it
+  // does NOT reintroduce the PPG high-scorer trap rule R8 guarded against. PPG/A–Z stay as options.
+  const [sort, setSort] = useState<SortKey>(showFit ? "fit" : "szn");
   // if Hints is switched off mid-spin while sorted by fit, fall back to the neutral default
-  const effSort: SortKey = sort === "fit" && !showFit ? "az" : sort;
+  const effSort: SortKey = sort === "fit" && !showFit ? "szn" : sort;
 
   const list = useMemo(() => {
     const inGroup = (c: DraftCandidate) =>
@@ -54,6 +55,7 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
       c.eligible.includes("C");
     const out = spin.candidates.filter((c) => inGroup(c) && c.name.toLowerCase().includes(q.toLowerCase().trim()));
     const key: Record<SortKey, (c: DraftCandidate) => number> = {
+      szn: (c) => c.rank ?? Number.MAX_SAFE_INTEGER,
       fit: (c) => -(c.fit?.delta ?? -99), ppg: (c) => -(c.pts ?? 0), rpg: (c) => -(c.trb ?? 0), apg: (c) => -(c.ast ?? 0), az: () => 0,
     };
     out.sort((a, b) => (effSort === "az" ? a.name.localeCompare(b.name) : key[effSort](a) - key[effSort](b)));
@@ -99,6 +101,7 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
           <select value={effSort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort players"
             className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-300 outline-none">
             {showFit && <option value="fit">Best fit</option>}
+            <option value="szn">Top</option>
             <option value="az">A–Z</option><option value="ppg">PPG</option><option value="rpg">RPG</option><option value="apg">APG</option>
           </select>
         )}
