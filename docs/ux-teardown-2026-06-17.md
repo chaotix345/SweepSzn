@@ -86,9 +86,17 @@ desktop centers; position sheet pins without relying on auto-scroll.
 - [~] ChallengeOwner PushPrompt gate SKIPPED — the audit's "render only when responders > 0" inverts the intent (you want the opt-in before responses).
 - [~] zinc-500 → zinc-400 contrast sweep DEFERRED — needs visual review to avoid flattening the intentional text hierarchy; zinc-500 passes AA for normal text.
 
-## Also flagged (separate from waves)
+## Deferred follow-ups (recommend the user is in the loop)
 
-- Desktop in-game layout imbalance: reels centered-narrow while browser+court hug center-right,
-  leaving a large dead left margin (~25% on 1440px). Worth a dedicated desktop-layout pass.
-- Player tokens on court use per-source-team colors (incl. green) which can read as win-semantics;
-  review in the design-system pass.
+- **Desktop in-game layout restructure** — DEFERRED from the autonomous deploy. The view is
+  functional (the half-court is already `lg:sticky lg:top-4`, `MiniRoster` is mobile-only), but on
+  desktop the reels/controls float center-wide above the grid, so the top-right reads empty and the
+  layout feels sparse. The clean fix folds the reels+controls into the grid's left column so the
+  sticky court becomes a right rail spanning from the top — a ~110-line restructure of the most
+  complex render in the app (`Game.tsx` 593–704). Too subtle-regression-prone to ship unsupervised
+  to prod 6 days from launch. Recommend `/design-review` (or `/plan-design-review`) with the user
+  awake. Mobile in-game is unaffected (single column, no dead space).
+- Court tokens use each player's **source-team colors** (so a green token = a green-jersey franchise,
+  not win-semantics) — this is intentional and correct; noting only so a future design pass doesn't
+  "fix" it by mistake.
+- The broad `zinc-500 → zinc-400` informational-contrast sweep also wants a design-review pass.
