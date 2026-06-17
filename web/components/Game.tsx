@@ -23,6 +23,7 @@ import { ev } from "@/lib/ev";
 import { getUid } from "@/lib/streak";
 import ResultCard from "@/components/ResultCard";
 import Leaderboard from "@/components/Leaderboard";
+import SignInSaveNudge from "@/components/SignInSaveNudge";
 import ChallengeResult from "@/components/ChallengeResult";
 import ChallengeOwner from "@/components/ChallengeOwner";
 import { newChallengeId, challengeSeed } from "@/lib/challenge";
@@ -544,6 +545,9 @@ export default function Game() {
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView}
         lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} onView={setLbView} />}
+      {/* Classic/HoopIQ/Prime have no board, so they'd otherwise offer a signed-out player no reason to
+          make an account — give them the minimal save/keep-streak sign-in nudge. */}
+      {(mode === "classic" || mode === "hoopiq" || mode === "prime") && <SignInSaveNudge />}
       {mode === "factorhunt" && <FhLeaderboard date={seed.replace("fh-", "")} trace={result.trace} prediction={fhPrediction} readOnly={result.trace.length === 0} />}
       {mode === "blueprint" && blueprint && <BpLeaderboard date={seed.replace("bp-", "")} trace={result.trace} blueprint={blueprint} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
       {mode === "challenge" && challengeId && challengeRole && (
