@@ -96,3 +96,44 @@ describe("GET /api/cron/streak-saver — nudge selection", () => {
     expect(NUDGE_CAP).toBeGreaterThan(0);
   });
 });
+
+describe("GET /api/cron/streak-saver — multi-mode union", () => {
+  function seedBoard(key: string, uids: string[]) {
+    ctx.redis!.zsets.set(key, new Map(uids.map((u, i) => [u, 60000 + i])));
+  }
+
+  it("nudges a player who played Factor Hunt yesterday but no mode today", async () => {
+    seedBoard(`lb:fh:${YESTERDAY}`, ["fh1-aaaaaa01"]);
+    seedSub("fh1-aaaaaa01");
+    const { status, body } = await readJson(await run("Bearer test-cron-secret"));
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ candidates: 1, sent: 1 });
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("nudges a player who played Surgeon or Blueprint yesterday but no mode today", async () => {
+    seedBoard(`lb:surgeon:${YESTERDAY}`, ["sg1-aaaaaa01"]);
+    seedBoard(`lb:bp:${YESTERDAY}:all`, ["bp1-aaaaaa01"]);
+    seedSub("sg1-aaaaaa01");
+    seedSub("bp1-aaaaaa01");
+    const { body } = await readJson(await run("Bearer test-cron-secret"));
+    expect(body).toMatchObject({ candidates: 2, sent: 2 });
+  });
+
+  it("does NOT nudge a player who played a DIFFERENT mode today (today union across boards)", async () => {
+    seedBoard(`lb:${YESTERDAY}`, ["x1-aaaaaa01"]);      // daily yesterday
+    seedBoard(`lb:surgeon:${TODAY}`, ["x1-aaaaaa01"]);  // but played Surgeon today
+    seedSub("x1-aaaaaa01");
+    const { body } = await readJson(await run("Bearer test-cron-secret"));
+    expect(body).toMatchObject({ candidates: 0, sent: 0 });
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
+  it("counts a player on multiple yesterday boards only once", async () => {
+    seedBoard(`lb:${YESTERDAY}`, ["y1-aaaaaa01"]);
+    seedBoard(`lb:bp:${YESTERDAY}:all`, ["y1-aaaaaa01"]);
+    seedSub("y1-aaaaaa01");
+    const { body } = await readJson(await run("Bearer test-cron-secret"));
+    expect(body).toMatchObject({ candidates: 1, sent: 1 });
+  });
+});

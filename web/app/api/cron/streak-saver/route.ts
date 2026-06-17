@@ -33,13 +33,19 @@ export async function GET(req: Request) {
   y.setUTCDate(y.getUTCDate() - 1);
   const yesterday = dayUTC(y);
 
+  // Re-engage players who played ANY daily-seeded board yesterday but none today. Daily, Factor
+  // Hunt, Surgeon and Blueprint all reset at 00:00 UTC, so lapsing on any of them is the same
+  // "broke a daily habit" signal — not just the Classic Daily.
+  const dailyBoards = (d: string) => [`lb:${d}`, `lb:fh:${d}`, `lb:surgeon:${d}`, `lb:bp:${d}:all`];
+  const unionMembers = async (d: string): Promise<string[]> => {
+    const lists = await Promise.all(dailyBoards(d).map((k) => redis!.zrange<string[]>(k, 0, -1)));
+    return [...new Set(lists.flat().map(String))];
+  };
+
   try {
-    const [yMembers, tMembers] = await Promise.all([
-      redis.zrange<string[]>(`lb:${yesterday}`, 0, -1),
-      redis.zrange<string[]>(`lb:${today}`, 0, -1),
-    ]);
-    const played = new Set(tMembers.map(String));
-    const candidates = yMembers.map(String).filter((u) => !played.has(u));
+    const [yMembers, tMembers] = await Promise.all([unionMembers(yesterday), unionMembers(today)]);
+    const played = new Set(tMembers);
+    const candidates = yMembers.filter((u) => !played.has(u));
 
     // claim all candidates in one pipeline; sadd=0 means a previous run already nudged that uid
     const claimKey = `streaknudge:${today}`;
@@ -58,7 +64,7 @@ export async function GET(req: Request) {
       // sendRawPushToUid is false for uids with no subscription — most players; that's expected
       if (await sendRawPushToUid(uid, {
         title: "🔥 Your streak is on the line",
-        body: "You played yesterday but not today — today's Daily closes at midnight UTC.",
+        body: "You played yesterday but not today — today's boards reset at midnight UTC.",
         url: "/play",
       })) sent++;
     }
