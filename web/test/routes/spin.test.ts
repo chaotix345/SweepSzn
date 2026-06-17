@@ -104,3 +104,19 @@ describe("POST /api/spin — prime seed", () => {
     expect(unique.size).toBe(cands.length);
   });
 });
+
+describe("POST /api/spin — szn rank ordinal", () => {
+  it("stamps each candidate with a sequential rank (0..n-1) in board order", async () => {
+    const { body } = await readJson(await post({ seed: "classic-rank-001" }));
+    const cands = body.candidates as Array<{ rank?: number }>;
+    expect(cands.length).toBeGreaterThan(1);
+    expect(cands.map((c) => c.rank)).toEqual(cands.map((_, i) => i));
+  });
+
+  it("stamps rank on prime candidates too", async () => {
+    const { body } = await readJson(await post({ seed: "prime-rank-001" }));
+    const cands = body.candidates as Array<{ rank?: number }>;
+    expect(cands.length).toBeGreaterThan(1);
+    expect(cands.map((c) => c.rank)).toEqual(cands.map((_, i) => i));
+  });
+});

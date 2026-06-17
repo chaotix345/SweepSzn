@@ -51,6 +51,7 @@ export interface Player {
   z?: ZScores;
   defense_estimated?: boolean;
   peak_score?: number;
+  fame?: number; // accolade-based recognizability score (data/build_fame.py); drives the "Top" sort
 }
 
 // Roster-aware "reveal before confirm" signal: how much this candidate would help the
@@ -81,6 +82,7 @@ export interface DraftCandidate {
   fit?: CandidateFit;
   usage?: number;       // engine usage demand — sent on every spin for the live budget bar (intrinsic public player data, not seed-relative — DESIGN.md §12)
   traits?: TraitKey[];  // descriptive board tags derived from intrinsic stats (see lib/traits.ts) — informs without revealing fit
+  rank?: number;        // server-assigned board ordinal (0 = top of the "Top"/szn order); client sorts "szn" by this
 }
 
 // Daily leaderboard: the client submits the draft as an ordered trace (index = round) so the

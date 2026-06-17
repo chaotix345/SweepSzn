@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import React from "react";
 import { Browser } from "@/components/game/browser";
 import type { DraftCandidate } from "@/lib/types";
@@ -17,17 +18,58 @@ const baseProps = {
   onReveal: () => {}, canPlace: () => true, onSelect: () => {},
 };
 
-describe("Browser — neutral default sort (R8)", () => {
-  it("does not default to PPG order (no high-scorer-first steering)", () => {
-    // Adam scores least, Zane scores most. PPG default would put Zane first.
+describe("Browser — default 'Top' sort ranks by server rank (R8)", () => {
+  it("defaults to server rank order, not PPG / A–Z / input order", () => {
+    // Adam: top scorer, alphabetically first, listed first — but rank 1.
+    // Zane: low scorer, alphabetically last, listed second — but rank 0 (best).
+    // A–Z, PPG, and input order all put Adam first; ONLY rank order puts Zane first.
     const spin = { team: "CHI", decade: "2000s", candidates: [
-      cand({ id: "a", name: "Adam Aaronson", pts: 10 }),
-      cand({ id: "z", name: "Zane Zykov", pts: 30 }),
+      cand({ id: "a", name: "Adam Aaronson", pts: 30, rank: 1 }),
+      cand({ id: "z", name: "Zane Zykov", pts: 10, rank: 0 }),
     ] };
     render(<Browser spin={spin} {...baseProps} />);
     const rows = screen.getAllByRole("button", { name: /^Select / });
-    expect(rows[0].getAttribute("aria-label")).toContain("Adam Aaronson");
-    expect(rows[1].getAttribute("aria-label")).toContain("Zane Zykov");
+    expect(rows[0].getAttribute("aria-label")).toContain("Zane Zykov");      // rank 0 wins
+    expect(rows[1].getAttribute("aria-label")).toContain("Adam Aaronson");
+  });
+});
+
+describe("Browser — sort options", () => {
+  const spin = { team: "CHI", decade: "2000s", candidates: [
+    cand({ id: "a", name: "Adam Aaronson", pts: 30, trb: 5, rank: 1 }),
+    cand({ id: "z", name: "Zane Zykov", pts: 10, trb: 12, rank: 0 }),
+  ] };
+  const order = () =>
+    screen.getAllByRole("button", { name: /^Select / }).map((r) => r.getAttribute("aria-label"));
+
+  it("'Top' (default) orders by rank", () => {
+    render(<Browser spin={spin} {...baseProps} />);
+    expect(order()[0]).toContain("Zane Zykov"); // rank 0, despite lower PPG and later alphabetically
+  });
+
+  it("PPG sorts by points descending when selected", async () => {
+    const user = userEvent.setup();
+    render(<Browser spin={spin} {...baseProps} />);
+    await user.selectOptions(screen.getByLabelText("Sort players"), "ppg");
+    expect(order()[0]).toContain("Adam Aaronson"); // 30 > 10
+  });
+
+  it("A–Z sorts alphabetically when selected", async () => {
+    const user = userEvent.setup();
+    render(<Browser spin={spin} {...baseProps} />);
+    await user.selectOptions(screen.getByLabelText("Sort players"), "az");
+    expect(order()[0]).toContain("Adam Aaronson"); // Aaronson < Zykov
+  });
+
+  it("'Top' sinks candidates missing a rank to the bottom", () => {
+    const noRankSpin = { team: "CHI", decade: "2000s", candidates: [
+      cand({ id: "u", name: "Unranked Ualson" }),   // no rank -> MAX_SAFE_INTEGER, sinks
+      cand({ id: "z", name: "Zane Zykov", rank: 0 }),
+    ] };
+    render(<Browser spin={noRankSpin} {...baseProps} />);
+    const rows = screen.getAllByRole("button", { name: /^Select / });
+    expect(rows[0].getAttribute("aria-label")).toContain("Zane Zykov");      // rank 0 first
+    expect(rows[1].getAttribute("aria-label")).toContain("Unranked Ualson"); // no rank last
   });
 });
 

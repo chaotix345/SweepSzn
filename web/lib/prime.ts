@@ -31,12 +31,22 @@ export function peakVariant<T extends Pick<Player, "id" | "year" | "pos" | "pts"
   return best;
 }
 
+// Default "Top" board order: most-recognizable players for this team-era first. `fame` (accolade
+// score from data/build_fame.py) leads; `peak_score` (VORP value) breaks ties and orders the
+// un-accoladed tail. Pure so selectSpin (era pools) and buildPrimePools share one definition.
+export function compareSzn(
+  a: Pick<Player, "fame" | "peak_score">,
+  b: Pick<Player, "fame" | "peak_score">,
+): number {
+  return (b.fame ?? 0) - (a.fame ?? 0) || (b.peak_score ?? 0) - (a.peak_score ?? 0);
+}
+
 export interface PrimePools { teams: string[]; byTeam: Map<string, Player[]> }
 
 // Build per-franchise prime pools from the draftable rows (caller pre-filters to current
 // franchises + canonical decades, mirroring data.ts's draft index). One peak variant per
 // person_id; franchises under PRIME_MIN_PEOPLE distinct people are dropped; pools sort by
-// peak_score desc (the same ordering selectSpin uses for era pools).
+// compareSzn desc (fame-first, peak_score tiebreak — same ordering selectSpin uses for era pools).
 export function buildPrimePools(draftable: Player[]): PrimePools {
   const people = new Map<string, Map<string, Player[]>>(); // team -> person_id -> variants
   for (const p of draftable) {
@@ -54,7 +64,7 @@ export function buildPrimePools(draftable: Player[]): PrimePools {
       const peak = peakVariant(variants);
       if (peak) pool.push(peak);
     }
-    pool.sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0));
+    pool.sort(compareSzn);
     byTeam.set(team, pool);
   }
   return { teams: [...byTeam.keys()].sort(), byTeam };
