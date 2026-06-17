@@ -66,11 +66,14 @@ desktop centers; position sheet pins without relying on auto-scroll.
 - [x] `SaveCardImage` exported + added to `SurgeonResult` (parity with the main reveal's shareable card)
 - [~] Mobile share-hierarchy reorder SKIPPED — the share row is already strong (Share + X + Bluesky quick-links + mobile bottom-sheet). PushPrompt streak-framing → Wave 6.
 
-## Wave 5 — Mode picker returning-user experience (low risk)
+## Wave 5 — Mode picker returning-user experience ✅ DONE + VERIFIED (low risk)
 
-- [ ] "Play {last mode} again →" fast path; Daily "already played → view result" detection
-- [ ] tighter mobile vertical rhythm; ResultsHistory lazy-init (no flash); easy→hard mode order
-- [ ] leaderboards page: per-mode board cards
+- [x] "↻ Play {last mode} again →" fast path (most recent solo mode); navigation via `window.location.assign` (NOT `useRouter` — it crashes the unit tests with no app-router context)
+- [x] Daily "already played today" detection → tile shows "✓ You played today / View today's result →" deep-linking to `/r/<encoded>`
+- [x] Tighter mobile vertical rhythm (`py-6 sm:py-12`, h1 `text-3xl sm:text-5xl`, Daily tile `mt-5 sm:mt-8`)
+- [x] Modes reordered easy→hard: Classic, Factor Hunt, Prime, HoopIQ, Blueprint, Surgeon
+- [x] Leaderboards page: per-mode "Other boards" cards (FH/Blueprint/Surgeon) replacing the prose disclaimer
+- [~] ResultsHistory lazy-init SKIPPED — it reads localStorage after mount on purpose (lazy-init during render breaks SSR/hydration).
 
 ## Wave 6 — Auth nudges, notifications, remaining a11y (low risk)
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ButtonLink } from "@/components/ui/Button";
 import Leaderboard from "@/components/Leaderboard";
+import Link from "next/link";
 import { dayUTC } from "@/lib/day";
 
 export const metadata: Metadata = {
@@ -23,12 +24,26 @@ export default function Leaderboards() {
         In Daily mode everyone gets the same spins, so the board is a pure test of judgment. Weekly sums your best
         daily wins; All-time is your career total. Play today&apos;s Daily to post a score.
       </p>
-      <p className="mt-2 max-w-xl text-sm text-zinc-500">
-        Factor Hunt, Blueprint, and Surgeon run their own separate daily boards — prediction bonuses, execution
-        multipliers, and win deltas never mix into the boards below. You&apos;ll find each board on its result screen.
-      </p>
-
       <Leaderboard date={date} trace={[]} readOnly />
+
+      {/* Factor Hunt / Blueprint / Surgeon run their own separate daily boards — surface them here so
+          they're discoverable; each board lives on that mode's result screen. */}
+      <div className="mt-10">
+        <div className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">Other boards</div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[
+            { label: "Factor Hunt", accent: "text-violet-400", tile: "bg-violet-500/15", desc: "Predict the engine's biggest factor for a leaderboard bonus." },
+            { label: "Blueprint", accent: "text-cyan-400", tile: "bg-cyan-500/15", desc: "Commit to a game plan; get graded on execution." },
+            { label: "Surgeon", accent: "text-rose-400", tile: "bg-rose-500/15", desc: "One swap to fix your lineup's worst factor." },
+          ].map((b) => (
+            <Link key={b.label} href="/play" className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 transition hover:border-zinc-600">
+              <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-black uppercase tracking-wide ${b.tile} ${b.accent}`}>{b.label}</span>
+              <p className="mt-2 text-sm text-zinc-400">{b.desc}</p>
+              <span className={`mt-2 inline-block text-sm font-bold ${b.accent}`}>Play →</span>
+            </Link>
+          ))}
+        </div>
+      </div>
 
       <div className="mt-6 flex justify-center">
         <ButtonLink href="/play" size="lg">Play today&apos;s Daily →</ButtonLink>

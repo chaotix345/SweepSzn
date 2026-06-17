@@ -3,6 +3,8 @@ import React, { useEffect, useState } from "react";
 import ResultsHistory from "@/components/ResultsHistory";
 import { ModeGlyph } from "@/components/game/modeIcons";
 import { CloseIcon } from "@/components/ui/icons";
+import { listResults, type ResultEntry } from "@/lib/resultHistory";
+import { dayUTC } from "@/lib/day";
 import type { Mode } from "@/components/game/types";
 
 // Per-mode accent (DESIGN.md): orange = core/social, violet = Factor Hunt / Prime, cyan = Blueprint,
@@ -18,9 +20,9 @@ type AccentKey = keyof typeof ACCENT;
 // The six "pick a discipline" modes (Daily is featured above, Challenge is a full-width invite below).
 const MODES: { id: Mode; title: string; desc: string; accent: AccentKey; diff: 1 | 2 | 3 }[] = [
   { id: "classic", title: "Classic", desc: "Full stats visible — draft on what you can see.", accent: "orange", diff: 1 },
-  { id: "hoopiq", title: "HoopIQ", desc: "Stats hidden — draft from memory and test your ball knowledge.", accent: "orange", diff: 3 },
   { id: "factorhunt", title: "Factor Hunt", desc: "Draft your five, then guess what the engine rewards or punishes most. Call it right, earn a bonus.", accent: "violet", diff: 2 },
   { id: "prime", title: "Prime Draft", desc: "No eras — every legend at his peak. Build cross-era fives.", accent: "violet", diff: 2 },
+  { id: "hoopiq", title: "HoopIQ", desc: "Stats hidden — draft from memory and test your ball knowledge.", accent: "orange", diff: 3 },
   { id: "blueprint", title: "Blueprint", desc: "Pick a game plan before the spin. The engine grades how well you follow it.", accent: "cyan", diff: 3 },
   { id: "surgeon", title: "Surgeon", desc: "The engine finds your lineup's weakest link. One swap to fix it.", accent: "rose", diff: 3 },
 ];
@@ -52,9 +54,18 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
     setShowIntro(false);
   };
 
+  const [history, setHistory] = useState<ResultEntry[] | null>(null);
+  // read after mount (hydration-safe, like ResultsHistory). null until then → no returning-user UI on SSR.
+  useEffect(() => { (async () => { try { setHistory(listResults()); } catch { /* private mode */ } })(); }, []);
+  // Returning-user fast path: most recent SOLO game's mode (daily is featured above; challenge has its own).
+  const lastReplay = history?.find((e) => e.mode !== "daily" && e.mode !== "challenge");
+  const lastReplayMode = MODES.find((m) => m.id === lastReplay?.mode);
+  // Daily already played today? Deep-link to its result instead of re-drafting the already-scored board.
+  const dailyToday = history?.find((e) => e.mode === "daily" && dayUTC(new Date(e.ts)) === dayUTC());
+
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12 text-center">
-      <h1 className="font-display text-4xl tracking-tight sm:text-5xl">Pick your mode</h1>
+    <div className="mx-auto max-w-3xl px-4 py-6 text-center sm:py-12">
+      <h1 className="font-display text-3xl tracking-tight sm:text-5xl">Pick your mode</h1>
       <p className="mt-2 text-lg text-zinc-400">Build an all-time NBA starting five. Can you go undefeated?</p>
 
       {showIntro && (
@@ -74,12 +85,12 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
 
       {/* Featured: Daily — the obvious, low-commitment first play */}
       <button
-        onClick={() => onPick("daily")}
-        aria-label="Play Daily mode — recommended for new players"
-        className="group mt-8 block w-full overflow-hidden rounded-2xl border border-orange-500/40 bg-gradient-to-br from-orange-500/10 to-zinc-900 p-6 text-left ring-1 ring-orange-500/10 transition hover:border-orange-500 hover:ring-orange-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 sm:p-7"
+        onClick={() => (dailyToday ? window.location.assign(`/r/${dailyToday.encoded}`) : onPick("daily"))}
+        aria-label={dailyToday ? "View today's Daily result" : "Play Daily mode — recommended for new players"}
+        className="group mt-5 block w-full overflow-hidden rounded-2xl border border-orange-500/40 bg-gradient-to-br from-orange-500/10 to-zinc-900 p-6 text-left ring-1 ring-orange-500/10 transition hover:border-orange-500 hover:ring-orange-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 sm:mt-8 sm:p-7"
       >
         <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-orange-300">
-          ★ Recommended · start here
+          {dailyToday ? "✓ You played today" : "★ Recommended · start here"}
         </span>
         <div className="mt-3 flex items-start gap-4">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-500/15 text-orange-400">
@@ -93,9 +104,20 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
           </div>
         </div>
         <div className="mt-4 inline-flex items-center gap-1 text-sm font-black text-orange-400 transition-all group-hover:gap-2">
-          Play Daily →
+          {dailyToday ? "View today's result →" : "Play Daily →"}
         </div>
       </button>
+
+      {/* Returning-user fast path: jump straight back into your last solo mode */}
+      {lastReplayMode && (
+        <button
+          onClick={() => onPick(lastReplayMode.id)}
+          className="group mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm font-bold text-orange-400 transition hover:border-zinc-600"
+        >
+          ↻ Play {lastReplayMode.title} again
+          <span className="transition-transform group-hover:translate-x-0.5">→</span>
+        </button>
+      )}
 
       {/* The six disciplines */}
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
