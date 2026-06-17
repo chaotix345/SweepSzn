@@ -90,7 +90,11 @@ export default function SessionProvider({ children }: { children: React.ReactNod
                 : "pointer-events-none fixed left-[-9999px] top-0 opacity-0"
             }
           >
-            <div className="mb-2 text-xs text-zinc-400">Sign in to save your streak, results, and ranks across every device.</div>
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <div className="text-sm font-bold text-zinc-100">Save your progress</div>
+              <button onClick={() => setSignInOpen(false)} aria-label="Close" className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition hover:text-zinc-200">✕</button>
+            </div>
+            <div className="mb-2 text-xs text-zinc-400">Keep your streak, results, and ranks across every device.</div>
             <GoogleOneTap onSignIn={onSignedIn} />
           </div>
         </>

@@ -75,12 +75,16 @@ desktop centers; position sheet pins without relying on auto-scroll.
 - [x] Leaderboards page: per-mode "Other boards" cards (FH/Blueprint/Surgeon) replacing the prose disclaimer
 - [~] ResultsHistory lazy-init SKIPPED — it reads localStorage after mount on purpose (lazy-init during render breaks SSR/hydration).
 
-## Wave 6 — Auth nudges, notifications, remaining a11y (low risk)
+## Wave 6 — Auth nudges, notifications, remaining a11y ✅ DONE (low risk)
 
-- [ ] One Tap dismissal memory; SessionProvider popover close + heading
-- [ ] SignInSaveNudge copy/contrast; extend nudge to all non-daily modes
-- [ ] hide NotificationBell for first-timers with no notifications
-- [ ] zinc-500 → zinc-400 for informational text; header focus-trap includes buttons
+- [x] SessionProvider sign-in popover: heading ("Save your progress") + explicit ✕ close button + reworded subtitle
+- [x] SignInSaveNudge: punchier copy + button `bg-white` → `bg-zinc-100` (softer on dark) + "Save with Google →"
+- [x] Hide NotificationBell for first-timers with nothing to show (appears the moment a ping lands)
+- [x] SiteHeader mobile-menu focus-trap selector `a[href]` → `a[href], button` (traps the in-menu CTA)
+- [~] One Tap dismissal memory SKIPPED — Google's native One-Tap cooldown already suppresses re-prompts; manual flag is redundant and touches fragile FedCM code.
+- [~] Extend SignInSaveNudge to FH/Blueprint/Surgeon SKIPPED — those modes have their own board claim paths; risk of double sign-in CTAs.
+- [~] ChallengeOwner PushPrompt gate SKIPPED — the audit's "render only when responders > 0" inverts the intent (you want the opt-in before responses).
+- [~] zinc-500 → zinc-400 contrast sweep DEFERRED — needs visual review to avoid flattening the intentional text hierarchy; zinc-500 passes AA for normal text.
 
 ## Also flagged (separate from waves)
 
