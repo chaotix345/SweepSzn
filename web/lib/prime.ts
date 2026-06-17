@@ -31,14 +31,25 @@ export function peakVariant<T extends Pick<Player, "id" | "year" | "pos" | "pts"
   return best;
 }
 
-// Default "Top" board order: most-recognizable players for this team-era first. `fame` (accolade
-// score from data/build_fame.py) leads; `peak_score` (VORP value) breaks ties and orders the
-// un-accoladed tail. Pure so selectSpin (era pools) and buildPrimePools share one definition.
+// Default "Top" board order: the most recognizable AND most relevant card for this team-era first.
+// `fame` (career accolade score from data/build_fame.py) anchors recognizability, but a famous
+// player's brief, low-impact cameo with a franchise (a one-season late-career stop) must not outrank
+// that era's actual standout — so `peak_score` (the variant's VORP for THIS stint, weighted
+// SZN_PEAK_WEIGHT×) is folded into the sort key rather than used only as a tiebreak. Empirically
+// (probe over real franchise-eras, 2026-06) a 2× weight fixes the cameo inversions — Curry > a
+// one-year CP3 on GSW, Shaq > the injury-season Malone on the 2000s Lakers, Garnett > cameo-Shaq on
+// the 2010s Celtics — while leaving comparably-fit stars in fame order (e.g. 2-MVP Nash stays above
+// a higher-peak Gasol). Exact ties fall back to fame (more famous first). Pure, so selectSpin (era
+// pools) and buildPrimePools share one definition.
+const SZN_PEAK_WEIGHT = 2;
+function sznScore(p: Pick<Player, "fame" | "peak_score">): number {
+  return (p.fame ?? 0) + SZN_PEAK_WEIGHT * (p.peak_score ?? 0);
+}
 export function compareSzn(
   a: Pick<Player, "fame" | "peak_score">,
   b: Pick<Player, "fame" | "peak_score">,
 ): number {
-  return (b.fame ?? 0) - (a.fame ?? 0) || (b.peak_score ?? 0) - (a.peak_score ?? 0);
+  return sznScore(b) - sznScore(a) || (b.fame ?? 0) - (a.fame ?? 0);
 }
 
 export interface PrimePools { teams: string[]; byTeam: Map<string, Player[]> }
