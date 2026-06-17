@@ -17,8 +17,8 @@ describe("SignInSaveNudge", () => {
   it("prompts a signed-out player to sign in and save across devices", () => {
     h.user = null;
     const { container } = render(<SignInSaveNudge />);
-    expect(within(container).getByRole("button", { name: /sign in with google/i })).toBeTruthy();
-    expect(container.textContent).toMatch(/keep your streak and results/i);
+    expect(within(container).getByRole("button", { name: /save with google/i })).toBeTruthy();
+    expect(container.textContent).toMatch(/keep your results and streak/i);
   });
 
   it("renders nothing once the player is signed in", () => {

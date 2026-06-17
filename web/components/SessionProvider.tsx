@@ -84,13 +84,18 @@ export default function SessionProvider({ children }: { children: React.ReactNod
             <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" onClick={() => setSignInOpen(false)} />
           )}
           <div
+            inert={!signInOpen}
             className={
               signInOpen
                 ? "fixed right-3 top-16 z-50 w-72 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl shadow-black/50"
                 : "pointer-events-none fixed left-[-9999px] top-0 opacity-0"
             }
           >
-            <div className="mb-2 text-xs text-zinc-400">Sign in to save your streak, results, and ranks across every device.</div>
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <div className="text-sm font-bold text-zinc-100">Save your progress</div>
+              <button onClick={() => setSignInOpen(false)} aria-label="Close" className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition hover:text-zinc-200">✕</button>
+            </div>
+            <div className="mb-2 text-xs text-zinc-400">Keep your streak, results, and ranks across every device.</div>
             <GoogleOneTap onSignIn={onSignedIn} />
           </div>
         </>

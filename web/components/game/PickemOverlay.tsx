@@ -31,12 +31,12 @@ export function PickemOverlay({ current, mode, dialogRef, onVote, onSkip }: {
             <span className="rounded-md bg-violet-500/20 px-2 py-1 text-sm font-bold text-violet-300">{eraLabel(current.decade)}</span>
           </div>
         )}
-        <p className="mt-3 text-base font-semibold text-zinc-100">Will the best possible five from this roster win more than 60 games?</p>
+        <p className="mt-3 text-base font-semibold text-zinc-100">Will a top-tier five from this roster win more than 60 games?</p>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <button onClick={() => onVote("y")} className="rounded-xl bg-green-500 py-3 text-base font-black text-black hover:bg-green-400">YES — 60+</button>
           <button onClick={() => onVote("n")} className="rounded-xl bg-red-500 py-3 text-base font-black text-black hover:bg-red-400">NO</button>
         </div>
-        <p className="mt-3 text-[11px] text-zinc-500">One tap — the crowd&apos;s call settles with your result.</p>
+        <p className="mt-3 text-[11px] text-zinc-500">One tap — 60 wins is an all-time-great season. The crowd&apos;s call settles with your result.</p>
       </div>
     </div>
   );

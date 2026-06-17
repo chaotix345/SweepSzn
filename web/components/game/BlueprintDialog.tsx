@@ -32,7 +32,7 @@ export function BlueprintDialog({ bpPick, setBpPick, onCommit, onCancel, dialogR
       <div className="animate-slide-up max-h-[85dvh] w-full max-w-sm overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
         <div className="text-center text-xs font-black uppercase tracking-widest text-cyan-400">📐 Blueprint</div>
         <p className="mt-2 text-center text-base font-semibold text-zinc-100">Commit to an objective — before you see the reels.</p>
-        <p className="mt-1 text-center text-[11px] text-zinc-500">The engine grades your execution on that axis. Board score = wins × execution (×1.0–1.3).</p>
+        <p className="mt-1 text-center text-[11px] text-zinc-500">The engine grades how faithfully you build what you committed to — better execution multiplies your wins on the board.</p>
         <div className="mt-4 space-y-2" role="radiogroup" aria-label="Blueprint choices">
           {BLUEPRINTS.map((b) => (
             <button key={b.key} role="radio" aria-checked={bpPick === b.key} onClick={() => setBpPick(b.key)}
@@ -47,7 +47,7 @@ export function BlueprintDialog({ bpPick, setBpPick, onCommit, onCancel, dialogR
           ))}
         </div>
         <button onClick={() => bpPick && onCommit(bpPick)} disabled={!bpPick}
-          className="mt-4 w-full rounded-xl bg-cyan-500 py-3 text-base font-black text-black hover:bg-cyan-400 disabled:opacity-40">
+          className="mt-4 w-full rounded-xl bg-orange-500 py-3 text-base font-black text-black hover:bg-orange-400 disabled:opacity-40">
           🔒 Commit — spin the reels
         </button>
         <button onClick={onCancel} className="mt-2 w-full py-1 text-xs text-zinc-500 hover:text-zinc-300">

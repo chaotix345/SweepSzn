@@ -277,6 +277,12 @@ function Board({ view, uid }: { view: LeaderboardView; uid: string }) {
       <div className="mb-1 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-zinc-500">
         <span>Today&apos;s top {Math.min(rows.length, 100)}</span><span>{view.total} played</span>
       </div>
+      <div className="mb-1 flex items-center gap-3 px-2.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+        <span className="w-7 shrink-0 text-right">#</span>
+        <span className="min-w-0 flex-1">Player</span>
+        <span className="shrink-0">W–L</span>
+        <span className="w-12 shrink-0 text-right" title="Net rating — per-100 scoring margin; the tiebreak when wins are equal">Net</span>
+      </div>
       <div className="max-h-[min(18rem,55dvh)] space-y-1 overflow-y-auto">
         {rows.map((r) => <Row key={r.uid} r={r} me={r.uid === uid} />)}
         {youOutside && view.you && <Row r={view.you} me />}
@@ -295,7 +301,7 @@ function Row({ r, me }: { r: LeaderboardRow; me?: boolean }) {
       <span className={`shrink-0 tabular-nums font-bold ${lead ? "font-display text-base" : ""}`}>
         <span className="text-green-400">{r.wins}</span><span className="text-zinc-600">-</span><span className="text-red-400">{r.losses}</span>
       </span>
-      <span className="w-12 shrink-0 text-right text-xs tabular-nums text-zinc-500">{r.net > 0 ? "+" : ""}{r.net.toFixed(1)}</span>
+      <span title="Net rating — per-100 scoring margin; breaks ties when wins are equal" className="w-12 shrink-0 text-right text-xs tabular-nums text-zinc-500">{r.net > 0 ? "+" : ""}{r.net.toFixed(1)}</span>
     </Link>
   );
 }

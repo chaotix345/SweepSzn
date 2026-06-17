@@ -4,11 +4,10 @@ import Link from "next/link";
 import { listResults, type ResultEntry } from "@/lib/resultHistory";
 import { useSessionContext } from "@/components/SessionProvider";
 import { fetchProfile } from "@/lib/account";
+import { gradeColor } from "@/lib/grades";
 
 const MODE_LABEL: Record<ResultEntry["mode"], string> = { daily: "Daily", classic: "Classic", hoopiq: "HoopIQ", challenge: "Challenge", factorhunt: "Factor Hunt", prime: "Prime", blueprint: "Blueprint", surgeon: "Surgeon" };
-const gradeText = (g: string) =>
-  g === "S" || g === "A+" ? "text-gold" : g.startsWith("A") ? "text-green-400" : g.startsWith("B") ? "text-blue-400"
-  : g.startsWith("C") ? "text-amber-400" : g.startsWith("D") ? "text-slate-400" : "text-red-400";
+const gradeText = gradeColor; // single source of truth — DESIGN.md grade-color scale
 const ago = (ts: number) => {
   const s = Math.floor((Date.now() - ts) / 1000);
   if (s < 60) return "just now";

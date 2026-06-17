@@ -72,14 +72,14 @@ describe("Game — usage cap visible from round 1 (R1)", () => {
     await act(async () => { fireEvent.click(findModeBtn("Classic", "Full stats visible")); });
     await spinAndWait();
     // Zero players placed — under the old `drafted.length >= 2` gate this bar was hidden.
-    expect(screen.queryByText(/Usage budget/i)).toBeTruthy();
+    expect(screen.queryByText(/Usage limit/i)).toBeTruthy();
   });
 
   it("does not show the usage bar in HoopIQ (blind drafting)", async () => {
     render(<Game />);
     await act(async () => { fireEvent.click(findModeBtn("HoopIQ", "test your ball knowledge")); });
     await spinAndWait();
-    expect(screen.queryByText(/Usage budget/i)).toBeNull();
+    expect(screen.queryByText(/Usage limit/i)).toBeNull();
   });
 });
 

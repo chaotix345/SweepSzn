@@ -40,7 +40,7 @@ const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1))
 // fetches it so a user (or the launch content workflow) can attach the card as a native image
 // instead of relying on a link unfurl. Copy-to-clipboard appears only where the browser supports
 // writing an image Blob (desktop) — the X-compose paste flow; download works everywhere.
-function SaveCardImage({ path }: { path: string }) {
+export function SaveCardImage({ path }: { path: string }) {
   const [state, setState] = useState<"idle" | "busy" | "saved" | "copied" | "error">("idle");
   const canCopyImage =
     typeof window !== "undefined" && typeof ClipboardItem !== "undefined" && typeof navigator !== "undefined" && !!navigator.clipboard?.write;
@@ -127,12 +127,14 @@ export default function ResultCard({
       <div className="relative isolate bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
         {/* elite-only radial gold wash behind the record — gold stays reserved for S/A+ / 82-0 */}
         {elite && <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-gold-glow" />}
-        <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{mode} · projected record</div>
-        <div className={`mt-1 font-display text-7xl tabular-nums sm:text-8xl ${gradeColor} animate-record-slam`}>
-          {result.wins}<span className="text-zinc-600">–</span>{result.losses}
-        </div>
-        <div className="mt-1 text-lg font-bold tracking-wide">
-          <span className={gradeColor}>{result.grade}</span> <span className="text-zinc-300">{result.label}</span>
+        <div aria-live="polite" aria-atomic="true">
+          <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{mode} · simulated record</div>
+          <div className={`mt-1 font-display text-7xl tabular-nums sm:text-8xl ${gradeColor} animate-record-slam`}>
+            {result.wins}<span className="text-zinc-600">–</span>{result.losses}
+          </div>
+          <div className="mt-1 text-lg font-bold tracking-wide">
+            <span className={gradeColor}>{result.grade}</span> <span className="text-zinc-300">{result.label}</span>
+          </div>
         </div>
         {usedHints && (
           <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300/90"
@@ -185,10 +187,10 @@ export default function ResultCard({
         <GradeLadder wins={result.wins} grade={result.grade} />
         <p className="mx-auto mt-3 max-w-md text-base font-medium text-zinc-200">{headline(result)}</p>
         <div className="mt-4 flex justify-center gap-2 text-sm">
-          <Metric label="ORtg" value={result.ortg.toFixed(1)} />
-          <Metric label="DRtg" value={result.drtg.toFixed(1)} />
+          <Metric label="ORtg" value={result.ortg.toFixed(1)} title="Offensive Rating — points scored per 100 possessions" />
+          <Metric label="DRtg" value={result.drtg.toFixed(1)} title="Defensive Rating — points allowed per 100 possessions" />
           <Metric label="Net" value={`${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`}
-            color={result.netRtg >= 0 ? "text-green-400" : "text-red-400"} />
+            color={result.netRtg >= 0 ? "text-green-400" : "text-red-400"} title="Net Rating — offense minus defense, per 100 possessions" />
         </div>
       </div>
 
@@ -430,9 +432,9 @@ function BlueprintStrip({ result, bp }: { result: LineupResult; bp: BlueprintVie
   );
 }
 
-function Metric({ label, value, color = "text-zinc-200" }: { label: string; value: string; color?: string }) {
+function Metric({ label, value, color = "text-zinc-200", title }: { label: string; value: string; color?: string; title?: string }) {
   return (
-    <div className="rounded-lg bg-zinc-800/60 px-3 py-1.5">
+    <div title={title} className="rounded-lg bg-zinc-800/60 px-3 py-1.5">
       <span className="text-zinc-500">{label} </span><b className={`tabular-nums ${color}`}>{value}</b>
     </div>
   );

@@ -90,11 +90,11 @@ export function SurgeonDialog({ sgPool, sgInId, setSgInId, sgOutId, setSgOutId, 
           );
         })()}
 
-        <input value={sgName} onChange={(e) => setSgName(e.target.value)} maxLength={24} placeholder="Your name (for the board)"
+        <input value={sgName} onChange={(e) => setSgName(e.target.value)} maxLength={24} placeholder="Your name (for the board)" aria-label="Your name for the leaderboard"
           className="mt-4 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-rose-500" />
         {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
         <button onClick={confirmSurgeon} disabled={!sgInId || !sgOutId || sgBusy}
-          className="mt-3 w-full rounded-xl bg-rose-500 py-3 text-base font-black text-black hover:bg-rose-400 disabled:opacity-40">
+          className="mt-3 w-full rounded-xl bg-orange-500 py-3 text-base font-black text-black hover:bg-orange-400 disabled:opacity-40">
           {sgBusy ? "Operating…" : "🔒 Confirm swap — reveal the delta"}
         </button>
         <button onClick={dismissPool}

@@ -55,9 +55,11 @@ export default function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <ButtonLink href="/play" size="sm" className="hidden sm:inline-flex">
-            Build your five
-          </ButtonLink>
+          {pathname !== "/play" && (
+            <ButtonLink href="/play" size="sm" className="hidden sm:inline-flex">
+              Build your five
+            </ButtonLink>
+          )}
           <AuthControl />
           <NotificationBell />
           <button
@@ -77,7 +79,7 @@ export default function SiteHeader() {
         <nav
           id="mobile-nav"
           ref={navRef}
-          onKeyDown={(e) => buildFocusTrapHandler<HTMLElement>(navRef, () => { setOpen(false); toggleRef.current?.focus(); }, { selector: "a[href]" })(e)}
+          onKeyDown={(e) => buildFocusTrapHandler<HTMLElement>(navRef, () => { setOpen(false); toggleRef.current?.focus(); }, { selector: "a[href], button" })(e)}
           className="animate-menu-down border-t border-zinc-800 px-4 pb-3 pt-1 sm:hidden"
         >
           {NAV.map((n, i) => (

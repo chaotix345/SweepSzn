@@ -80,6 +80,8 @@ export default function NotificationBell() {
 
   const unread = view?.unread ?? 0;
   const items = view?.items ?? [];
+  // First-timers with nothing to see: keep the header clean. The bell appears the moment a ping lands.
+  if (!open && (!view || (items.length === 0 && unread === 0))) return null;
 
   return (
     <div className="relative">

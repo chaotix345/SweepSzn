@@ -6,13 +6,11 @@ import { useSessionContext } from "@/components/SessionProvider";
 import type { ChallengeOwnerView } from "@/lib/types";
 import FiveStrip from "@/components/FiveStrip";
 import PushPrompt from "@/components/PushPrompt";
+import { gradeColor } from "@/lib/grades";
 
 type State = "loading" | "ok" | "forbidden" | "notfound" | "disabled" | "error";
 
-// S/A+ are the reserved gold tier (DESIGN.md); the rest follow the shared grade scale.
-const gradeText = (g: string) =>
-  g === "S" || g === "A+" ? "text-gold" : g.startsWith("A") ? "text-green-400" : g.startsWith("B") ? "text-blue-400"
-  : g.startsWith("C") ? "text-amber-400" : g.startsWith("D") ? "text-slate-400" : "text-red-400";
+const gradeText = gradeColor; // single source of truth — DESIGN.md grade-color scale
 
 const signed = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
 

@@ -13,13 +13,13 @@ export default function SignInSaveNudge() {
   return (
     <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
       <div className="mb-2 text-xs text-zinc-400">
-        This result is saved on this device only. Sign in to keep your streak and results across every device.
+        Saved on this device only. Sign in to keep your results and streak across every device — one tap.
       </div>
       <button
         onClick={promptSignIn}
-        className="w-full rounded-lg bg-white px-4 py-2 text-sm font-bold text-zinc-900 transition hover:bg-zinc-100"
+        className="w-full rounded-lg bg-zinc-100 px-4 py-2 text-sm font-bold text-zinc-900 transition hover:bg-white"
       >
-        Sign in with Google
+        Save with Google →
       </button>
     </div>
   );

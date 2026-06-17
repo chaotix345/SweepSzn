@@ -10,6 +10,7 @@ export function useFactorHunt(seed: string, simulate: SimulateFn, setError: (e: 
   const [fhStep, setFhStep] = useState<{ roster: Roster; ask: "worst" | "best"; choices: string[] } | null>(null);
   const [fhPick, setFhPick] = useState<string | null>(null);            // highlighted choice (not yet locked)
   const [fhPrediction, setFhPrediction] = useState<string | null>(null); // locked choice (null = skipped)
+  const [fhFetching, setFhFetching] = useState(false);                   // choices fetch in flight (button feedback)
   const fhFetchingRef = useRef(false);                                  // de-dupes the choices fetch
   const fhAbortRef = useRef<AbortController | null>(null);              // cancels an in-flight choices fetch on restart
   const fhRef = useRef<HTMLDivElement>(null);                           // prediction dialog
@@ -19,7 +20,7 @@ export function useFactorHunt(seed: string, simulate: SimulateFn, setError: (e: 
   // Any failure falls straight through to a normal reveal with no bonus — never blocks the game.
   const beginFhPrediction = useCallback(async (r: Roster) => {
     if (fhFetchingRef.current) return;
-    fhFetchingRef.current = true; setError(null);
+    fhFetchingRef.current = true; setFhFetching(true); setError(null);
     // abortable: a Restart mid-fetch must not resurrect the old game's prediction dialog (success
     // path) or fall through to a stale simulate() carrying the old mode/seed (failure path)
     fhAbortRef.current?.abort();
@@ -43,7 +44,7 @@ export function useFactorHunt(seed: string, simulate: SimulateFn, setError: (e: 
       if (e instanceof DOMException && e.name === "AbortError") return; // restarted — not a failure
       if (ctrl.signal.aborted) return;
       simulate(r, null); // graceful: reveal without a prediction, no bonus
-    } finally { fhFetchingRef.current = false; }
+    } finally { fhFetchingRef.current = false; setFhFetching(false); }
   }, [seed, simulate, setError]);
 
   const lockFh = useCallback((choice: string | null) => {
@@ -56,8 +57,8 @@ export function useFactorHunt(seed: string, simulate: SimulateFn, setError: (e: 
 
   const reset = useCallback(() => {
     fhAbortRef.current?.abort(); fhAbortRef.current = null;
-    setFhStep(null); setFhPick(null); setFhPrediction(null); fhFetchingRef.current = false;
+    setFhStep(null); setFhPick(null); setFhPrediction(null); setFhFetching(false); fhFetchingRef.current = false;
   }, []);
 
-  return { fhStep, fhPick, setFhPick, fhPrediction, setFhPrediction, fhRef, beginFhPrediction, lockFh, reset };
+  return { fhStep, fhPick, setFhPick, fhPrediction, setFhPrediction, fhRef, beginFhPrediction, lockFh, fhFetching, reset };
 }
