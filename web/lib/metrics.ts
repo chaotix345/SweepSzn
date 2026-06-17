@@ -11,6 +11,7 @@ export interface Metrics {
   d1: number;                                  // next-day return rate, 0..1
   d7: number | null;                           // 7-day return rate, null if window < 8
   modeSplit: Record<string, number>;           // mode → play count over the window
+  submitSplit: Record<string, number>;         // mode → submit count over the window (play→submit numerator)
   boardByDay: number[];                        // ZCARD lb:<day> (ascending)
   boards: { daily: number; weekly: number; alltime: number };
   winBuckets: { label: string; count: number }[]; // today's leaderboard win distribution
@@ -51,15 +52,16 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
       days,
       funnel: { plays: 0, completes: 0, shares: 0, signins: 0, submits: 0 },
       rates: { completion: 0, shareRate: 0, capture: 0 },
-      dauByDay: days.map(() => 0), d1: 0, d7: null, modeSplit: {},
+      dauByDay: days.map(() => 0), d1: 0, d7: null, modeSplit: {}, submitSplit: {},
       boardByDay: days.map(() => 0), boards: { daily: 0, weekly: 0, alltime: 0 },
       winBuckets: bucketWins([]), totals: {},
     };
   }
 
-  const [counts, modeHashes, activeSets, boardCards, todayZ, totalsHash, weekCard, allCard] = await Promise.all([
+  const [counts, modeHashes, submodeHashes, activeSets, boardCards, todayZ, totalsHash, weekCard, allCard] = await Promise.all([
     Promise.all(STAGES.map(s => redis.mget<(string | number | null)[]>(...days.map(d => `ev:${s}:${d}`)))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:mode:${d}`))),
+    Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:submode:${d}`))),
     Promise.all(days.map(d => redis.smembers(`ev:active:${d}`))),
     Promise.all(days.map(d => redis.zcard(`lb:${d}`))),
     redis.zrange<(string | number)[]>(`lb:${today}`, 0, -1, { withScores: true }),
@@ -89,13 +91,15 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
 
   const modeSplit: Record<string, number> = {};
   for (const h of modeHashes) if (h) for (const [k, v] of Object.entries(h)) modeSplit[k] = (modeSplit[k] ?? 0) + num(v);
+  const submitSplit: Record<string, number> = {};
+  for (const h of submodeHashes) if (h) for (const [k, v] of Object.entries(h)) submitSplit[k] = (submitSplit[k] ?? 0) + num(v);
 
   const wins: number[] = [];
   for (let i = 1; i < todayZ.length; i += 2) wins.push(decodeWins(num(todayZ[i])));
 
   const boardByDay = (boardCards as number[]).map(num);
   return {
-    days, funnel, rates, dauByDay, d1, d7, modeSplit, boardByDay,
+    days, funnel, rates, dauByDay, d1, d7, modeSplit, submitSplit, boardByDay,
     boards: { daily: boardByDay[boardByDay.length - 1] ?? 0, weekly: num(weekCard), alltime: num(allCard) },
     winBuckets: bucketWins(wins),
     totals: Object.fromEntries(Object.entries(totalsHash ?? {}).map(([k, v]) => [k, num(v)])),

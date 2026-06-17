@@ -80,6 +80,21 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </section>
 
       <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Mode conversion (play → submit)</h2>
+        {["daily", "challenge", "factorhunt", "blueprint", "surgeon"].map(k => {
+          const plays = m.modeSplit[k] ?? 0;
+          const submits = m.submitSplit[k] ?? 0;
+          return (
+            <div key={k} className="flex items-center gap-2 text-sm">
+              <span className="w-24 shrink-0 text-zinc-400">{k}</span>
+              <span className="tabular-nums text-zinc-300">{submits} / {plays}</span>
+              <span className="text-xs text-zinc-500">{plays > 0 ? fmtPct(submits / plays) : "—"}</span>
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="space-y-2">
         <h2 className="text-lg font-semibold">Leaderboard</h2>
         <p className="text-sm text-zinc-300">Daily <b>{m.boards.daily}</b> · Weekly <b>{m.boards.weekly}</b> · All-time <b>{m.boards.alltime}</b></p>
         <p className="font-mono text-xl leading-none text-sky-400" title="Daily board size per day">{sparkline(m.boardByDay)}</p>
