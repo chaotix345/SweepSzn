@@ -75,3 +75,17 @@ describe("GET /api/challenge/[id]/board — board read", () => {
     expect(json).not.toContain("creator-uid");
   });
 });
+
+describe("GET /api/challenge/[id]/board — CDN cache", () => {
+  it("sets the public board cache header on a successful read (absorbs spectator polls)", async () => {
+    const res = await get(VALID_ID);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("public, s-maxage=10, stale-while-revalidate=30");
+  });
+
+  it("does NOT set a cache header on a 400 (error responses are never CDN-cached)", async () => {
+    const res = await get("abc");
+    expect(res.status).toBe(400);
+    expect(res.headers.get("cache-control")).toBeNull();
+  });
+});

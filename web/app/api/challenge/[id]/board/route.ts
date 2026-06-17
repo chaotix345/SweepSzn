@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { isChallengeEnabled, getChallengeBoard } from "@/lib/challengeStore";
 import { rateLimit, ipOf } from "@/lib/redis";
+import { BOARD_CACHE } from "@/lib/boardCache";
 
 export const runtime = "nodejs";
 
 // Public spectator board: the ranked records for a challenge (name/W-L/net) with no lineup or uid.
 // Anyone with the link can watch the rivalry without playing — the /c/<id> page polls this.
+// Cache at the CDN (no uid in the response → fully shareable): a viral H2H with many spectators
+// polling every 30s collapses to ≤1 origin hit per 10s per PoP instead of one Redis call per watcher.
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!isChallengeEnabled()) return NextResponse.json({ error: "challenges not configured" }, { status: 503 });
   if (!(await rateLimit(`rl:chalboard:${ipOf(req)}`, 120, 60))) {
@@ -13,5 +16,5 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
   const { id } = await params;
   if (!/^[a-z0-9]{6,16}$/.test(id)) return NextResponse.json({ error: "bad id" }, { status: 400 });
-  return NextResponse.json(await getChallengeBoard(id));
+  return NextResponse.json(await getChallengeBoard(id), { headers: BOARD_CACHE });
 }
