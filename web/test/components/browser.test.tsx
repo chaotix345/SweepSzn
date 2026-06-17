@@ -60,6 +60,17 @@ describe("Browser — sort options", () => {
     await user.selectOptions(screen.getByLabelText("Sort players"), "az");
     expect(order()[0]).toContain("Adam Aaronson"); // Aaronson < Zykov
   });
+
+  it("'Top' sinks candidates missing a rank to the bottom", () => {
+    const noRankSpin = { team: "CHI", decade: "2000s", candidates: [
+      cand({ id: "u", name: "Unranked Ualson" }),   // no rank -> MAX_SAFE_INTEGER, sinks
+      cand({ id: "z", name: "Zane Zykov", rank: 0 }),
+    ] };
+    render(<Browser spin={noRankSpin} {...baseProps} />);
+    const rows = screen.getAllByRole("button", { name: /^Select / });
+    expect(rows[0].getAttribute("aria-label")).toContain("Zane Zykov");      // rank 0 first
+    expect(rows[1].getAttribute("aria-label")).toContain("Unranked Ualson"); // no rank last
+  });
 });
 
 describe("Browser — era-adjustment disclosure at draft (R4)", () => {
