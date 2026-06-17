@@ -6,6 +6,7 @@ import {
   req,
   readJson,
   authEnv,
+  exhaustRateLimit,
 } from "@/test/routeHarness";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
@@ -38,6 +39,14 @@ const DATE = "2026-6-10";
 
 beforeEach(() => {
   freshFake();
+});
+
+describe("GET /api/daily/leaderboard — rate limit", () => {
+  it("returns 429 when the per-ip bucket is exhausted", async () => {
+    exhaustRateLimit("rl:dlboard:7.7.7.7", 120);
+    const { status } = await readJson(await GET(req(`/api/daily/leaderboard?date=${DATE}`, { ip: "7.7.7.7" })));
+    expect(status).toBe(429);
+  });
 });
 
 describe("GET /api/daily/leaderboard — bad date", () => {
@@ -165,12 +174,13 @@ describe("GET /api/daily/leaderboard — different dates are independent", () =>
 
 describe("GET /api/daily/leaderboard — Redis trip budget", () => {
   // Upstash is HTTP: every trip is a network round trip. readBoardView parallelizes zcard with
-  // the top read; an in-window uid costs nothing extra. Budget: zcard + zrange + hmget = 3.
-  it("an in-window read costs at most 3 round trips", async () => {
+  // the top read; an in-window uid costs nothing extra. Budget: rate-limit pipeline (1) +
+  // zcard + zrange + hmget (3) = 4.
+  it("an in-window read costs at most 4 round trips (incl. the rate-limit pipeline)", async () => {
     seedBoard(DATE, [{ uid: "uid-aaa-12345678", name: "Alice", wins: 55, net: 7 }]);
     const before = ctx.redis!.trips;
     const { status } = await readJson(await get(`date=${DATE}&uid=uid-aaa-12345678`));
     expect(status).toBe(200);
-    expect(ctx.redis!.trips - before).toBeLessThanOrEqual(3);
+    expect(ctx.redis!.trips - before).toBeLessThanOrEqual(4);
   });
 });

@@ -280,6 +280,17 @@ export function createRedisFake() {
     smembers: async (k: string) => { log("smembers", k); return [...(sets.get(k) ?? [])].map(de); },
     scard: async (k: string) => { log("scard", k); return sets.get(k)?.size ?? 0; },
 
+    ping: async () => { log("ping"); return "PONG"; },
+    zremrangebyrank: async (k: string, start: number, stop: number) => {
+      log("zremrangebyrank", k, start, stop);
+      const z = zsets.get(k);
+      if (!z) return 0;
+      // ZSET is score-ordered ascending; remove the members in the [start,stop] rank range.
+      const victims = range(zsorted(k), start, stop).map(([m]) => m);
+      for (const m of victims) z.delete(m);
+      return victims.length;
+    },
+
     eval: async (script: string, keys: string[], args: (string | number)[]) => {
       log("eval", keys.join(","), args.join(","));
       if (script === KEEP_BEST_LUA) return deepDe(keepBest(keys, args));

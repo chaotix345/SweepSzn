@@ -58,6 +58,6 @@ export async function POST(req: Request) {
   // Server-authoritative streak (signed-in only): completing today's verified daily records the
   // day under the account, so the streak survives across devices and beyond the daily board's TTL.
   if (session) await recordStreakDate(uid, date, Date.now());
-  after(() => bump(redis, "submit", { uid }));
+  after(() => bump(redis, "submit", { uid, mode: "daily" }));
   return NextResponse.json(view);
 }

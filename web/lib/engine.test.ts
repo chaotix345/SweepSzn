@@ -188,6 +188,12 @@ describe("era adjustment is a quantified factor", () => {
   it("absent for an all-modern lineup", () => {
     expect(b.factors.some((x) => /era adjustment/i.test(x.label))).toBe(false);
   });
+
+  it("carries a negative winsEst (explain.ts renders the headline cost as -winsEst — a sign flip would invert it)", () => {
+    const f = r.factors.find((x) => /era adjustment/i.test(x.label))!;
+    expect(f.winsEst).toBeDefined();
+    expect(f.winsEst!).toBeLessThan(0);
+  });
 });
 
 describe("per-player role scores on the breakdown", () => {

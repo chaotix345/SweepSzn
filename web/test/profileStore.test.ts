@@ -39,6 +39,45 @@ describe("profileStore — redis-backed", () => {
     expect(await store.getStreakCount(uid, now)).toBe(2);
   });
 
+  it("getStreakCount reads only the most-recent STREAK_CAP window (bounds the read on a huge ZSET)", async () => {
+    const uid = "ubig";
+    const now = Date.UTC(2026, 5, 15, 12);
+    // Seed CAP+20 consecutive days ending today directly (record path doesn't trim by design).
+    const z = new Map<string, number>();
+    for (let i = 0; i < store.STREAK_CAP + 20; i++) {
+      const ms = now - i * 86_400_000;
+      const d = new Date(ms);
+      z.set(`${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`, ms);
+    }
+    ctx.redis!.zsets.set(`streak:${uid}`, z);
+    // The bounded read sees the newest STREAK_CAP consecutive days → streak reported as exactly CAP
+    // (a longer run is implausible and the client also caps at 400).
+    expect(await store.getStreakCount(uid, now)).toBe(store.STREAK_CAP);
+  });
+
+  it("syncStreakDates dedupes within the batch and drops out-of-range years (bounds the no-TTL ZSET)", async () => {
+    const uid = "uyear";
+    await store.syncStreakDates(uid, ["2026-6-1", "2026-6-1", "1999-1-1", "2101-1-1", "2026-6-2"]);
+    const z = ctx.redis!.zsets.get(`streak:${uid}`)!;
+    expect(z.size).toBe(2); // dupe collapsed, both out-of-range years rejected
+    expect(z.has("2026-6-1")).toBe(true);
+    expect(z.has("2026-6-2")).toBe(true);
+    expect(z.has("1999-1-1")).toBe(false);
+    expect(z.has("2101-1-1")).toBe(false);
+  });
+
+  it("syncStreakDates caps the streak ZSET at STREAK_CAP", async () => {
+    const uid = "usync";
+    const dates: string[] = [];
+    const base = Date.UTC(2020, 0, 1);
+    for (let i = 0; i < store.STREAK_CAP + 25; i++) {
+      const d = new Date(base + i * 86_400_000);
+      dates.push(`${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`);
+    }
+    await store.syncStreakDates(uid, dates);
+    expect(ctx.redis!.zsets.get(`streak:${uid}`)!.size).toBe(store.STREAK_CAP);
+  });
+
   it("syncResults dedupes by mode:encoded and preserves newest-first", async () => {
     const uid = "u2";
     await store.syncResults(uid, [{ encoded: "a", mode: "daily", wins: 1, losses: 1, grade: "", ts: 1 }]);

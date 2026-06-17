@@ -67,6 +67,6 @@ export async function POST(req: Request) {
     predicted, correct, score: decodeFhDisplay(sortScore),
   };
   const view = await submitFhScore(date, row, sortScore);
-  after(() => bump(redis, "submit", { uid }));
+  after(() => bump(redis, "submit", { uid, mode: "factorhunt" }));
   return NextResponse.json(view);
 }

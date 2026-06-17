@@ -19,8 +19,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description,
     robots: { index: false }, // shareable snapshot, not search content
-    openGraph: { title, description, type: "website" },
-    twitter: { card: "summary_large_image", title, description },
+    openGraph: { title, description, type: "website", url: `/rank/${card}` },
+    twitter: { card: "summary_large_image", title, description, site: "@SweepSeason", creator: "@SweepSeason" },
   };
 }
 

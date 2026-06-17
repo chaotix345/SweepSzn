@@ -60,6 +60,6 @@ export async function POST(req: Request) {
     bp: blueprint, grade: bp.grade, score: bp.score,
   };
   const view = await submitBpScore(date, row, sortScore);
-  after(() => bump(redis, "submit", { uid }));
+  after(() => bump(redis, "submit", { uid, mode: "blueprint" }));
   return NextResponse.json(view);
 }

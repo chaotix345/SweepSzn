@@ -44,6 +44,12 @@ export async function bump(
       const modeKey = `ev:mode:${day}`;
       p.hincrby(modeKey, opts.mode, 1).expire(modeKey, EV_TTL);
     }
+    // submit-by-mode lives in its own hash so play→submit conversion is computable per mode
+    // (plays land in ev:mode, submits in ev:submode — never conflated).
+    if (stage === "submit" && opts.mode && MODES.has(opts.mode)) {
+      const modeKey = `ev:submode:${day}`;
+      p.hincrby(modeKey, opts.mode, 1).expire(modeKey, EV_TTL);
+    }
     await p.exec();
     // play/share/signin/submit carry a uid → contribute to the day's distinct-active set.
     // Cap distinct-member growth: the beacon is unauthenticated, so without a bound a flood of

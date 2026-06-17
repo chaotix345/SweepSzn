@@ -397,6 +397,19 @@ describe("POST /api/challenge/submit — after() notification fan-out", () => {
     expect(notifList!.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("flushAfter mode-tags the submit beacon as challenge", async () => {
+    const weakInfo = {
+      uid: "creator-submode", name: "Creator", wins: 10, losses: 72, net: -10.0,
+      grade: "F", lineup: "p0pg,p1sg,p2sf,p3pf,p4c", seed: `h2h-${VALID_ID}`, hinted: false,
+    };
+    ctx.redis!.strings.set(`chal:${VALID_ID}:info`, JSON.stringify(weakInfo));
+    await post({ id: VALID_ID, uid: "responder-submode", name: "Mo", trace: LEGIT_TRACE });
+    await flushAfter();
+    const d = new Date();
+    const day = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+    expect(Number(ctx.redis!.hashes.get(`ev:submode:${day}`)?.get("challenge"))).toBeGreaterThanOrEqual(1);
+  });
+
   it("dedup nx key is set after notification fan-out", async () => {
     const creatorUid = "creator-uid-dedup";
     const weakInfo = {

@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { isLeaderboardEnabled, getLeaderboard } from "@/lib/leaderboard";
+import { rateLimit, ipOf } from "@/lib/redis";
 import { BOARD_CACHE } from "@/lib/boardCache";
 
 export async function GET(req: Request) {
   if (!isLeaderboardEnabled()) return NextResponse.json({ error: "leaderboard not configured" }, { status: 503 });
+  // The board is CDN-cached, but cycling ?uid=/?date= bypasses the cache and reaches Redis, so
+  // bound per-IP volume (matches the challenge spectator board's 120/min).
+  if (!(await rateLimit(`rl:dlboard:${ipOf(req)}`, 120, 60))) {
+    return NextResponse.json({ error: "too many requests" }, { status: 429 });
+  }
   const u = new URL(req.url);
   const date = u.searchParams.get("date");
   const uid = u.searchParams.get("uid") ?? undefined;

@@ -75,7 +75,13 @@ export async function rateLimit(bucket: string, max: number, windowSec: number):
   }
 }
 
-// Client IP from the proxy header (Vercel sets x-forwarded-for; leftmost entry is the client).
+// Client IP for rate-limit bucketing. Prefer x-real-ip (set by Vercel's edge to the connecting
+// client, so a client can't forge it) over x-forwarded-for, whose leftmost entry a caller can
+// prepend. Fall back to the XFF leftmost, then "anon", so non-Vercel/local hosts still bucket sanely.
 export function ipOf(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anon";
+  return (
+    req.headers.get("x-real-ip")?.trim() ||
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "anon"
+  );
 }

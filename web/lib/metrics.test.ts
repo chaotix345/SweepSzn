@@ -63,6 +63,9 @@ describe("getMetrics", () => {
     "ev:mode:2026-6-7": { daily: 50, classic: 30, hoopiq: 15, challenge: 5 },
     "ev:mode:2026-6-8": { daily: 70, classic: 40, hoopiq: 8, challenge: 2 },
     "ev:mode:2026-6-9": { daily: 50, classic: 20, hoopiq: 8, challenge: 2 },
+    "ev:submode:2026-6-7": { daily: 20, challenge: 3, factorhunt: 5 },
+    "ev:submode:2026-6-8": { daily: 25, challenge: 1 },
+    "ev:submode:2026-6-9": { daily: 15 },
     "ev:totals": { play: 300, complete: 200, share: 40, signin: 20, submit: 90 },
   };
   const zcards: Record<string, number> = { "lb:2026-6-7": 28, "lb:2026-6-8": 40, "lb:2026-6-9": 20, "lb:week:2026-W24": 96, "lb:alltime": 1234 };
@@ -176,6 +179,15 @@ describe("getMetrics", () => {
     const m = await getMetrics(fake as unknown as Redis, { days: 3, now });
     expect(m.modeSplit.daily).toBe(170);
     expect(m.modeSplit.challenge).toBe(9);
+  });
+
+  it("submit split summed across window (the per-mode play→submit numerator)", async () => {
+    const fake = buildFake();
+    const m = await getMetrics(fake as unknown as Redis, { days: 3, now });
+    expect(m.submitSplit.daily).toBe(60);       // 20 + 25 + 15
+    expect(m.submitSplit.challenge).toBe(4);     // 3 + 1
+    expect(m.submitSplit.factorhunt).toBe(5);    // 5
+    expect(m.submitSplit.classic ?? 0).toBe(0);  // classic has no submit beacon
   });
 
   it("board ZCARD per day", async () => {
