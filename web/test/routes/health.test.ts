@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { enableRedisEnv, freshFake, readJson } from "@/test/routeHarness";
+import { enableRedisEnv, freshFake, ctx, readJson } from "@/test/routeHarness";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 
@@ -16,6 +16,13 @@ describe("GET /api/health", () => {
     expect(body.redis).toMatchObject({ configured: true, reachable: true });
   });
 
+  it("reports redis unreachable (but still configured) when the PING throws", async () => {
+    // the canary's whole job: surface a configured-but-unreachable Redis (the common deploy failure)
+    ctx.redis!.ping = async () => { throw new Error("redis down"); };
+    const { body } = await readJson(await GET());
+    expect(body.redis).toMatchObject({ configured: true, reachable: false });
+  });
+
   it("never sets a cache header that would let a monitor see stale status", async () => {
     const res = await GET();
     expect(res.headers.get("cache-control")).toBe("no-store");
@@ -23,7 +30,6 @@ describe("GET /api/health", () => {
 
   it("reports configured booleans for push/auth/cron without leaking secret values", async () => {
     const { body } = await readJson(await GET());
-    // push/auth/cron not configured in this hermetic env → false, never the underlying values
     expect(typeof body.push).toBe("boolean");
     expect(typeof body.auth).toBe("boolean");
     expect(typeof body.cron).toBe("boolean");

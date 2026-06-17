@@ -11,7 +11,12 @@ describe("spinPool determinism (the anti-cheat replay depends on it)", () => {
     const a = spinPool(seed, 0);
     const b = spinPool(seed, 0);
     expect(b).toEqual(a);
+    // structural guards (not coupled to specific players, which shift with data/compareSzn updates):
+    // a real franchise+decade, a non-empty pool, and no duplicate cards.
+    expect(a.team).toBeTruthy();
+    expect(a.decade).toMatch(/^\d{4}s$/);
     expect(a.ids.length).toBeGreaterThan(0);
+    expect(new Set(a.ids).size).toBe(a.ids.length);
   });
 
   it("is stable across all five draft rounds (each round re-derives purely from seed+round)", () => {
