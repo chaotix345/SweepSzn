@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
@@ -90,5 +90,19 @@ describe("Browser — era-adjustment disclosure at draft (R4)", () => {
     const spin = { team: "CHI", decade: "PRIME", candidates: [cand({ id: "a", name: "A", decade: "1960s", year: 1962 })] };
     render(<Browser spin={spin} {...baseProps} mode={"prime" as const} />);
     expect(screen.queryByTitle(/discount|era-adjust|before 1985/i)).toBeTruthy();
+  });
+});
+
+describe("Browser — no-slot guard", () => {
+  it("does not enter the placing state for a player with no open eligible slot", async () => {
+    const onSelect = vi.fn();
+    const spin = { team: "CHI", decade: "2000s", candidates: [cand({ id: "a", name: "Adam Aaronson", rank: 0 })] };
+    render(<Browser spin={spin} {...baseProps} canPlace={() => false} onSelect={onSelect} />);
+    const row = screen.getByRole("button", { name: /^Select Adam/ });
+    expect(row.getAttribute("aria-disabled")).toBe("true");
+    expect(row.getAttribute("aria-label")).toContain("no open slot");
+    expect(row.className).toContain("cursor-not-allowed");
+    await userEvent.setup().click(row);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

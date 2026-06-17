@@ -39,7 +39,7 @@ export default function Leaderboards() {
             <Link key={b.label} href="/play" className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 transition hover:border-zinc-600">
               <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-black uppercase tracking-wide ${b.tile} ${b.accent}`}>{b.label}</span>
               <p className="mt-2 text-sm text-zinc-400">{b.desc}</p>
-              <span className={`mt-2 inline-block text-sm font-bold ${b.accent}`}>Play →</span>
+              <span className="mt-2 inline-block text-sm font-bold text-orange-400">Play →</span>
             </Link>
           ))}
         </div>

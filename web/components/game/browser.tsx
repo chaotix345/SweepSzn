@@ -116,7 +116,7 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
           const fits = canPlace(c);
           const showRowFit = showFit && fits && c.fit;
           return (
-            <button key={c.id} onClick={() => fits && onSelect(c)} aria-pressed={sel} aria-disabled={!fits}
+            <button key={c.id} onClick={() => fits && onSelect(c)} aria-pressed={sel} aria-disabled={!fits} tabIndex={fits ? undefined : -1}
               aria-label={`Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}${showUsage && c.usage != null ? `, ${Math.round(c.usage)} percent usage demand` : ""}${showRowFit ? `, fit ${c.fit!.delta > 0 ? "+" : ""}${c.fit!.delta}${c.fit!.adds.length ? ", adds " + c.fit!.adds.join(" and ") : ""}` : ""}`}
               title={fits ? undefined : "No open slot for this player — re-spin or pick a different position"}
               className={`mb-1.5 flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition active:scale-[0.98] ${

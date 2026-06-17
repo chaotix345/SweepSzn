@@ -84,6 +84,7 @@ export default function SessionProvider({ children }: { children: React.ReactNod
             <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" onClick={() => setSignInOpen(false)} />
           )}
           <div
+            inert={!signInOpen}
             className={
               signInOpen
                 ? "fixed right-3 top-16 z-50 w-72 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl shadow-black/50"

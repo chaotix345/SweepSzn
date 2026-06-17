@@ -124,15 +124,17 @@ export default function ResultCard({
   return (
     <div className={`mt-4 overflow-hidden rounded-2xl border bg-zinc-900 ${elite ? "border-gold/30 ring-1 ring-gold/25 animate-gold-pulse" : "animate-rise-in border-zinc-800"}`}>
       {/* hero — the buzzer moment: the record slams in; elite grades get the gold trophy glow */}
-      <div aria-live="polite" aria-atomic="true" className="relative isolate bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
+      <div className="relative isolate bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
         {/* elite-only radial gold wash behind the record — gold stays reserved for S/A+ / 82-0 */}
         {elite && <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-gold-glow" />}
-        <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{mode} · simulated record</div>
-        <div className={`mt-1 font-display text-7xl tabular-nums sm:text-8xl ${gradeColor} animate-record-slam`}>
-          {result.wins}<span className="text-zinc-600">–</span>{result.losses}
-        </div>
-        <div className="mt-1 text-lg font-bold tracking-wide">
-          <span className={gradeColor}>{result.grade}</span> <span className="text-zinc-300">{result.label}</span>
+        <div aria-live="polite" aria-atomic="true">
+          <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{mode} · simulated record</div>
+          <div className={`mt-1 font-display text-7xl tabular-nums sm:text-8xl ${gradeColor} animate-record-slam`}>
+            {result.wins}<span className="text-zinc-600">–</span>{result.losses}
+          </div>
+          <div className="mt-1 text-lg font-bold tracking-wide">
+            <span className={gradeColor}>{result.grade}</span> <span className="text-zinc-300">{result.label}</span>
+          </div>
         </div>
         {usedHints && (
           <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300/90"

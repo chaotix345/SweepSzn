@@ -57,7 +57,7 @@ export function useFactorHunt(seed: string, simulate: SimulateFn, setError: (e: 
 
   const reset = useCallback(() => {
     fhAbortRef.current?.abort(); fhAbortRef.current = null;
-    setFhStep(null); setFhPick(null); setFhPrediction(null); fhFetchingRef.current = false;
+    setFhStep(null); setFhPick(null); setFhPrediction(null); setFhFetching(false); fhFetchingRef.current = false;
   }, []);
 
   return { fhStep, fhPick, setFhPick, fhPrediction, setFhPrediction, fhRef, beginFhPrediction, lockFh, fhFetching, reset };
