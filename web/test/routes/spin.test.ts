@@ -116,6 +116,7 @@ describe("POST /api/spin — szn rank ordinal", () => {
   it("stamps rank on prime candidates too", async () => {
     const { body } = await readJson(await post({ seed: "prime-rank-001" }));
     const cands = body.candidates as Array<{ rank?: number }>;
+    expect(cands.length).toBeGreaterThan(1);
     expect(cands.map((c) => c.rank)).toEqual(cands.map((_, i) => i));
   });
 });
