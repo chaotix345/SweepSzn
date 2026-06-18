@@ -40,7 +40,10 @@ export function accoladeLine(a: Accolades): string {
 // The player's career arc: unique team+decade stints, chronological, with the single peak flagged.
 export function careerJourney(variants: Player[]): JourneyStint[] {
   if (!variants.length) return [];
-  const peak = variants.reduce((b, p) => ((p.peak_score ?? 0) > (b.peak_score ?? 0) ? p : b), variants[0]);
+  // Pick the peak stint by a real, published metric (VORP → BPM → scoring) — never the app's internal
+  // peak_score ranking field, which must not surface even indirectly pre-commit (DESIGN.md §12).
+  const metric = (p: Player) => p.vorp ?? p.bpm ?? p.pts ?? 0;
+  const peak = variants.reduce((b, p) => (metric(p) > metric(b) ? p : b), variants[0]);
   const peakKey = `${peak.team}|${peak.decade}`;
   const seen = new Set<string>();
   const out: JourneyStint[] = [];

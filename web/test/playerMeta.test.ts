@@ -19,8 +19,8 @@ describe("accoladeLine", () => {
 });
 
 describe("careerJourney", () => {
-  const v = (team: string, decade: string, id: string, peak_score = 0): Player =>
-    ({ id, person_id: "x", name: "X", year: 2000, decade, tier: "complete", team, pos: "SF", peak_score } as Player);
+  const v = (team: string, decade: string, id: string, vorp = 0): Player =>
+    ({ id, person_id: "x", name: "X", year: 2000, decade, tier: "complete", team, pos: "SF", vorp } as Player);
   it("lists unique team+decade stints chronologically and marks the single peak", () => {
     const j = careerJourney([
       v("MIA", "2010s", "a", 5), v("CLE", "2000s", "b", 8), v("CLE", "2000s", "b2", 3), v("LAL", "2010s", "c", 4),

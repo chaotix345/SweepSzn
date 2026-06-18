@@ -53,7 +53,7 @@ export function DexBoard() {
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl leading-none">Drafted Dex</h1>
-          <p className="mt-1 text-sm text-zinc-500">{data.players.length} cards · {data.total} games played</p>
+          <p className="mt-1 text-sm text-zinc-500">{data.players.length} cards · {data.total} recent games</p>
         </div>
         <div className="text-right">
           <div className="font-display text-4xl leading-none text-orange-400">{people}</div>

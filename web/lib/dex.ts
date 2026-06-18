@@ -53,6 +53,6 @@ export function computeBadges(players: DexPlayer[], results: { grade: string }[]
   if (has((p) => p.decade === "1960s")) earned.push("sixties");
   if (results.some((r) => r.grade === "S")) earned.push("sTier");
   if (has((p) => p.eligible.length >= 3)) earned.push("tripleThreat");
-  if (has((p) => p.fame === 0)) earned.push("underdog");
+  if (has((p) => p.fame === 0 && p.pts != null)) earned.push("underdog"); // real record, just no accolades (not a data gap)
   return earned;
 }

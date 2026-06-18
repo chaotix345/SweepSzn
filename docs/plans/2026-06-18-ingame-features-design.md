@@ -86,11 +86,15 @@ Unifies three sub-features below the ResultCard:
 - **Scouting anchor:** your est. ORtg/DRtg/NetRtg next to the matched real team's actuals (`team_seasons.json`).
 - **Surfaces:** `ResultCard.tsx` (`<WhatIfLab>` below weakest-slot pointer), new `web/components/game/WhatIfLab.tsx`,
   `ScoutingAnchor.tsx`, `WeakestSlotDive.tsx`.
-- **Data:** `POST /api/what-if` (thin alias of `/api/evaluate`); `players.json` client filter for candidates;
-  `team_lookup.json` (from Feature 2); optional offline `build_top3_alts.py` → `top3_alts.json`.
+- **Data:** swaps reuse the existing `POST /api/evaluate` (already public + rate-limited); a new
+  `GET /api/swap-options?team&decade&slot` serves the slot's candidates; `team_lookup.json` (deferred).
 - **Recommended:** inline accordion in the ResultCard.
-- **Integrity:** full engine transparency is FAIR here (round scored). Guardrails: `/api/what-if` must validate
-  the session is already completed/scored (reject in-progress drafts) + rate-limit; swap list sorted by **fame
+- **Integrity:** full engine transparency is FAIR here (round scored). **As-built decision:** no separate
+  `/api/what-if` wrapper — the Lab is post-commit UI only (renders solely on the ResultCard), so it adds zero
+  new pre-commit exposure, and `/api/evaluate` was already public before this work. Leaderboard integrity rests
+  on the deterministic **seed-replay verification** (daily/challenge submit), NOT on hiding evaluate — so a
+  wrapper that "validates a completed session" would be theater (the client can call evaluate directly anyway).
+  Enforced guardrails: swap list sorted by **fame
   only**, never by simulated result; share-from-lab cards labeled "What-If".
 
 ### 6. Social Texture: Rarity + Crowd Signal — Tier C — Effort M
@@ -126,9 +130,11 @@ Unifies three sub-features below the ResultCard:
 
 ## Cross-feature integrity guardrails (enforce in code)
 
-1. `/api/what-if` validates a completed/scored session; rate-limited.
-2. Lab swap list sorts by fame only — enforce server-side (no "sort by result").
-3. Confirm `players.json.vorp` is B-Ref VORP, not engine `peak_score`, before surfacing in Compare.
+1. What-If Lab is post-commit UI only (ResultCard) and reuses the already-public `/api/evaluate`; no
+   `/api/what-if` wrapper (would be theater — see Feature 5). Leaderboard integrity = seed-replay, unchanged.
+2. Lab swap list sorts by fame only — enforced server-side in `getSwapOptions` (no "sort by result").
+3. No engine-internal field surfaces pre-commit: Compare shows real B-Ref stats; the dossier's peak-stint ★
+   uses real VORP/BPM/PPG, not the app's `peak_score` ranking field.
 4. Crowd reveal hooks the **post-confirm** callback, not selection/hover; volume-gated.
 5. No engine-internal field (`peak_score`/`obpm`/`dbpm`/`vorp` if internal) shown anywhere pre-commit.
 

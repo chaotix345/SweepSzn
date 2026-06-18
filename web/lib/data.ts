@@ -30,6 +30,7 @@ let _cache: {
   draftKeys: string[];
   teamsByDecade: Map<string, string[]>;
   decadesByTeam: Map<string, string[]>;
+  personNames: Map<string, string>;
   coeff: Coefficients;
 } | null = null;
 
@@ -40,6 +41,7 @@ function load() {
   const coeff: Coefficients = { ...DEFAULT_COEFFICIENTS, ...coeffRaw };
 
   const byId = new Map<string, Player>();
+  const personNames = new Map<string, string>();
   const draftIndex = new Map<string, Player[]>();
   const teamsByDecade = new Map<string, string[]>();
   const decadesByTeam = new Map<string, string[]>();
@@ -49,6 +51,7 @@ function load() {
   for (const p of players) {
     p.person_id ??= p.name.toLowerCase().replace(/['.]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
     byId.set(p.id, p);
+    personNames.set(p.person_id, p.name);
     // 82-0 parity: only current franchises, only the 1960s–2020s decades are draftable
     if (!CURRENT.has(p.team) || !DECADES.has(p.decade)) continue;
     const key = `${p.team}|${p.decade}`;
@@ -64,7 +67,7 @@ function load() {
   for (const [team, set] of decSeen) decadesByTeam.set(team, [...set]);
   const draftKeys = [...draftIndex.keys()];
 
-  _cache = { players, byId, draftIndex, draftKeys, teamsByDecade, decadesByTeam, coeff };
+  _cache = { players, byId, draftIndex, draftKeys, teamsByDecade, decadesByTeam, personNames, coeff };
   return _cache;
 }
 
@@ -81,6 +84,11 @@ export function getPlayersByIds(ids: string[]): Player[] {
 export function getPersonVariants(personId: string): Player[] {
   const { players } = load();
   return players.filter((p) => (p.person_id ?? p.id) === personId);
+}
+
+// O(1) display-name lookup for a person_id (built once at load) — used by the crowd reveal.
+export function getPersonName(personId: string): string | undefined {
+  return load().personNames.get(personId);
 }
 
 // Draftable players for a (team, decade) eligible at `slot`, fame-sorted (compareSzn) — the post-game

@@ -427,6 +427,7 @@ export default function Game() {
 
   const place = useCallback((slot: Slot) => {
     if (!selPlayer || roster[slot] || !selPlayer.eligible.includes(slot)) return;
+    setCrowdNote(null); // clear any prior slot's reveal before this lock's fetch resolves
     traceRef.current.push({ slot, pickedId: selPlayer.id, respins: [...roundRespinsRef.current] });
     roundRespinsRef.current = [];
     // Silent crowd-signal beacon: count this pick for the (mode, spin) config. Fired AFTER the slot

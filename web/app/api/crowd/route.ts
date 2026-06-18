@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { crowdForSlot } from "@/lib/socialStore";
-import { getPersonVariants } from "@/lib/data";
+import { getPersonName } from "@/lib/data";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 
 export const runtime = "nodejs";
@@ -30,7 +30,7 @@ export async function GET(req: Request) {
       total: crowd.total,
       choices: crowd.choices.map((c) => ({
         personId: c.personId,
-        name: getPersonVariants(c.personId)[0]?.name ?? c.personId,
+        name: getPersonName(c.personId) ?? c.personId,
         pct: c.pct,
       })),
     },

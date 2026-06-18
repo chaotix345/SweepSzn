@@ -42,6 +42,7 @@ describe("computeBadges", () => {
     expect(computeBadges([mk({ eligible: ["PG", "SG", "SF"] })], [])).toContain("tripleThreat");
     expect(computeBadges([mk({ fame: 0 })], [])).toContain("underdog");
     expect(computeBadges([mk({ fame: 5 })], [])).not.toContain("underdog");
+    expect(computeBadges([{ ...mk({ fame: 0 }), pts: null }], [])).not.toContain("underdog"); // data-absent, not obscure
   });
 });
 

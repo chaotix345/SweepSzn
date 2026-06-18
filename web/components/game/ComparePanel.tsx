@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import type { DraftCandidate } from "@/lib/types";
 import { eraLabel } from "@/lib/teams";
 import { ZRadar } from "./ZRadar";
@@ -20,6 +20,7 @@ export function ComparePanel({ a, b, dialogRef, onClose, onPick }: {
   a: DraftCandidate; b: DraftCandidate; dialogRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void; onPick: (c: DraftCandidate) => void;
 }) {
+  useEffect(() => { dialogRef.current?.focus(); }, [dialogRef]); // move focus into the dialog for a11y
   const cell = (c: DraftCandidate, other: DraftCandidate, k: typeof ROWS[number]["k"]) => {
     const v = c[k], o = other[k];
     const hi = typeof v === "number" && (typeof o !== "number" || v >= o);

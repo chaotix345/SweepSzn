@@ -9,7 +9,7 @@ export function RarityBadge({ ids }: { ids: string }) {
   useEffect(() => {
     if (ids.split(",").length !== 5) return;
     let alive = true;
-    fetch(`/api/rarity?ids=${ids}`)
+    fetch(`/api/rarity?ids=${encodeURIComponent(ids)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (alive && d?.rarity) setPct(d.rarity.pct); })
       .catch(() => {});
