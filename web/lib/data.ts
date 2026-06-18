@@ -1,8 +1,9 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
-import type { Player, Coefficients, DraftCandidate, CandidateFit, Slot } from "./types";
+import type { Player, Coefficients, DraftCandidate, CandidateFit, Slot, EraContext } from "./types";
 import { DEFAULT_COEFFICIENTS, quickScore, playerFeatures } from "./engine";
+import { decadeEraContext } from "./leagueContext";
 import { buildPrimePools, compareSzn, type PrimePools } from "./prime";
 import { playerTraits } from "./traits";
 import { mulberry32, strSeed } from "./rng";
@@ -164,6 +165,7 @@ export interface SpinResult {
   team: string;
   decade: string;
   candidates: DraftCandidate[];
+  era?: EraContext; // descriptive league-era snapshot for the spun decade (null/omitted for Prime)
 }
 
 // Spin a (team, decade) like 82-0: uniform over populated combos, full roster returned.
@@ -229,7 +231,7 @@ export function spin(seed: string, round: number, opts: SpinOptions = {}, wantFi
   // send unrounded usage so the live budget bar sums the SAME floats blueprintMetric grades on —
   // a per-player round here could straddle the A+/A boundary the bar tells the player they hit
   const candidates = pool.map((p, i) => toCandidate(p, fits?.get(p.id), playerFeatures(p, coeff).usage, i));
-  return { team, decade, candidates };
+  return { team, decade, candidates, era: decadeEraContext(decade) ?? undefined };
 }
 
 // Pool-only spin for leaderboard verification: same (team, decade) selection, candidate ids only

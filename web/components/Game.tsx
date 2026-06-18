@@ -17,7 +17,7 @@ import { useBlueprint } from "@/components/game/useBlueprint";
 import { BlueprintDialog } from "@/components/game/BlueprintDialog";
 import { useSurgeon, type SgResult } from "@/components/game/useSurgeon";
 import { SurgeonDialog } from "@/components/game/SurgeonDialog";
-import type { DraftCandidate, DraftStep, LeaderboardView, LineupResult, Player, Slot } from "@/lib/types";
+import type { DraftCandidate, DraftStep, EraContext, LeaderboardView, LineupResult, Player, Slot } from "@/lib/types";
 import { SLOTS, FRANCHISES, DECADES, teamName, displayName, eraLabel } from "@/lib/teams";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
@@ -45,7 +45,7 @@ import { ProjectionMeter } from "@/components/game/ProjectionMeter";
 import { projectionAllowed, type RosterProjection } from "@/lib/projection";
 type Roster = Record<Slot, DraftCandidate | null>;
 const EMPTY: Roster = { PG: null, SG: null, SF: null, PF: null, C: null };
-interface Spin { team: string; decade: string; candidates: DraftCandidate[] }
+interface Spin { team: string; decade: string; candidates: DraftCandidate[]; era?: EraContext }
 type SpinOpts = { lockedTeam?: string; lockedDecade?: string; excludeTeam?: string; excludeDecade?: string; salt?: number };
 // The full current result kept in localStorage for a same-session refresh (carries the draft trace
 // plus, for Factor Hunt, the locked prediction so the verdict chip survives a refresh — and, for

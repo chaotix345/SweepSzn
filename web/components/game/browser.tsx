@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from "react";
-import type { CandidateFit, DraftCandidate } from "@/lib/types";
+import type { CandidateFit, DraftCandidate, EraContext } from "@/lib/types";
 import { teamColors, eraLabel } from "@/lib/teams";
 import { TRAIT_META } from "@/lib/traits";
 import type { Mode } from "@/components/game/types";
 
-type Spin = { team: string; decade: string; candidates: DraftCandidate[] };
+type Spin = { team: string; decade: string; candidates: DraftCandidate[]; era?: EraContext };
 export type SortKey = "szn" | "fit" | "ppg" | "rpg" | "apg" | "az";
 
 // Decades that can contain pre-1985 players, whose box dominance the engine discounts (eraStrength,
@@ -106,6 +106,15 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
           </select>
         )}
       </div>
+      {/* Era Pulse: descriptive league context for the spun decade — frames raw stats in their era
+          without any engine/fit signal (DESIGN.md §12). Hidden in HoopIQ, where the era is masked. */}
+      {!hideStats && spin.era && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-zinc-800/70 px-3 py-1.5 text-[11px] text-zinc-500">
+          <span className="font-semibold uppercase tracking-wide text-zinc-400">{spin.era.label}</span>
+          {spin.era.pace != null && (<><span aria-hidden>·</span><span className="tabular-nums">{spin.era.pace} pace</span></>)}
+          <span aria-hidden>·</span><span>{spin.era.era3pt.label}</span>
+        </div>
+      )}
       <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-zinc-500">
         <span>{list.length} player{list.length === 1 ? "" : "s"} available{hideStats ? " · stats hidden" : ""}</span>
         {showFit && <span className="text-zinc-500">fit = net swing for <span className="text-zinc-400">your</span> roster</span>}
