@@ -35,3 +35,6 @@ web/scripts/best_team.mjs
 *.pem
 .env*
 !.env.example
+
+# Superpowers brainstorm visual companion artifacts
+.superpowers/
