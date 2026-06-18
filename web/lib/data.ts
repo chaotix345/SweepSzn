@@ -83,6 +83,17 @@ export function getPersonVariants(personId: string): Player[] {
   return players.filter((p) => (p.person_id ?? p.id) === personId);
 }
 
+// Draftable players for a (team, decade) eligible at `slot`, fame-sorted (compareSzn) — the post-game
+// What-If Lab's swap options. Same descriptive candidate shape as a spin; it carries NO fit/engine
+// signal and is never ordered by outcome (the Lab re-scores only after the user picks). DESIGN.md §12.
+export function getSwapOptions(team: string, decade: string, slot: Slot): DraftCandidate[] {
+  const { draftIndex, coeff } = load();
+  const pool = (draftIndex.get(`${team}|${decade}`) ?? [])
+    .filter((p) => ((p.eligible && p.eligible.length) ? p.eligible : [p.pos as Slot]).includes(slot))
+    .sort(compareSzn);
+  return pool.map((p, i) => toCandidate(p, undefined, playerFeatures(p, coeff).usage, i));
+}
+
 // Top-K draftable players by peak_score — the candidate universe the projection ticker's "ceiling"
 // (best-possible completion) is chosen from. Public global pool only (never a seed's future spins),
 // so it leaks nothing. Prime draws from the all-time peak-variant pools; everything else from the

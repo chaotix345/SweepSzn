@@ -71,6 +71,7 @@ const ROUTE_TO_TEST: Record<string, string> = {
   "surgeon/leaderboard":            "surgeonLeaderboard",
   "surgeon/pool":                   "surgeonPool",
   "surgeon/submit":                 "surgeonSubmit",
+  "swap-options":                   "swapOptions",
 };
 
 describe("route coverage meta-test", () => {
