@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import React from "react";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -411,5 +411,27 @@ describe("ResultCard — shareable card image (screenshots are the product)", ()
   it("renders a 'Save card image' button so the OG card can be attached, not just linked", () => {
     const { container } = renderCard();
     expect(container.querySelector('button[aria-label="Save card image"]')).toBeTruthy();
+  });
+});
+
+describe("ResultCard — roster-row player dossier (descriptive, post-commit §12)", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("exposes a player-details toggle on every starting-five row", () => {
+    const { container } = renderCard();
+    const toggles = container.querySelectorAll('button[aria-label$=" details"]');
+    expect(toggles.length).toBe(5);
+  });
+
+  it("clicking a row's toggle mounts that player's dossier (descriptive identity card)", () => {
+    // never-resolving fetch holds the dossier in its loading state (and silences RarityBadge/DexStrip)
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    const { container } = renderCard();
+    const toggle = container.querySelector('button[aria-label="Show Player PG details"]') as HTMLButtonElement;
+    expect(toggle).toBeTruthy();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(container.querySelector('button[aria-label="Hide Player PG details"]')).toBeTruthy();
+    expect(container.textContent).toMatch(/Loading…/);
   });
 });

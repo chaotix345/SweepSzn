@@ -14,6 +14,8 @@ import { GRADE_COLOR, isEliteGrade } from "@/lib/grades";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { WhatIfLab } from "@/components/game/WhatIfLab";
 import { RarityBadge } from "@/components/game/RarityBadge";
+import { Dossier } from "@/components/game/Dossier";
+import { DexStrip } from "@/components/game/DexStrip";
 
 // Crowd snapshot + your vote (and, same-session only, the spun team/era the vote was about).
 type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
@@ -122,6 +124,8 @@ export default function ResultCard({
   const names = players.map((p) => displayName(p.name));
 
   const elite = isEliteGrade(result.grade);
+  // one roster row's dossier open at a time (tap ⓘ) — reuses the draft-board Dossier, post-commit
+  const [openRosterId, setOpenRosterId] = useState<string | null>(null);
 
   return (
     <div className={`mt-4 overflow-hidden rounded-2xl border bg-zinc-900 ${elite ? "border-gold/30 ring-1 ring-gold/25 animate-gold-pulse" : "animate-rise-in border-zinc-800"}`}>
@@ -232,6 +236,7 @@ export default function ResultCard({
           {players.map((p, i) => {
             const role = roles[i];
             const c = teamColors(p.team);
+            const open = openRosterId === p.id;
             return (
               <div key={p.id} className="rounded-xl bg-zinc-950/60 px-2.5 py-2">
                 <div className="flex items-center gap-3">
@@ -249,8 +254,17 @@ export default function ResultCard({
                     <RoleBars pb={result.players[i]} />
                   </div>
                   <StatRow p={p} className="hidden shrink-0 sm:flex" />
+                  {/* tap ⓘ → the same descriptive Dossier the draft board uses (accolades, career, era bars) */}
+                  <button onClick={() => setOpenRosterId(open ? null : p.id)} aria-expanded={open}
+                    aria-label={`${open ? "Hide" : "Show"} ${p.name} details`}
+                    title="Player details — accolades, career, era context"
+                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border text-sm transition ${
+                      open ? "border-orange-500 bg-orange-500/10 text-orange-400" : "border-zinc-800 text-zinc-500 hover:text-orange-400"}`}>
+                    {open ? "▴" : "ⓘ"}
+                  </button>
                 </div>
                 <StatRow p={p} className="mt-1.5 flex justify-between px-1 sm:hidden" />
+                {open && <Dossier cand={p} />}
               </div>
             );
           })}
@@ -263,6 +277,7 @@ export default function ResultCard({
             <Stat v={totals.stl} k="SPG" strong /><Stat v={totals.blk} k="BPG" strong />
           </div>
         </div>
+        <DexStrip />
       </div>
 
       <div className="border-t border-zinc-800 px-6 py-4">

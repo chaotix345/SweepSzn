@@ -18,7 +18,9 @@ const BARS: { k: "pts" | "trb" | "ast"; label: string }[] = [
   { k: "pts", label: "PTS" }, { k: "trb", label: "REB" }, { k: "ast", label: "AST" },
 ];
 
-export function Dossier({ cand }: { cand: DraftCandidate }) {
+// Accepts anything carrying the descriptive fields the dossier reads — the lean DraftCandidate from
+// the draft board, or a full Player from the result card's roster rows (both supersets of this Pick).
+export function Dossier({ cand }: { cand: Pick<DraftCandidate, "id" | "z" | "pts" | "trb" | "ast"> }) {
   const [data, setData] = useState<DossierData | null>(null);
   const [err, setErr] = useState(false);
   useEffect(() => {
