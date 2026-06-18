@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import React from "react";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -414,17 +414,60 @@ describe("ResultCard — shareable card image (screenshots are the product)", ()
   });
 });
 
-describe("ResultCard — scouting anchor (projected ratings vs a comparable real team)", () => {
-  it("renders the matched real team's actual ORtg/DRtg/Net beside your five for a 55-win result", () => {
+// The deep analytical tools now live in a collapsed "Explore" zone BELOW the Share CTA so a
+// first-time mobile visitor reaches Share without scrolling past them. The zone is lazy-mounted.
+function openExplore(container: HTMLElement) {
+  fireEvent.click(within(container).getByRole("button", { name: /explore your five/i }));
+}
+
+describe("ResultCard — scouting anchor (now inside the Explore zone, below Share)", () => {
+  it("reveals the matched real team's actual ORtg/DRtg/Net once the Explore zone is opened (55-win result)", () => {
     const { container } = renderCard(); // wins=55 → 58-24 Spurs (ORtg 108.3, DRtg 101.6, Net +6.7)
+    // collapsed + lazy: not present until the user opts in
+    expect(container.textContent).not.toMatch(/Scouting report/i);
+    openExplore(container);
     expect(container.textContent).toMatch(/Scouting report/i);
     expect(container.textContent).toContain("101.6"); // Spurs DRtg — appears only in the scouting block
     expect(container.textContent).toContain("+6.7");   // Spurs Net
   });
 
-  it("omits the scouting report below the 42-win anchor floor", () => {
+  it("omits the scouting report below the 42-win anchor floor even with the Explore zone open", () => {
     const { container } = renderCard({ result: makeResult({ wins: 30, losses: 52, grade: "D", label: "Lottery team" }) });
+    openExplore(container);
     expect(container.textContent).not.toMatch(/Scouting report/i);
+  });
+});
+
+describe("ResultCard — share-first sequencing (deep tools disclosed below Share)", () => {
+  it("keeps the deep tools collapsed by default — What-If / Compare / Scouting are not mounted", () => {
+    const { container } = renderCard();
+    expect(container.textContent).not.toMatch(/Open the What-If Lab/i);
+    expect(container.textContent).not.toMatch(/Compare lineup/i);
+    expect(container.textContent).not.toMatch(/Scouting report/i);
+    const toggle = within(container).getByRole("button", { name: /explore your five/i });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("reveals the What-If Lab and Compare tools when the Explore zone is opened", () => {
+    const { container } = renderCard();
+    openExplore(container);
+    expect(container.textContent).toMatch(/Open the What-If Lab/i);
+    expect(container.textContent).toMatch(/Compare lineup/i);
+  });
+
+  it("places the primary Share affordance ABOVE the Explore zone (the growth loop is not buried)", () => {
+    const { container } = renderCard();
+    const share = container.querySelector('a[aria-label="Post to X"]')!;
+    const explore = within(container).getByRole("button", { name: /explore your five/i });
+    // Node.DOCUMENT_POSITION_FOLLOWING (4) set => explore comes AFTER share in document order
+    expect(share.compareDocumentPosition(explore) & 4).toBeTruthy();
+  });
+
+  it("gates the What-If Lab out of the Explore zone in Prime (peak-era pools wouldn't match the spun era)", () => {
+    const { container } = renderCard({ prime: true, mode: "Prime Draft" });
+    openExplore(container);
+    expect(container.textContent).not.toMatch(/Open the What-If Lab/i);
+    expect(container.textContent).toMatch(/Compare lineup/i); // Compare is still offered in Prime
   });
 });
 
