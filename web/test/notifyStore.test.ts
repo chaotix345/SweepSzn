@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { enableRedisEnv, freshFake, ctx } from "@/test/routeHarness";
-import type { Notif } from "@/lib/types";
+import type { Notif, ChallengeNotif, BadgeNotif } from "@/lib/types";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 
@@ -10,7 +10,7 @@ const { NOTIF_CAP } = await import("@/lib/notify");
 
 beforeEach(() => { freshFake(); });
 
-const mkNotif = (over: Partial<Notif> = {}): Notif => ({
+const mkNotif = (over: Partial<ChallengeNotif> = {}): Notif => ({
   id: "n1",
   type: "challenge_response",
   challengeId: "c1",
@@ -61,5 +61,33 @@ describe("enqueueNotif dedup", () => {
       await enqueueNotif("u1", mkNotif({ challengeId: `c${i}`, ts: 1000 + i }));
     }
     expect(ctx.redis!.lists.get("notif:u1")?.length).toBe(NOTIF_CAP);
+  });
+});
+
+const mkBadge = (over: Partial<BadgeNotif> = {}): BadgeNotif => ({
+  id: "badge:scorer", type: "badge_unlock", badge: "scorer", name: "Bucket Getter", ts: 1000, ...over,
+});
+
+describe("enqueueNotif dedup — badge unlocks (keyed by badge, not challenge)", () => {
+  it("writes the first badge notification", async () => {
+    await enqueueNotif("u1", mkBadge());
+    expect(ctx.redis!.lists.get("notif:u1")?.length).toBe(1);
+  });
+
+  it("suppresses a repeat of the same badge", async () => {
+    await enqueueNotif("u1", mkBadge({ ts: 1 }));
+    await enqueueNotif("u1", mkBadge({ ts: 2 })); // same badge key → deduped
+    expect(ctx.redis!.lists.get("notif:u1")?.length).toBe(1);
+  });
+
+  it("does NOT suppress a different badge key", async () => {
+    await enqueueNotif("u1", mkBadge({ badge: "scorer", id: "badge:scorer" }));
+    await enqueueNotif("u1", mkBadge({ badge: "glass", id: "badge:glass" }));
+    expect(ctx.redis!.lists.get("notif:u1")?.length).toBe(2);
+  });
+
+  it("sets a badge-scoped dedup key (never collides with the challenge namespace)", async () => {
+    await enqueueNotif("u1", mkBadge());
+    expect(ctx.redis!.ttls.has("notif:dedup:u1:badge:scorer")).toBe(true);
   });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { enableRedisEnv, freshFake, ctx, req, readJson, signIn } from "@/test/routeHarness";
+import { enableRedisEnv, freshFake, ctx, req, readJson, signIn, flushAfter } from "@/test/routeHarness";
 import { dayUTC } from "@/lib/day";
+import { encodeLineup } from "@/lib/share";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -10,6 +11,15 @@ enableRedisEnv();
 vi.useFakeTimers({ now: new Date("2026-06-15T12:00:00Z"), toFake: ["Date"] });
 
 const { POST } = await import("@/app/api/profile/sync/route");
+const { getNotifs } = await import("@/lib/notifyStore");
+
+const FIVE = [
+  "michael_jordan_chi_1980s_1988",
+  "lebron_james_cle_2000s_2009",
+  "david_robinson_sas_1990s_1994",
+  "nikola_joki_den_2020s_2024",
+  "kevin_garnett_min_2000s_2004",
+];
 
 const post = (body: unknown, headers?: Record<string, string>) =>
   POST(req("/api/profile/sync", { method: "POST", body, headers: { "x-requested-with": "fetch", ...headers } }));
@@ -85,5 +95,26 @@ describe("POST /api/profile/sync", () => {
     const many = Array.from({ length: 500 }, (_, i) => dayUTC(new Date(base + i * 86_400_000)));
     await post({ history: many });
     expect(ctx.redis!.zsets.get(`streak:${UID}`)!.size).toBe(400);
+  });
+
+  // Drafted Dex badge-unlock notifications (post-commit, descriptive — §12).
+  it("records the badge snapshot but does NOT ping on the first sync (no backfill spam)", async () => {
+    await signIn({ uid: UID, name: "X" });
+    await post({ results: [{ encoded: encodeLineup(FIVE), mode: "daily", wins: 50, losses: 32, grade: "B", ts: 100 }] });
+    await flushAfter();
+    expect((await getNotifs(UID)).items.length).toBe(0);
+    expect(ctx.redis!.sets.get(`badges:${UID}`)?.size ?? 0).toBeGreaterThan(0); // snapshot stored
+  });
+
+  it("pings when a later sync newly unlocks a badge", async () => {
+    await signIn({ uid: UID, name: "X" });
+    await post({ results: [{ encoded: encodeLineup(FIVE), mode: "daily", wins: 50, losses: 32, grade: "B", ts: 100 }] });
+    await flushAfter(); // snapshot stored, no ping
+    await post({ results: [{ encoded: encodeLineup(FIVE), mode: "classic", wins: 80, losses: 2, grade: "S", ts: 200 }] });
+    await flushAfter();
+    const inbox = (await getNotifs(UID)).items;
+    expect(inbox.length).toBeGreaterThan(0);
+    expect(inbox[0].type).toBe("badge_unlock");
+    expect(inbox[0].type === "badge_unlock" && inbox[0].badge).toBe("sTier");
   });
 });

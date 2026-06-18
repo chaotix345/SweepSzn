@@ -268,6 +268,45 @@ export function challengeOgElement(creatorName: string, r: { wins: number; losse
   );
 }
 
+// Share-your-Dex card: the collection size + badge count + a row of the top collected players. All
+// descriptive (a collection, never a fit signal — DESIGN.md §12). Snapshot decoded from the URL.
+export function dexOgElement(players: { name: string; team: string }[], count: number, badges: number) {
+  const top = players.slice(0, 8);
+  return (
+    <div style={shell}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "baseline" }}>
+          <Wordmark />
+          <span style={{ marginLeft: 16, fontSize: 22, color: "#a1a1aa", fontWeight: 600 }}>Drafted Dex</span>
+        </div>
+        <span style={{ display: "flex", fontSize: 22, color: "#71717a" }}>my collection</span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", marginTop: "auto", marginBottom: "auto" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 24 }}>
+          <span style={{ display: "flex", fontSize: 150, fontWeight: 900, lineHeight: 1, color: "#ff6a00" }}>{count}</span>
+          <span style={{ display: "flex", fontSize: 34, color: "#a1a1aa" }}>players collected · {badges} badges</span>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 26, maxWidth: 1040 }}>
+          {top.map((p, i) => {
+            const c = teamColors(p.team);
+            return (
+              <span key={i} style={{ display: "flex", padding: "8px 16px", borderRadius: 999, background: c.bg, color: c.text, fontSize: 22, fontWeight: 700 }}>
+                {ascii(displayName(p.name))}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ display: "flex", fontSize: 30, fontWeight: 700, color: "#fafafa" }}>Every legend you&apos;ve fielded.</span>
+        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#ff6a00" }}>Start your Dex →</span>
+      </div>
+    </div>
+  );
+}
+
 // Share-your-rank card: shows the sharer's leaderboard standing + a CTA. Snapshot from the URL.
 export function rankOgElement(c: RankCard) {
   const scopeLabel = c.scope === "daily" ? "Daily leaderboard" : c.scope === "week" ? "Weekly leaderboard" : "All-time leaderboard";

@@ -2,14 +2,14 @@
 // Used by the inbox UI (text + unread count), the submit route (build the event), and the push
 // sender (text payload). The server stores/reads via notifyStore.ts; pushes via pushStore.ts.
 
-import type { Notif } from "./types";
+import type { Notif, ChallengeNotif, BadgeNotif } from "./types";
 
 export const NOTIF_CAP = 50; // max notifications retained per uid (LTRIM); newest-first
 
 interface BuildInput {
   challengeId: string;
   opponent: string;
-  outcome: Notif["outcome"];
+  outcome: ChallengeNotif["outcome"];
   tookLead: boolean;
   oppWins: number; oppLosses: number;
   yourWins: number; yourLosses: number;
@@ -19,7 +19,7 @@ interface BuildInput {
 // Deterministic id (challenge:ts:opponent) — no RNG, so the unit test is stable and a duplicate
 // submit at the same instant collapses to the same id rather than spamming the list. (The store also
 // dedups identical-outcome pings per challenge+responder, so genuine collisions never accumulate.)
-export function buildChallengeNotification(i: BuildInput): Notif {
+export function buildChallengeNotification(i: BuildInput): ChallengeNotif {
   return {
     id: `${i.challengeId}:${i.ts}:${i.opponent}`,
     type: "challenge_response",
@@ -33,6 +33,11 @@ export function buildChallengeNotification(i: BuildInput): Notif {
   };
 }
 
+// A newly-unlocked Drafted Dex badge. Deterministic id ("badge:<key>") so a re-fire collapses to one.
+export function buildBadgeNotification(badge: string, name: string, ts: number): BadgeNotif {
+  return { id: `badge:${badge}`, type: "badge_unlock", badge, name, ts };
+}
+
 // Unread = notifications strictly newer than the read watermark (the ts of the newest item the user
 // has marked read). Idempotent and drift-free; "mark all read" sets the watermark to the newest ts.
 export function unreadCount(items: Pick<Notif, "ts">[], watermark: number): number {
@@ -41,6 +46,9 @@ export function unreadCount(items: Pick<Notif, "ts">[], watermark: number): numb
 
 // Shared copy for the in-app inbox AND the web-push payload, so both read identically.
 export function notificationText(n: Notif): { title: string; body: string } {
+  if (n.type === "badge_unlock") {
+    return { title: `Badge unlocked: ${n.name}`, body: "A new milestone in your Drafted Dex — tap to see your collection." };
+  }
   const them = n.opponent || "Someone";
   const bar = `${n.yourWins}-${n.yourLosses}`;
   const theirs = `${n.oppWins}-${n.oppLosses}`;

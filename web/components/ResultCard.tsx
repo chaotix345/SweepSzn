@@ -7,13 +7,16 @@ import type { LineupResult, Player, PlayerBreakdown, Slot } from "@/lib/types";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { encodeLineup, cardImageUrl } from "@/lib/share";
 import { bpCode, type BlueprintView } from "@/lib/blueprint";
-import { factorViews, lineupRoles, headline, historyAnchor, playerContribRows, type ContribRow } from "@/lib/explain";
+import { factorViews, lineupRoles, headline, historyAnchor, scoutingAnchor, fmtNet, playerContribRows, type ContribRow } from "@/lib/explain";
 import { WIN_GRADES, weakestSlot } from "@/lib/engine";
 import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
 import { GRADE_COLOR, isEliteGrade } from "@/lib/grades";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { WhatIfLab } from "@/components/game/WhatIfLab";
 import { RarityBadge } from "@/components/game/RarityBadge";
+import { Dossier } from "@/components/game/Dossier";
+import { DexStrip } from "@/components/game/DexStrip";
+import { CompareLineup } from "@/components/game/CompareLineup";
 
 // Crowd snapshot + your vote (and, same-session only, the spun team/era the vote was about).
 type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
@@ -122,6 +125,8 @@ export default function ResultCard({
   const names = players.map((p) => displayName(p.name));
 
   const elite = isEliteGrade(result.grade);
+  // one roster row's dossier open at a time (tap ⓘ) — reuses the draft-board Dossier, post-commit
+  const [openRosterId, setOpenRosterId] = useState<string | null>(null);
 
   return (
     <div className={`mt-4 overflow-hidden rounded-2xl border bg-zinc-900 ${elite ? "border-gold/30 ring-1 ring-gold/25 animate-gold-pulse" : "animate-rise-in border-zinc-800"}`}>
@@ -218,11 +223,13 @@ export default function ResultCard({
           </p>
         )}
         <RarityBadge ids={players.map((p) => p.person_id ?? p.id).join(",")} />
+        <ScoutingAnchor result={result} />
         {/* What-If Lab: post-commit swap sandbox. Gated off Prime (a candidate's decade there is its
             peak, not the spun era, so the slot pool wouldn't match). Re-scores via /api/evaluate. */}
         {mode !== "prime" && (
           <WhatIfLab players={players} slots={slots} baseWins={result.wins} baseLosses={result.losses} baseGrade={result.grade} />
         )}
+        <CompareLineup players={players} result={result} lineupSeg={lineupSeg} />
       </div>
 
       {/* roster */}
@@ -232,6 +239,7 @@ export default function ResultCard({
           {players.map((p, i) => {
             const role = roles[i];
             const c = teamColors(p.team);
+            const open = openRosterId === p.id;
             return (
               <div key={p.id} className="rounded-xl bg-zinc-950/60 px-2.5 py-2">
                 <div className="flex items-center gap-3">
@@ -249,8 +257,17 @@ export default function ResultCard({
                     <RoleBars pb={result.players[i]} />
                   </div>
                   <StatRow p={p} className="hidden shrink-0 sm:flex" />
+                  {/* tap ⓘ → the same descriptive Dossier the draft board uses (accolades, career, era bars) */}
+                  <button onClick={() => setOpenRosterId(open ? null : p.id)} aria-expanded={open}
+                    aria-label={`${open ? "Hide" : "Show"} ${p.name} details`}
+                    title="Player details — accolades, career, era context"
+                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border text-sm transition ${
+                      open ? "border-orange-500 bg-orange-500/10 text-orange-400" : "border-zinc-800 text-zinc-500 hover:text-orange-400"}`}>
+                    {open ? "▴" : "ⓘ"}
+                  </button>
                 </div>
                 <StatRow p={p} className="mt-1.5 flex justify-between px-1 sm:hidden" />
+                {open && <Dossier cand={p} />}
               </div>
             );
           })}
@@ -263,6 +280,7 @@ export default function ResultCard({
             <Stat v={totals.stl} k="SPG" strong /><Stat v={totals.blk} k="BPG" strong />
           </div>
         </div>
+        <DexStrip lineupIds={players.map((p) => p.id)} />
       </div>
 
       <div className="border-t border-zinc-800 px-6 py-4">
@@ -438,6 +456,42 @@ function BlueprintStrip({ result, bp }: { result: LineupResult; bp: BlueprintVie
       </div>
       <p className="mt-2 text-center text-[11px] text-zinc-500">
         {result.wins} wins × {bp.mult.toFixed(2)} execution = your score on the {bp.label} board
+      </p>
+    </div>
+  );
+}
+
+// Post-commit scouting report: your five's projected ORtg/DRtg/Net beside a comparable real team's
+// actual ratings (from the win-band anchor). Descriptive — the round is already scored, so juxtaposing
+// the engine's own numbers (already shown above) with a real yardstick is fair (DESIGN.md §12).
+function ScoutingAnchor({ result }: { result: LineupResult }) {
+  const s = scoutingAnchor(result);
+  if (!s) return null;
+  const rows = [
+    { label: "Your five (projected)", ortg: s.est.ortg, drtg: s.est.drtg, net: s.est.netRtg, you: true },
+    { label: `${s.anchor.record} ${s.anchor.team} (${s.anchor.season})`, ortg: s.anchor.ortg, drtg: s.anchor.drtg, net: s.anchor.nrtg, you: false },
+  ];
+  return (
+    <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide text-zinc-500">📋 Scouting report</span>
+        <span className="text-[10px] text-zinc-600">per 100 possessions</span>
+      </div>
+      <div className="grid grid-cols-[1fr_3.25rem_3.25rem_3.25rem] gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-600">
+        <span /><span className="text-right">ORtg</span><span className="text-right">DRtg</span><span className="text-right">Net</span>
+      </div>
+      <div className="mt-1 space-y-1">
+        {rows.map((r) => (
+          <div key={r.label} className="grid grid-cols-[1fr_3.25rem_3.25rem_3.25rem] items-center gap-1 text-[11px] tabular-nums">
+            <span className={`truncate ${r.you ? "font-semibold text-zinc-200" : "text-zinc-400"}`}>{r.label}</span>
+            <span className="text-right text-zinc-300">{r.ortg.toFixed(1)}</span>
+            <span className="text-right text-zinc-300">{r.drtg.toFixed(1)}</span>
+            <span className={`text-right ${r.net >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtNet(r.net)}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[10px] leading-snug text-zinc-600">
+        Your five&apos;s engine projection beside {s.anchor.team}&apos;s actual {s.anchor.season} ratings — a real-history yardstick, not a fit score.
       </p>
     </div>
   );

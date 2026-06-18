@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { factorBlurb, factorViews, playerContribRows, historyAnchor, headline } from "./explain";
+import { factorBlurb, factorViews, playerContribRows, historyAnchor, scoutingAnchor, FAMOUS_TEAMS, fmtNet, headline } from "./explain";
 import type { LineupResult, PlayerBreakdown } from "./types";
 
 const GENERIC = "Contribution to the team rating.";
@@ -96,6 +96,45 @@ describe("historyAnchor — verified real-team reference per win band", () => {
   it("41 and below → no anchor (an average team wins 41)", () => {
     expect(historyAnchor(41)).toBeNull();
     expect(historyAnchor(20)).toBeNull();
+  });
+});
+
+describe("scoutingAnchor — your five's projection beside a comparable real team", () => {
+  it("pairs the win-band anchor with the result's projected ratings + the team's actuals", () => {
+    const s = scoutingAnchor(mkResult({ wins: 57, ortg: 112, drtg: 104, netRtg: 8 }))!;
+    expect(s).not.toBeNull();
+    expect(s.anchor.team).toMatch(/Spurs/);
+    expect(s.est).toEqual({ ortg: 112, drtg: 104, netRtg: 8 });
+    expect(s.anchor.ortg).toBeCloseTo(108.3, 1); // the real 2012-13 Spurs ORtg
+  });
+
+  it("returns null below the 42-win anchor floor", () => {
+    expect(scoutingAnchor(mkResult({ wins: 30 }))).toBeNull();
+  });
+});
+
+describe("fmtNet — signed net rating whose sign agrees with the rounded magnitude", () => {
+  it("prefixes + for positive and keeps - for negative", () => {
+    expect(fmtNet(4.2)).toBe("+4.2");
+    expect(fmtNet(-3.1)).toBe("-3.1");
+  });
+  it("never shows +0.0 for a value that rounds to zero", () => {
+    expect(fmtNet(0.04)).toBe("0.0");
+    expect(fmtNet(0)).toBe("0.0");
+    expect(fmtNet(-0.02)).toBe("0.0");
+  });
+});
+
+describe("FAMOUS_TEAMS — the curated real-team set the compare picker offers", () => {
+  it("exposes every anchor team with real ratings for the picker", () => {
+    expect(FAMOUS_TEAMS.length).toBe(8);
+    for (const t of FAMOUS_TEAMS) {
+      expect(typeof t.name).toBe("string");
+      expect(typeof t.year).toBe("number");
+      expect(typeof t.ortg).toBe("number");
+      expect(typeof t.drtg).toBe("number");
+    }
+    expect(FAMOUS_TEAMS[0].team).toMatch(/Warriors/);
   });
 });
 

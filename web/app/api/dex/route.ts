@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/authServer";
-import { getResults, getDexIds } from "@/lib/profileStore";
-import { decodeLineup } from "@/lib/share";
-import { getPlayersByIds } from "@/lib/data";
-import { playerTraits } from "@/lib/traits";
 import { rateLimit, ipOf } from "@/lib/redis";
-import { computeBadges, type DexPlayer } from "@/lib/dex";
+import { loadDexState } from "@/lib/dexState";
 
 export const runtime = "nodejs";
 
@@ -19,18 +15,6 @@ export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "auth_required" }, { status: 401 });
 
-  const results = await getResults(session.uid);
-  const seen = new Set<string>();
-  for (const r of results) for (const id of decodeLineup(r.encoded)) seen.add(id);
-  // Union the unbounded dex set so players from games evicted past the 200-result cap aren't lost.
-  for (const id of await getDexIds(session.uid)) seen.add(id);
-
-  const players: DexPlayer[] = getPlayersByIds([...seen]).map((p) => ({
-    id: p.id, personId: p.person_id ?? p.id, name: p.name, team: p.team, decade: p.decade,
-    pos: p.pos, eligible: p.eligible && p.eligible.length ? p.eligible : [p.pos],
-    pts: p.pts ?? null, trb: p.trb ?? null, ast: p.ast ?? null, stl: p.stl ?? null, blk: p.blk ?? null,
-    fame: p.fame ?? 0, traits: playerTraits(p),
-  }));
-  const badges = computeBadges(players, results.map((r) => ({ grade: r.grade })));
-  return NextResponse.json({ players, total: results.length, badges });
+  const { players, total, badges } = await loadDexState(session.uid);
+  return NextResponse.json({ players, total, badges });
 }

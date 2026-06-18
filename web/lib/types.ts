@@ -156,7 +156,7 @@ export interface ChallengeOwnerView {
 // non-sensitive data already on / derivable from the public challenge board (a display name + a W-L
 // record + an unguessable challenge id) — no lineup, no uid. `outcome` is from the CREATOR's POV
 // (the notified party): "beaten" = a responder beat the creator's bar, "held" = the creator held.
-export interface Notif {
+export interface ChallengeNotif {
   id: string;
   type: "challenge_response";
   challengeId: string;
@@ -167,6 +167,16 @@ export interface Notif {
   yourWins: number; yourLosses: number;
   ts: number;
 }
+// A Drafted Dex badge that newly unlocked on a result sync — post-commit + descriptive (a milestone
+// over real box/identity data, never a fit signal — DESIGN.md §12). Deep-links to /dex.
+export interface BadgeNotif {
+  id: string;            // "badge:<key>" — deterministic, so a duplicate collapses instead of spamming
+  type: "badge_unlock";
+  badge: string;         // BadgeKey
+  name: string;          // display name shown in the inbox
+  ts: number;
+}
+export type Notif = ChallengeNotif | BadgeNotif;
 export interface NotifView { items: Notif[]; unread: number }
 
 export interface DefModel {

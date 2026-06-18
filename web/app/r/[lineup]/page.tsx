@@ -2,30 +2,16 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPlayersByIds, getCoefficients } from "@/lib/data";
-import { evaluateLineup } from "@/lib/engine";
-import { decodeShare } from "@/lib/share";
-import { bpFromCode, gradeBlueprint } from "@/lib/blueprint";
+import { resolveSharedLineup } from "@/lib/sharedLineup";
 import { SLOTS, displayName } from "@/lib/teams";
 import ResultCard from "@/components/ResultCard";
 import { ButtonLink } from "@/components/ui/Button";
 
 type Props = { params: Promise<{ lineup: string }> };
 
-// cache() dedupes the lookup+evaluate across generateMetadata and the page render (same request).
-const loadLineup = cache((lineup: string) => {
-  const { ids, hinted, prime, bp } = decodeShare(lineup);
-  // reject crafted URLs with the wrong count or duplicate ids (5 of the same player would otherwise
-  // pass the length check and render a nonsensical fabricated record) — mirrors verifyTrace's guard
-  if (ids.length !== 5 || new Set(ids).size !== 5) return null;
-  const players = getPlayersByIds(ids);
-  if (players.length !== 5) return null;
-  const result = evaluateLineup(players, getCoefficients());
-  // a b<code>~ prefix re-derives the blueprint execution grade from the same result (deterministic).
-  // blueprint and prime are mutually exclusive modes — a crafted bs~p~ URL renders as blueprint only
-  const bpKey = bpFromCode(bp);
-  return { players, result, hinted, prime: bpKey ? false : prime, blueprint: bpKey ? gradeBlueprint(bpKey, result) : null };
-});
+// cache() dedupes the decode+evaluate across generateMetadata and the page render (same request).
+// The decode/evaluate/validate logic lives in resolveSharedLineup (shared with /api/result + /compare).
+const loadLineup = cache(resolveSharedLineup);
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { lineup } = await params;
