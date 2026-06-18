@@ -17,6 +17,7 @@ import { RarityBadge } from "@/components/game/RarityBadge";
 import { Dossier } from "@/components/game/Dossier";
 import { DexStrip } from "@/components/game/DexStrip";
 import { CompareLineup } from "@/components/game/CompareLineup";
+import { ExploreZone } from "@/components/game/ExploreZone";
 
 // Crowd snapshot + your vote (and, same-session only, the spun team/era the vote was about).
 type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
@@ -94,9 +95,9 @@ export function SaveCardImage({ path }: { path: string }) {
 }
 
 export default function ResultCard({
-  result, players, slots, mode, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint, lbRank,
+  result, players, slots, mode, modeKey, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint, lbRank,
 }: {
-  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean; blueprint?: BlueprintView; lbRank?: LbRankProp | null;
+  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; modeKey?: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean; blueprint?: BlueprintView; lbRank?: LbRankProp | null;
 }) {
   const factors = factorViews(result);
   // split by the value's sign (what actually helped/hurt), not the engine's fixed label —
@@ -127,6 +128,8 @@ export default function ResultCard({
   const elite = isEliteGrade(result.grade);
   // one roster row's dossier open at a time (tap ⓘ) — reuses the draft-board Dossier, post-commit
   const [openRosterId, setOpenRosterId] = useState<string | null>(null);
+  // teaser for the collapsed Explore zone (What-If Lab is gated off Prime — see below)
+  const exploreSummary = prime ? "Compare your five" : "What-If Lab · Compare";
 
   return (
     <div className={`mt-4 overflow-hidden rounded-2xl border bg-zinc-900 ${elite ? "border-gold/30 ring-1 ring-gold/25 animate-gold-pulse" : "animate-rise-in border-zinc-800"}`}>
@@ -223,13 +226,6 @@ export default function ResultCard({
           </p>
         )}
         <RarityBadge ids={players.map((p) => p.person_id ?? p.id).join(",")} />
-        <ScoutingAnchor result={result} />
-        {/* What-If Lab: post-commit swap sandbox. Gated off Prime (a candidate's decade there is its
-            peak, not the spun era, so the slot pool wouldn't match). Re-scores via /api/evaluate. */}
-        {mode !== "prime" && (
-          <WhatIfLab players={players} slots={slots} baseWins={result.wins} baseLosses={result.losses} baseGrade={result.grade} />
-        )}
-        <CompareLineup players={players} result={result} lineupSeg={lineupSeg} />
       </div>
 
       {/* roster */}
@@ -295,6 +291,18 @@ export default function ResultCard({
         </div>
         <SaveCardImage path={sharePath} />
       </div>
+
+      {/* Deep tools sit BELOW Share so the growth loop isn't buried under a wall of analysis.
+          Collapsed + lazy-mounted (a cold permalink viewer never fires their /api fetches). */}
+      <ExploreZone summary={exploreSummary} onOpen={() => track("explore_open", { mode: modeKey ?? "shared", grade: result.grade, wins: result.wins })}>
+        <ScoutingAnchor result={result} />
+        {/* What-If Lab: post-commit swap sandbox. Gated off Prime — a candidate's decade there is
+            his peak, not the spun era, so the slot pool wouldn't match. Re-scores via /api/evaluate. */}
+        {!prime && (
+          <WhatIfLab players={players} slots={slots} baseWins={result.wins} baseLosses={result.losses} baseGrade={result.grade} />
+        )}
+        <CompareLineup players={players} result={result} lineupSeg={lineupSeg} />
+      </ExploreZone>
     </div>
   );
 }

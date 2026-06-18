@@ -10,6 +10,9 @@ vi.mock("next/link", () => ({
     React.createElement("a", { href, className }, children),
 }));
 
+vi.mock("@vercel/analytics", () => ({ track: vi.fn() }));
+
+import { track } from "@vercel/analytics";
 import { CompareLineup } from "@/components/game/CompareLineup";
 import type { Player, LineupResult } from "@/lib/types";
 
@@ -29,7 +32,7 @@ function makeResult(o: Partial<LineupResult> = {}): LineupResult {
 const setup = () =>
   render(<CompareLineup players={makePlayers()} result={makeResult()} lineupSeg="p0,p1,p2,p3,p4" />);
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); });
 
 describe("CompareLineup — post-game compare (vs real team / vs friend)", () => {
   it("opens a dialog from the compare CTA", () => {
@@ -65,6 +68,29 @@ describe("CompareLineup — post-game compare (vs real team / vs friend)", () =>
     // a share-this-matchup link to the /compare SSR route
     const share = container.querySelector('a[href^="/compare/p0,p1,p2,p3,p4/"]');
     expect(share).toBeTruthy();
+  });
+
+  it("fires a compare_open analytics event when the compare CTA opens (the friend loop is a growth surface)", () => {
+    const { getByRole } = setup();
+    fireEvent.click(getByRole("button", { name: /compare your lineup/i }));
+    expect(track).toHaveBeenCalledWith("compare_open", expect.objectContaining({ grade: expect.any(String), wins: expect.any(Number) }));
+  });
+
+  it("fires a compare_friend event when a friend's five resolves", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true, status: 200,
+      json: async () => ({
+        players: makePlayers(),
+        result: makeResult({ wins: 70, losses: 12 }),
+        hinted: false, prime: false, blueprint: null,
+      }),
+    }) as unknown as typeof fetch));
+    const { getByRole, getByPlaceholderText } = setup();
+    fireEvent.click(getByRole("button", { name: /compare your lineup/i }));
+    fireEvent.click(getByRole("button", { name: /vs a friend/i }));
+    fireEvent.change(getByPlaceholderText(/paste/i), { target: { value: "https://sweepszn.com/r/x,y,z,w,v" } });
+    fireEvent.click(getByRole("button", { name: /compare with friend/i }));
+    await waitFor(() => expect(track).toHaveBeenCalledWith("compare_friend", expect.objectContaining({ your_grade: expect.any(String), friend_grade: expect.any(String) })));
   });
 
   it("vs Friend: surfaces an error when the link does not resolve", async () => {

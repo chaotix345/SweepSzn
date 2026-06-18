@@ -565,7 +565,7 @@ export default function Game() {
   );
   if (result) return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
-      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView}
+      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} modeKey={mode} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView}
         lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} onView={setLbView} />}
       {/* Classic/HoopIQ/Prime have no board, so they'd otherwise offer a signed-out player no reason to
