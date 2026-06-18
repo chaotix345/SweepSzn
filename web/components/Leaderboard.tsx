@@ -180,7 +180,7 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
           {tab === "daily" && stale && !submitted && (
             <div className="mt-3 rounded-lg border border-amber-600/40 bg-amber-500/10 p-3 text-xs text-amber-300">
               Today&apos;s daily just reset — this game was for an earlier day, so it can&apos;t be posted.{" "}
-              <a href="/play" className="font-bold underline hover:text-amber-200">Play today&apos;s daily →</a>
+              <a href="/play?mode=daily" className="font-bold underline hover:text-amber-200">Play today&apos;s daily →</a>
             </div>
           )}
           {tab === "daily" && !submitted && !readOnly && !stale && (
@@ -234,7 +234,7 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
       ) : (
         <div className="mt-3 rounded-lg border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-500">
           Leaderboards are warming up.{" "}
-          <a href="/play" className="font-semibold text-orange-400 hover:text-orange-300">Play the Daily →</a>
+          <a href="/play?mode=daily" className="font-semibold text-orange-400 hover:text-orange-300">Play the Daily →</a>
         </div>
       )}
     </div>
@@ -262,7 +262,7 @@ function EmptyBoard() {
       </div>
       <p className="mt-2.5 text-center text-xs text-zinc-400">
         Be the first on today&apos;s board.{" "}
-        <a href="/play" className="font-semibold text-orange-400 hover:text-orange-300">Play now →</a>
+        <a href="/play?mode=daily" className="font-semibold text-orange-400 hover:text-orange-300">Play now →</a>
       </p>
     </div>
   );

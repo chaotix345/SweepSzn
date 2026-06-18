@@ -12,8 +12,9 @@ describe("parseModeParam", () => {
     expect(parseModeParam("challenge")).toBeNull();
   });
 
-  it("rejects null / missing param", () => {
+  it("rejects null / undefined / missing param (returns null, never undefined)", () => {
     expect(parseModeParam(null)).toBeNull();
+    expect(parseModeParam(undefined)).toBeNull();
   });
 
   it("rejects the empty string", () => {

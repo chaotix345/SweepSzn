@@ -380,7 +380,10 @@ export default function Game() {
         if (dl) {
           if (cancelled) return;
           start(dl);
-          params.delete("mode");
+          // A fresh start owns the URL: drop ?mode= AND any restore params (?r=/?m=/?own=/?d=/?sg=) so a
+          // later refresh can't resurrect a stale result. start() already strips them from the LIVE url,
+          // but `params` is the pre-start snapshot — clean it too before this replaceState rewrites the bar.
+          for (const k of ["mode", "r", "m", "own", "d", "sg"]) params.delete(k);
           const qs = params.toString();
           window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
           return;

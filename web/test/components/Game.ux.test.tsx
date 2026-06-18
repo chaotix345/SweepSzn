@@ -151,6 +151,23 @@ describe("Game — ?mode= deep-link past the picker", () => {
     await act(async () => {});
     expect(screen.queryByText(/Pick your mode/i)).toBeTruthy();
   });
+
+  it("clicking ← Modes from a deep-linked game returns to the picker (the escape hatch)", async () => {
+    window.history.replaceState({}, "", "/play?mode=daily");
+    render(<Game />);
+    await act(async () => {});
+    expect(screen.queryByText(/Pick your mode/i)).toBeNull(); // started in-game
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /modes/i })); });
+    expect(screen.queryByText(/Pick your mode/i)).toBeTruthy(); // back at the wall (discovery preserved)
+  });
+
+  it("a fresh ?mode= start drops any coexisting restore params (a refresh won't resurrect them)", async () => {
+    window.history.replaceState({}, "", "/play?mode=daily&r=abcde&m=classic");
+    render(<Game />);
+    await act(async () => {});
+    expect(screen.queryByText(/Pick your mode/i)).toBeNull(); // daily started — the restore did NOT win
+    expect(window.location.search).toBe(""); // r/m stripped, so a later refresh stays clean
+  });
 });
 
 describe("Game — first-run levers tip (R6)", () => {

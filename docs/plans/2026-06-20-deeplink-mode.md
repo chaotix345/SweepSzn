@@ -80,6 +80,34 @@ mount effect.
   each finding empirically) → `npm run build` → PR → CI → merge → verify prod deploy + `/api/health`
   → dogfood every changed surface on both viewports.
 
+## Review fixes (5-dim adversarial Workflow, 20 agents, per-finding verify)
+
+Verdict: 15 findings raised → 7 confirmed actionable → fixed; 8 rejected (the verify stage correctly
+downgraded the theoretical ones — e.g. the "← Modes snaps back to a stale result" race is impossible
+because the `!mode` render guard precedes the `result` branch, so a late `setResult` is never shown).
+
+Fixed:
+1. **`?mode=` left coexisting restore params in the URL** (correctness/med). The `?mode=` branch rebuilt
+   the URL from the pre-`start()` `params` snapshot, so a `/play?mode=daily&r=…&m=…` would re-add the
+   stale `?r=/?m=` after `start()` cleaned the live URL → a later refresh would resurrect a result the
+   user never played. Fix: strip `mode/r/m/own/d/sg` from the snapshot before the replaceState. (Our own
+   links never emit the combo, but it's a cheap robustness fix + a regression test now pins it.)
+2. **Leaderboard ×3 CTAs were never deep-linked** (completeness/high — the real catch). The earlier batch
+   Edit silently errored ("file not read") and I missed it among the batch; the diff had zero Leaderboard
+   changes. The most-complete full-permalink audit (this review) caught it. Fixed lines 183/237/265 →
+   `/play?mode=daily`, verified on disk.
+3. **Surgeon shares now deep-link to `?mode=surgeon`, not `daily`** (completeness/med). "Fix your (own)
+   five →" on `/sg/` (both the `ShareHeader` and the in-card CTA) is Surgeon-mode language; routing it to
+   Daily contradicted the copy. Routing to Surgeon makes copy+destination cohere — the same principle as
+   the per-mode board tiles. (`/r/`, `/pe/`, `/compare/`, `/dex/s/` stay Daily — the universal cold-start.)
+4. **Test gaps** (low/nit): added a Game-level escape-hatch integration test (deep-link → click ← Modes →
+   picker reappears), a coexisting-restore-param strip test, scoped the ResultCard shared-CTA query with
+   `within(container)` (the block has no auto-cleanup), and added the `parseModeParam(undefined)` case
+   (which **disproved** the review's claimed type-contract bug — the ternary returns `null`, not `undefined`).
+
+DexBoard "Play a round →" stays `/play` deliberately (a returning-user collection surface); the review's
+completeness pass did not flag it. Suite 1530 → 1547 green; tsc + lint(0 err) + build all pass.
+
 ## Deferred (next session)
 
 Sign-in conversion moment (post-game §12-safe "claim your rank"); slot-pick crowd reveal; per-page OG

@@ -57,7 +57,7 @@ export default async function SharedSurgeon({ params }: Props) {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <ShareHeader tagline="a friend fixed their five" cta="Fix your five →" />
+        <ShareHeader tagline="a friend fixed their five" cta="Fix your five →" ctaHref="/play?mode=surgeon" />
         <SurgeonResult before={data.before} after={data.after} beforePlayers={data.beforePlayers}
           afterPlayers={data.afterPlayers} outIdx={data.outIdx} diagnosis={data.diagnosis} card={card} shared />
       </div>
