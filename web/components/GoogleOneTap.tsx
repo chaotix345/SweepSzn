@@ -66,13 +66,14 @@ export default function GoogleOneTap({ onSignIn }: { onSignIn: () => void }) {
         client_id: CLIENT_ID,
         callback: handleCredential,
         nonce,
-        use_fedcm_for_prompt: true,
       });
-      window.google.accounts.id.prompt(); // inline One Tap
+      // No unsolicited One Tap prompt(): SessionProvider only mounts this component once the player
+      // opens sign-in, so we render the explicit Google button — reliable across browsers (Safari
+      // suppresses One Tap) and aligned with the anon-first funnel (DESIGN.md §12).
       if (btnRef.current) {
         window.google.accounts.id.renderButton(btnRef.current, {
           theme: "filled_black", size: "large", text: "signin_with", shape: "pill",
-        }); // fallback button (Safari / One Tap suppression)
+        });
       }
     })();
     return () => { cancelled = true; };

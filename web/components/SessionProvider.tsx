@@ -75,22 +75,15 @@ export default function SessionProvider({ children }: { children: React.ReactNod
   return (
     <Ctx.Provider value={{ user, loading, refresh, signOut, promptSignIn, signInNonce }}>
       {children}
-      {AUTH_ENABLED && !loading && !user && (
-        // One mounted GoogleOneTap: its One Tap bubble auto-greets signed-out visitors app-wide, and its
-        // fallback button lives in this container — offscreen until promptSignIn() reveals it as a popover
-        // (so the header "Sign in" button and the leaderboard CTA both surface the same single instance).
+      {AUTH_ENABLED && !loading && !user && signInOpen && (
+        // Google sign-in is deferred to user INTENT: GSI (the Google button) loads only when the player
+        // opens sign-in — the header "Sign in", a leaderboard CTA, or the post-game "Save with Google"
+        // nudge, all via promptSignIn(). There is no unsolicited One Tap prompt on the landing page:
+        // anon play is the funnel; signing in is the opt-in upgrade for anyone who cares about their
+        // standing (DESIGN.md §12). Gating the mount also keeps GSI's iframe/FedCM off the top of funnel.
         <>
-          {signInOpen && (
-            <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" onClick={() => setSignInOpen(false)} />
-          )}
-          <div
-            inert={!signInOpen}
-            className={
-              signInOpen
-                ? "fixed right-3 top-16 z-50 w-72 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl shadow-black/50"
-                : "pointer-events-none fixed left-[-9999px] top-0 opacity-0"
-            }
-          >
+          <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" onClick={() => setSignInOpen(false)} />
+          <div className="fixed right-3 top-16 z-50 w-72 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl shadow-black/50">
             <div className="mb-2 flex items-start justify-between gap-2">
               <div className="text-sm font-bold text-zinc-100">Save your progress</div>
               <button onClick={() => setSignInOpen(false)} aria-label="Close" className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition hover:text-zinc-200">✕</button>
