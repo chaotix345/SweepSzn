@@ -16,6 +16,7 @@ beforeEach(() => {
   evMock.mockClear();
   sessionStorage.clear();
   localStorage.clear();
+  window.history.replaceState({}, "", "/"); // reset utm in the URL between tests
 });
 afterEach(() => cleanup());
 
@@ -56,5 +57,17 @@ describe("Beacon", () => {
     cleanup();
     render(<Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />);
     expect(evMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("attributes the beacon to the URL utm_source when present (visit-by-source)", () => {
+    window.history.replaceState({}, "", "/?utm_source=x_launch");
+    render(<Beacon name="visit" />);
+    expect(evMock).toHaveBeenCalledWith("visit", { uid: "uid-test-1234", source: "x_launch" });
+  });
+
+  it("falls back to the persisted first-touch source when the URL carries none", () => {
+    localStorage.setItem("szn:utm:source", "organic");
+    render(<Beacon name="visit" />);
+    expect(evMock).toHaveBeenCalledWith("visit", { uid: "uid-test-1234", source: "organic" });
   });
 });

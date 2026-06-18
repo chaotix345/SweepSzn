@@ -18,6 +18,7 @@ export type EvStage = ClientStage | "complete" | "signin" | "submit";
 
 export const EV_TTL = 60 * 60 * 24 * 45; // ~45 days, enough for a 14-day window + retention look-back
 export const EV_ACTIVE_CAP = 50_000;     // max distinct uids tracked per day (far above realistic DAU)
+export const EV_SRC_CAP = 500;           // max distinct utm sources tracked per stage/day (far above legit cardinality)
 
 // Stages whose uid counts toward the day's distinct-active set (DAU / D1 / D7). Deliberately an
 // engaged-action allow-list: `visit` and `share_view` are non-engaging (a bouncer / a share recipient
@@ -81,12 +82,17 @@ export async function bump(
       const modeKey = `ev:submode:${day}`;
       p.hincrby(modeKey, opts.mode, 1).expire(modeKey, EV_TTL);
     }
+    await p.exec();
     // acquisition split: only visit + first_play, only when a (re-validated) source rode the beacon.
+    // Capped like ev:active below — /api/ev is unauthenticated, so bound distinct hash-field growth
+    // (an attacker cycling utm_source values) before the write; legit utm cardinality is tiny, far
+    // under the cap. Past it, per-source attribution is approximate — acceptable for internal metrics.
     if (SOURCE_STAGES.has(stage) && opts.source && SRC_RE.test(opts.source)) {
       const srcKey = `ev:src:${stage}:${day}`;
-      p.hincrby(srcKey, opts.source, 1).expire(srcKey, EV_TTL);
+      if ((await redis.hlen(srcKey)) < EV_SRC_CAP) {
+        await redis.pipeline().hincrby(srcKey, opts.source, 1).expire(srcKey, EV_TTL).exec();
+      }
     }
-    await p.exec();
     // play/share/signin/submit carry a uid → contribute to the day's distinct-active set.
     // Cap distinct-member growth: the beacon is unauthenticated, so without a bound a flood of
     // unique uids could exhaust shared Redis memory (the set lives EV_TTL and is materialised by

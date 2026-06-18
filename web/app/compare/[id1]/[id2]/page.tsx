@@ -8,6 +8,7 @@ import { ZRadar } from "@/components/game/ZRadar";
 import { displayName } from "@/lib/teams";
 import { GRADE_COLOR } from "@/lib/grades";
 import ShareHeader from "@/components/ShareHeader";
+import Beacon from "@/components/Beacon";
 
 type Props = { params: Promise<{ id1: string; id2: string }> };
 
@@ -70,6 +71,9 @@ export default async function ComparePage({ params }: Props) {
   const { left, right } = data;
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      {/* Share-loop close + first-arrival visit (feeds sourceSplit.visit; device key shared with home). */}
+      <Beacon name="share_view" />
+      <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <ShareHeader tagline="lineup compare" cta="Build your own →" />
 

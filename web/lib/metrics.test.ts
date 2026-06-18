@@ -73,6 +73,9 @@ describe("getMetrics", () => {
     "ev:submode:2026-6-7": { daily: 20, challenge: 3, factorhunt: 5 },
     "ev:submode:2026-6-8": { daily: 25, challenge: 1 },
     "ev:submode:2026-6-9": { daily: 15 },
+    "ev:src:first_play:2026-6-7": { x_launch: 5, reddit: 2 },
+    "ev:src:first_play:2026-6-9": { x_launch: 3 }, // same channel a 2nd day → exercises the cross-day fold
+    "ev:src:visit:2026-6-8": { x_launch: 40, reddit: 10 },
     "ev:totals": { play: 300, complete: 200, share: 40, signin: 20, submit: 90 },
   };
   const zcards: Record<string, number> = { "lb:2026-6-7": 28, "lb:2026-6-8": 40, "lb:2026-6-9": 20, "lb:week:2026-W24": 96, "lb:alltime": 1234 };
@@ -220,6 +223,15 @@ describe("getMetrics", () => {
     expect(m.submitSplit.classic ?? 0).toBe(0);  // classic has no submit beacon
   });
 
+  it("source split summed across window (utm acquisition; folds the same channel across days)", async () => {
+    const fake = buildFake();
+    const m = await getMetrics(fake as unknown as Redis, { days: 3, now });
+    expect(m.sourceSplit.firstPlay.x_launch).toBe(8); // 5 (6-7) + 3 (6-9) — the cross-day fold
+    expect(m.sourceSplit.firstPlay.reddit).toBe(2);
+    expect(m.sourceSplit.visit.x_launch).toBe(40);
+    expect(m.sourceSplit.visit.reddit).toBe(10);
+  });
+
   it("board ZCARD per day", async () => {
     const fake = buildFake();
     const m = await getMetrics(fake as unknown as Redis, { days: 3, now });
@@ -263,5 +275,7 @@ describe("getMetrics", () => {
     expect(empty.rates.firstPlay).toBe(0);
     expect(empty.d1).toBe(0);
     expect(empty.days.length).toBe(3);
+    expect(empty.sourceSplit.firstPlay).toStrictEqual({});
+    expect(empty.sourceSplit.visit).toStrictEqual({});
   });
 });

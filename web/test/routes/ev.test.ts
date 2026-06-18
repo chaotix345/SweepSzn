@@ -201,4 +201,22 @@ describe("POST /api/ev", () => {
     expect(res.status).toBe(204);
     expect(ctx.redis!.strings.has(`ev:play:${dayUTC()}`)).toBe(false);
   });
+
+  it("writes the ev:src:first_play:<day> source hash for a first_play beacon with a valid source", async () => {
+    await post({ ev: "first_play", uid: "user-abc00001", source: "x_launch" });
+    const day = dayUTC();
+    expect(Number(ctx.redis!.hashes.get(`ev:src:first_play:${day}`)?.get("x_launch"))).toBe(1);
+  });
+
+  it("does NOT write a source hash when the source is uppercase (rejected end-to-end by parseEvBody)", async () => {
+    await post({ ev: "first_play", uid: "user-abc00001", source: "X_Launch" });
+    const day = dayUTC();
+    expect(ctx.redis!.hashes.has(`ev:src:first_play:${day}`)).toBe(false);
+  });
+
+  it("does NOT write a source hash for a non-acquisition stage (play) even with a valid source", async () => {
+    await post({ ev: "play", uid: "user-abc00001", mode: "daily", source: "x_launch" });
+    const day = dayUTC();
+    expect(ctx.redis!.hashes.has(`ev:src:play:${day}`)).toBe(false);
+  });
 });

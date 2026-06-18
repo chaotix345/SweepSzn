@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { decodeRankCard, type RankCard } from "@/lib/rankShare";
 import { ButtonLink } from "@/components/ui/Button";
+import Beacon from "@/components/Beacon";
 
 type Props = { params: Promise<{ card: string }> };
 
@@ -31,6 +32,9 @@ export default async function RankPage({ params }: Props) {
   if (!c) notFound();
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      {/* Share-loop close + first-arrival visit (feeds sourceSplit.visit; device key shared with home). */}
+      <Beacon name="share_view" />
+      <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <Link href="/" className="flex items-baseline text-2xl tracking-tight">
           <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>

@@ -23,7 +23,7 @@ import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
 import { markFirstPlay } from "@/lib/firstPlay";
 import { parseModeParam } from "@/lib/modeParam";
-import { getUtmSource } from "@/lib/utm";
+import { currentUtmSource, getUtmSource } from "@/lib/utm";
 import { showsSaveNudge } from "@/lib/signinNudge";
 import { scrollToTop } from "@/lib/scroll";
 import { getUid } from "@/lib/streak";
@@ -311,7 +311,11 @@ export default function Game() {
   const start = useCallback((m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string }) => {
     track("mode_start", { mode: m });
     ev("play", { uid: getUid(), mode: m });
-    markFirstPlay(getUid(), getUtmSource() ?? undefined); // once-ever-per-device first-play signal (distinct from replays), attributed to the first-touch utm channel
+    // once-ever-per-device first-play signal (distinct from replays), attributed to the utm channel.
+    // Read the URL FIRST (a cold /play?mode=…&utm_source=… deep-link fires this before UtmCapture's
+    // layout effect has persisted the source), falling back to the stored first-touch source — same
+    // ordering-robust pattern as Beacon.tsx.
+    markFirstPlay(getUid(), currentUtmSource() ?? getUtmSource() ?? undefined);
     abortSimRef.current?.abort(); abortSimRef.current = null; // cancel any in-flight simulate
     setMode(m);
     let cid: string | null = null;
@@ -591,7 +595,7 @@ export default function Game() {
         afterPlayers={sgResult.afterPlayers} outIdx={sgResult.outIdx} diagnosis={sgResult.diagnosis}
         card={sgResult.card} onReset={() => start("surgeon")} />
       <SgLeaderboard date={seed.replace("surgeon-", "")} preloaded={sgResult.view} />
-      <SignInSaveNudge />
+      {showsSaveNudge(mode) && <SignInSaveNudge />}
     </Shell>
   );
   if (result) return (

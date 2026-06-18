@@ -26,8 +26,7 @@ export const intersectCount = (a: string[], b: string[]): number => {
   const s = new Set(a); let c = 0; for (const x of b) if (s.has(x)) c++; return c;
 };
 
-// Fold a window of per-day field→count hashes (e.g. ev:mode:<day>, ev:src:first_play:<day>) into one
-// label→total map.
+// Fold a window of per-day source hashes (ev:src:<stage>:<day>) into one label→total map.
 const foldHashes = (hashes: (Record<string, string | number> | null)[]): Record<string, number> => {
   const out: Record<string, number> = {};
   for (const h of hashes) if (h) for (const [k, v] of Object.entries(h)) out[k] = (out[k] ?? 0) + num(v);

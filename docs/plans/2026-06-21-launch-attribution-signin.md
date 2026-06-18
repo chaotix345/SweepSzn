@@ -104,6 +104,35 @@ added once there's traffic to optimize against; would bloat this PR).
   `/api/health` → dogfood changed surfaces on both viewports (incl. a `/browse` JS check that a
   `?utm_source=` deep-link starts the game and persists the param).
 
+## Review fixes (5-dim adversarial Workflow, 34 agents, per-finding verify)
+
+29 findings raised → **27 confirmed/partial, 2 rejected** (the verify stage correctly downgraded the
+"source parsed for all stages" finding — `bump`'s `SOURCE_STAGES` gate is the real control — and a
+false fp/v-ordering claim). Fixed every actionable one:
+
+1. **[HIGH] `first_play` lost its source on the deep-link path** (the *primary* launch URL
+   `/play?mode=daily&utm_source=x_launch`). React fires the `Game` child effect before the root-layout
+   `UtmCapture` effect, so `getUtmSource()` (localStorage) was empty when `markFirstPlay` ran. Fix:
+   read the URL directly first — `currentUtmSource() ?? getUtmSource()` — mirroring `Beacon.tsx`. A
+   failing-first `Game.ux` test now pins `markFirstPlay("…","x_launch")`.
+2. **[HIGH] visit beacon missing on entry surfaces** → `sourceSplit.visit` (the per-source conversion
+   denominator) undercounted. Added `visit` to **`/play`** (via `play/layout.tsx`) and `visit`+
+   `share_view` to the four share permalinks **`/sg/`, `/compare/`, `/dex/s/`, `/rank/`** (matching the
+   `/r/` `/pe/` pattern; shared device-scoped key dedupes cross-page).
+3. **[HIGH] unbounded Redis memory** — `ev:src:*` hashes had no cap, so an attacker cycling
+   `utm_source` values could exhaust memory. Added `EV_SRC_CAP=500` HLEN guard (mirrors the
+   `ev:active` SCARD cap); the source write moved to its own guarded post-pipeline. New cap test.
+4. **[MED] surgeon branch hard-coded `<SignInSaveNudge/>`** outside the `showsSaveNudge(mode)` gate →
+   routed through the predicate so both result branches can't drift.
+5. **Test coverage** (the most-complete pass): Beacon utm wiring (URL + persisted fallback), end-to-end
+   `/api/ev` source (valid/uppercase-rejected/non-acquisition-stage), `markFirstPlay` source-elision,
+   `bump` share_view-no-hash + cap, `getMetrics` `sourceSplit` cross-day fold + null-redis shape, utm
+   tampered-localStorage + empty-string. **Kept dots in `SRC_RE`** (standard UTM convention, e.g.
+   `x.com`; the HLEN cap bounds metric-pollution) and **scoped the `foldHashes` comment** to source
+   hashes (not migrating the working modeSplit/submitSplit loops — minimal diff).
+
+Suite 1547 → **1581** green; tsc + lint(0 err) + build all pass.
+
 ## Deferred (next session)
 
 Per-page OG for `/about` `/how-it-works` `/leaderboards`; slot-pick crowd reveal; per-nudge

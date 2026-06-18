@@ -175,6 +175,9 @@ describe("Game — ?mode= deep-link past the picker", () => {
     await act(async () => {});
     expect(screen.queryByText(/Pick your mode/i)).toBeNull(); // daily started past the wall
     expect(window.location.search).toBe("?utm_source=x_launch"); // utm is NOT in the strip list — it survives for the funnel
+    // and first_play is attributed to the channel — read straight off the URL so it's robust to the
+    // UtmCapture-vs-Game effect ordering (localStorage may not be written yet on a cold deep-link).
+    expect(markFirstPlay).toHaveBeenCalledWith("test-uid-ux", "x_launch");
   });
 });
 

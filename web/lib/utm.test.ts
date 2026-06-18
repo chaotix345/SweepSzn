@@ -58,4 +58,21 @@ describe("captureUtm + getUtmSource", () => {
   it("getUtmSource returns null when nothing has been captured", () => {
     expect(getUtmSource()).toBe(null);
   });
+
+  it("getUtmSource re-sanitizes on read: a tampered/invalid stored value returns null", () => {
+    localStorage.setItem("szn:utm:source", "bad value!");
+    expect(getUtmSource()).toBe(null);
+  });
+
+  it("first-touch is locked even by a corrupt stored value — a new valid URL source can't overwrite", () => {
+    localStorage.setItem("szn:utm:source", "bad value!");
+    window.history.replaceState({}, "", "/?utm_source=newsletter");
+    captureUtm();
+    expect(getUtmSource()).toBe(null); // the slot is occupied (raw guard); first channel still wins
+  });
+
+  it("currentUtmSource returns null for a present-but-empty ?utm_source=", () => {
+    window.history.replaceState({}, "", "/?utm_source=");
+    expect(currentUtmSource()).toBe(null);
+  });
 });
