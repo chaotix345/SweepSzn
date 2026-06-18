@@ -29,6 +29,16 @@ describe("ModeSelect", () => {
     }
   });
 
+  it("renders every 'Play →' CTA in the action orange — never a mode accent (DESIGN.md: orange is the only CTA color)", () => {
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    const ctas = screen.getAllByText("Play →");
+    expect(ctas.length).toBeGreaterThanOrEqual(7); // 6 discipline tiles + the Challenge invite
+    for (const el of ctas) {
+      expect(el.className).toContain("text-orange-400");
+      expect(el.className).not.toMatch(/text-(violet|cyan|rose)-400/);
+    }
+  });
+
   it("calls onPick with the right mode id when a card is clicked", () => {
     const onPick = vi.fn();
     render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} />);

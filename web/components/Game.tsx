@@ -22,6 +22,7 @@ import { SLOTS, FRANCHISES, DECADES, teamName, displayName, eraLabel } from "@/l
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
 import { markFirstPlay } from "@/lib/firstPlay";
+import { scrollToTop } from "@/lib/scroll";
 import { getUid } from "@/lib/streak";
 import ResultCard from "@/components/ResultCard";
 import Leaderboard from "@/components/Leaderboard";
@@ -455,6 +456,12 @@ export default function Game() {
     const next = { ...roster, [slot]: selPlayer };
     setRoster(next); setSelPlayer(null); setCurrent(null); setLockedReel(null);
     if (SLOTS.every((s) => next[s])) finishDraft(next);
+    // Placing a pick collapses the tall candidate browser (the next pick needs a fresh spin), so the
+    // page shrinks and the scroll position clamps below the reels — leaving the player scrolled past
+    // the reels + turn count (reported mobile bug). Bring the viewport back to the top on the next
+    // frame, after the collapse re-renders: shows the reels for the next spin, or the result reveal on
+    // the final pick.
+    if (typeof window !== "undefined") requestAnimationFrame(() => scrollToTop());
   }, [selPlayer, roster, finishDraft, current, mode]);
 
   const canSwap = useCallback((a: Slot, b: Slot) => {
@@ -614,65 +621,69 @@ export default function Game() {
 
   return (
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart={filled > 0 || !!current}>
-      {/* reels */}
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        <Reel kind="TEAM" value={reel.team} sub={teamName(reel.team)} color="orange" locked={lockedReel === "team"} masked={reelMasked(lockedReel === "team")} spinning={spinning || !current} />
-        <Reel kind="ERA" value={reel.era} sub={mode === "prime" ? "peak form" : "decade"} color="violet" prime={mode === "prime"}
-          locked={mode !== "prime" && lockedReel === "era"} masked={reelMasked(lockedReel === "era")} spinning={mode !== "prime" && (spinning || !current)} />
-        {!current && (
-          <button onClick={spin} disabled={spinning}
-            className="rounded-xl bg-orange-500 px-7 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400 disabled:opacity-50">
-            {spinning ? "Spinning…" : "🎰 SPIN"}
-          </button>
-        )}
-      </div>
-      {hideIQ && (
-        <p className="mt-2 text-center text-[11px] text-zinc-500">🧠 Team &amp; era hidden — draft by recognizing the players.</p>
-      )}
-      {mode === "prime" && (
-        <p className="mt-2 text-center text-[11px] text-zinc-500">⚡ Fantasy simulation, not historical — every legend at his peak, any era.</p>
-      )}
-      {mode === "blueprint" && blueprint && (
-        <p className="mt-2 text-center text-[11px] text-cyan-400/80">📐 Committed: {BLUEPRINTS.find((b) => b.key === blueprint)!.label} — the engine grades your execution.</p>
-      )}
-      {mode === "surgeon" && (
-        <p className="mt-2 text-center text-[11px] text-rose-400/80">🩺 Draft five — then the engine diagnoses your worst factor and deals one fix.</p>
-      )}
-      {/* First-run scoring primer (R6): names the real levers honestly so new players don't learn the
-          mechanics only by losing. Skipped where it would conflict or duplicate — HoopIQ is deliberately
-          blind, Blueprint has its own objective dialog, Surgeon's diagnosis step teaches the same vocab. */}
-      {showLeversTip && mode !== "hoopiq" && mode !== "blueprint" && mode !== "surgeon" && (
-        <details open className="mx-auto mt-3 w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-left">
-          <summary className="cursor-pointer text-xs font-bold text-zinc-300">New here? How your five is scored</summary>
-          <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
-            The engine simulates 82 games and weighs several things at once: <strong className="text-zinc-300">star offense</strong> and{" "}
-            <strong className="text-zinc-300">defense</strong>, floor <strong className="text-zinc-300">spacing</strong>, and{" "}
-            <strong className="text-zinc-300">usage overload</strong> — one ball can&apos;t feed five high-usage scorers. Two more quietly
-            decide seasons: <strong className="text-zinc-300">interior size</strong> (rim protection) and{" "}
-            <strong className="text-zinc-300">perimeter defense</strong> — a five with neither bleeds real wins. Pre-1985 box stats are
-            discounted, too. The bottom line is fit, not PPG.
-          </p>
-          <div className="mt-2 flex items-center gap-3">
-            <button onClick={dismissLeversTip} className="rounded-md bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700">Got it</button>
-            <a href="/how-it-works" className="text-[11px] font-semibold text-orange-400 hover:underline">Full breakdown →</a>
-          </div>
-        </details>
-      )}
-      {/* USAGE DISCIPLINE drafts to a non-obvious budget — the live bar is the spec's fix.
-          Everywhere else the bar pre-explains the engine's dominant penalty (see showUsageBar). */}
-      {showUsageBar && <UsageBar total={drafted.reduce((a, c) => a + (c.usage ?? 0), 0)} discipline={discBar} />}
-      {projAllowed && !allFilled && filled >= 1 && projection?.floor && <ProjectionMeter projection={projection} />}
-      {(current || spinning) && (
-        <div className="mt-2 flex justify-center gap-2 text-xs">
-          <SkipBtn label="↻ Re-spin Team" used={skips.team} onClick={reSpinTeam} disabled={spinning} />
-          {/* the era reel is hard-locked to PRIME in Prime Draft — no era re-spin to offer */}
-          {mode !== "prime" && <SkipBtn label="↻ Re-spin Era" used={skips.era} onClick={reSpinEra} disabled={spinning} />}
-        </div>
-      )}
-
-      <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_minmax(300px,380px)]">
-        {/* candidate browser (first on mobile + desktop-left) */}
+      <div className="grid gap-5 lg:grid-cols-[1fr_minmax(300px,380px)]">
+        {/* Desktop: the reels + controls fold into the LEFT column so the sticky court becomes a right
+            rail spanning from the top (no dead space top-right). Mobile is single-column, so the DOM
+            order is unchanged: reels → controls → roster → browser → court. */}
         <div className="order-first">
+          {/* reels + draft controls */}
+          <div className="mb-5">
+            {/* reels */}
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Reel kind="TEAM" value={reel.team} sub={teamName(reel.team)} color="orange" locked={lockedReel === "team"} masked={reelMasked(lockedReel === "team")} spinning={spinning || !current} />
+              <Reel kind="ERA" value={reel.era} sub={mode === "prime" ? "peak form" : "decade"} color="violet" prime={mode === "prime"}
+                locked={mode !== "prime" && lockedReel === "era"} masked={reelMasked(lockedReel === "era")} spinning={mode !== "prime" && (spinning || !current)} />
+              {!current && (
+                <button onClick={spin} disabled={spinning}
+                  className="rounded-xl bg-orange-500 px-7 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400 disabled:opacity-50">
+                  {spinning ? "Spinning…" : "🎰 SPIN"}
+                </button>
+              )}
+            </div>
+            {hideIQ && (
+              <p className="mt-2 text-center text-[11px] text-zinc-500">🧠 Team &amp; era hidden — draft by recognizing the players.</p>
+            )}
+            {mode === "prime" && (
+              <p className="mt-2 text-center text-[11px] text-zinc-500">⚡ Fantasy simulation, not historical — every legend at his peak, any era.</p>
+            )}
+            {mode === "blueprint" && blueprint && (
+              <p className="mt-2 text-center text-[11px] text-cyan-400/80">📐 Committed: {BLUEPRINTS.find((b) => b.key === blueprint)!.label} — the engine grades your execution.</p>
+            )}
+            {mode === "surgeon" && (
+              <p className="mt-2 text-center text-[11px] text-rose-400/80">🩺 Draft five — then the engine diagnoses your worst factor and deals one fix.</p>
+            )}
+            {/* First-run scoring primer (R6): names the real levers honestly so new players don't learn the
+                mechanics only by losing. Skipped where it would conflict or duplicate — HoopIQ is deliberately
+                blind, Blueprint has its own objective dialog, Surgeon's diagnosis step teaches the same vocab. */}
+            {showLeversTip && mode !== "hoopiq" && mode !== "blueprint" && mode !== "surgeon" && (
+              <details open className="mx-auto mt-3 w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-left">
+                <summary className="cursor-pointer text-xs font-bold text-zinc-300">New here? How your five is scored</summary>
+                <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+                  The engine simulates 82 games and weighs several things at once: <strong className="text-zinc-300">star offense</strong> and{" "}
+                  <strong className="text-zinc-300">defense</strong>, floor <strong className="text-zinc-300">spacing</strong>, and{" "}
+                  <strong className="text-zinc-300">usage overload</strong> — one ball can&apos;t feed five high-usage scorers. Two more quietly
+                  decide seasons: <strong className="text-zinc-300">interior size</strong> (rim protection) and{" "}
+                  <strong className="text-zinc-300">perimeter defense</strong> — a five with neither bleeds real wins. Pre-1985 box stats are
+                  discounted, too. The bottom line is fit, not PPG.
+                </p>
+                <div className="mt-2 flex items-center gap-3">
+                  <button onClick={dismissLeversTip} className="rounded-md bg-zinc-800 px-2.5 py-1 text-[11px] font-semibold text-zinc-200 hover:bg-zinc-700">Got it</button>
+                  <a href="/how-it-works" className="text-[11px] font-semibold text-orange-400 hover:underline">Full breakdown →</a>
+                </div>
+              </details>
+            )}
+            {/* USAGE DISCIPLINE drafts to a non-obvious budget — the live bar is the spec's fix.
+                Everywhere else the bar pre-explains the engine's dominant penalty (see showUsageBar). */}
+            {showUsageBar && <UsageBar total={drafted.reduce((a, c) => a + (c.usage ?? 0), 0)} discipline={discBar} />}
+            {projAllowed && !allFilled && filled >= 1 && projection?.floor && <ProjectionMeter projection={projection} />}
+            {(current || spinning) && (
+              <div className="mt-2 flex justify-center gap-2 text-xs">
+                <SkipBtn label="↻ Re-spin Team" used={skips.team} onClick={reSpinTeam} disabled={spinning} />
+                {/* the era reel is hard-locked to PRIME in Prime Draft — no era re-spin to offer */}
+                {mode !== "prime" && <SkipBtn label="↻ Re-spin Era" used={skips.era} onClick={reSpinEra} disabled={spinning} />}
+              </div>
+            )}
+          </div>
           {/* mobile: your five at a glance, directly above the candidates (the half-court is below the fold) */}
           <MiniRoster roster={roster} maskColors={hideIQ} />
           {current ? (
