@@ -7,7 +7,7 @@ import type { LineupResult, Player, PlayerBreakdown, Slot } from "@/lib/types";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { encodeLineup, cardImageUrl } from "@/lib/share";
 import { bpCode, type BlueprintView } from "@/lib/blueprint";
-import { factorViews, lineupRoles, headline, historyAnchor, scoutingAnchor, playerContribRows, type ContribRow } from "@/lib/explain";
+import { factorViews, lineupRoles, headline, historyAnchor, scoutingAnchor, fmtNet, playerContribRows, type ContribRow } from "@/lib/explain";
 import { WIN_GRADES, weakestSlot } from "@/lib/engine";
 import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
 import { GRADE_COLOR, isEliteGrade } from "@/lib/grades";
@@ -280,7 +280,7 @@ export default function ResultCard({
             <Stat v={totals.stl} k="SPG" strong /><Stat v={totals.blk} k="BPG" strong />
           </div>
         </div>
-        <DexStrip />
+        <DexStrip lineupIds={players.map((p) => p.id)} />
       </div>
 
       <div className="border-t border-zinc-800 px-6 py-4">
@@ -486,7 +486,7 @@ function ScoutingAnchor({ result }: { result: LineupResult }) {
             <span className={`truncate ${r.you ? "font-semibold text-zinc-200" : "text-zinc-400"}`}>{r.label}</span>
             <span className="text-right text-zinc-300">{r.ortg.toFixed(1)}</span>
             <span className="text-right text-zinc-300">{r.drtg.toFixed(1)}</span>
-            <span className={`text-right ${r.net >= 0 ? "text-green-400" : "text-red-400"}`}>{r.net > 0 ? "+" : ""}{r.net.toFixed(1)}</span>
+            <span className={`text-right ${r.net >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtNet(r.net)}</span>
           </div>
         ))}
       </div>

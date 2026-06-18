@@ -37,6 +37,12 @@ describe("extractLineupSegment — pull a lineup segment out of a pasted friend 
     expect(extractLineupSegment("")).toBeNull();
     expect(extractLineupSegment("   ")).toBeNull();
   });
+  it("rejects an ambiguous /compare/ link (two lineups) rather than grabbing the wrong five", () => {
+    expect(extractLineupSegment("https://sweepszn.com/compare/a,b,c,d,e/f,g,h,i,j")).toBeNull();
+  });
+  it("rejects a non-/r/ URL path", () => {
+    expect(extractLineupSegment("https://sweepszn.com/share/a,b,c,d,e")).toBeNull();
+  });
 });
 
 describe("dex share card — encode/decode the 'Share your Dex' payload", () => {

@@ -66,7 +66,9 @@ export function extractLineupSegment(input: string): string | null {
   const i = s.lastIndexOf("/r/");
   if (i >= 0) s = s.slice(i + 3);
   s = s.split(/[?#]/)[0].replace(/\/+$/, "");
-  if (s.includes("/")) s = s.slice(s.lastIndexOf("/") + 1); // a stray URL without /r/ → last path part
+  // accept only a /r/ result link or a bare segment — a path that still has a slash (e.g. a /compare/
+  // link carrying two lineups) is ambiguous, so reject it instead of silently grabbing the wrong five.
+  if (s.includes("/")) return null;
   return s.trim() || null;
 }
 

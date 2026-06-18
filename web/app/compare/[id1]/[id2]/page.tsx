@@ -3,6 +3,7 @@ import { cache } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { resolveSharedLineup, type SharedLineup } from "@/lib/sharedLineup";
+import { fmtNet } from "@/lib/explain";
 import { avgZ } from "@/lib/radar";
 import { ZRadar } from "@/components/game/ZRadar";
 import { displayName } from "@/lib/teams";
@@ -38,10 +39,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-function net(n: number): string {
-  return `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
-}
-
 function Side({ data, color, tag }: { data: SharedLineup; color: string; tag: string }) {
   const { result, players } = data;
   return (
@@ -61,7 +58,7 @@ function Side({ data, color, tag }: { data: SharedLineup; color: string; tag: st
       <div className="mt-2 flex gap-3 border-t border-zinc-800 pt-2 text-[11px] tabular-nums text-zinc-400">
         <span>ORtg <b className="text-zinc-200">{result.ortg.toFixed(1)}</b></span>
         <span>DRtg <b className="text-zinc-200">{result.drtg.toFixed(1)}</b></span>
-        <span>Net <b className={result.netRtg >= 0 ? "text-green-400" : "text-red-400"}>{net(result.netRtg)}</b></span>
+        <span>Net <b className={result.netRtg >= 0 ? "text-green-400" : "text-red-400"}>{fmtNet(result.netRtg)}</b></span>
       </div>
     </div>
   );

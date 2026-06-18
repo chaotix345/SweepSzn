@@ -43,6 +43,14 @@ export interface ContribRow { id: string; name: string; offPts: number; defPts: 
 // This is what answers "why is Star offense only 13?" when a defensive anchor's negative
 // offensive impact silently drags the sum.
 const r1 = (x: number) => Math.round(x * 10) / 10;
+
+// Signed net rating to 1dp whose sign agrees with the displayed magnitude — guards against a "+0.0" /
+// "-0.0" when a tiny value rounds to zero (used by the scouting anchor + lineup compare).
+export function fmtNet(n: number): string {
+  const r = r1(n);
+  if (r === 0) return "0.0";
+  return `${r > 0 ? "+" : ""}${r.toFixed(1)}`;
+}
 export function playerContribRows(breakdowns: PlayerBreakdown[]): ContribRow[] {
   const c = DEFAULT_COEFFICIENTS;
   return breakdowns.map((b) => ({ id: b.id, name: b.name, offPts: r1(c.offScale * b.off), defPts: r1(c.defScale * b.def) }));

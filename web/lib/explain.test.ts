@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { factorBlurb, factorViews, playerContribRows, historyAnchor, scoutingAnchor, FAMOUS_TEAMS, headline } from "./explain";
+import { factorBlurb, factorViews, playerContribRows, historyAnchor, scoutingAnchor, FAMOUS_TEAMS, fmtNet, headline } from "./explain";
 import type { LineupResult, PlayerBreakdown } from "./types";
 
 const GENERIC = "Contribution to the team rating.";
@@ -110,6 +110,18 @@ describe("scoutingAnchor — your five's projection beside a comparable real tea
 
   it("returns null below the 42-win anchor floor", () => {
     expect(scoutingAnchor(mkResult({ wins: 30 }))).toBeNull();
+  });
+});
+
+describe("fmtNet — signed net rating whose sign agrees with the rounded magnitude", () => {
+  it("prefixes + for positive and keeps - for negative", () => {
+    expect(fmtNet(4.2)).toBe("+4.2");
+    expect(fmtNet(-3.1)).toBe("-3.1");
+  });
+  it("never shows +0.0 for a value that rounds to zero", () => {
+    expect(fmtNet(0.04)).toBe("0.0");
+    expect(fmtNet(0)).toBe("0.0");
+    expect(fmtNet(-0.02)).toBe("0.0");
   });
 });
 

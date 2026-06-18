@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Player, LineupResult } from "@/lib/types";
-import { FAMOUS_TEAMS, historyAnchor } from "@/lib/explain";
+import { FAMOUS_TEAMS, historyAnchor, fmtNet } from "@/lib/explain";
 import { extractLineupSegment } from "@/lib/share";
 import { avgZ } from "@/lib/radar";
 import { ZRadar } from "@/components/game/ZRadar";
@@ -35,7 +35,7 @@ function RatingTable({ you, them }: {
             <span className={`truncate ${r.you ? "font-semibold text-zinc-200" : "text-zinc-400"}`}>{r.label}</span>
             <span className="text-right text-zinc-300">{r.ortg.toFixed(1)}</span>
             <span className="text-right text-zinc-300">{r.drtg.toFixed(1)}</span>
-            <span className={`text-right ${r.net >= 0 ? "text-green-400" : "text-red-400"}`}>{r.net > 0 ? "+" : ""}{r.net.toFixed(1)}</span>
+            <span className={`text-right ${r.net >= 0 ? "text-green-400" : "text-red-400"}`}>{fmtNet(r.net)}</span>
           </div>
         ))}
       </div>
@@ -64,6 +64,9 @@ export function CompareLineup({ players, result, lineupSeg }: { players: Player[
   });
   const [link, setLink] = useState("");
   const [friend, setFriend] = useState<FriendData | null>(null);
+  // the segment captured AT FETCH TIME — so the "share this matchup" link can't drift if the user
+  // keeps typing in the box after a successful compare.
+  const [friendSeg, setFriendSeg] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error" | "ok">("idle");
 
   useEffect(() => {
@@ -75,13 +78,14 @@ export function CompareLineup({ players, result, lineupSeg }: { players: Player[
 
   async function loadFriend() {
     const seg = extractLineupSegment(link);
-    if (!seg) { setStatus("error"); return; }
-    setStatus("loading"); setFriend(null);
+    if (!seg) { setStatus("error"); setFriend(null); setFriendSeg(null); return; }
+    setStatus("loading"); setFriend(null); setFriendSeg(null);
     try {
       const r = await fetch(`/api/result/${seg}`);
       if (!r.ok) { setStatus("error"); return; }
       const d = await r.json();
       setFriend({ players: d.players, result: d.result });
+      setFriendSeg(seg);
       setStatus("ok");
     } catch { setStatus("error"); }
   }
@@ -96,7 +100,6 @@ export function CompareLineup({ players, result, lineupSeg }: { players: Player[
   }
 
   const team = FAMOUS_TEAMS[teamIdx];
-  const friendSeg = friend ? extractLineupSegment(link) : null;
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Compare lineup"

@@ -25,10 +25,11 @@ function load(): Record<string, TeamSeason> {
     _cache = JSON.parse(
       fs.readFileSync(path.join(process.cwd(), "public", "data", "team_lookup.json"), "utf-8"),
     ) as Record<string, TeamSeason>;
+    return _cache;
   } catch {
-    _cache = {};
+    // Don't cache the empty result — a transient read error shouldn't poison every later lookup.
+    return {};
   }
-  return _cache;
 }
 
 export function teamSeason(name: string, year: number): TeamSeason | null {
