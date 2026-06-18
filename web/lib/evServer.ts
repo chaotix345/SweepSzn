@@ -25,11 +25,20 @@ export const EV_ACTIVE_CAP = 50_000;     // max distinct uids tracked per day (f
 // added — so only play/share/signin/submit qualify.
 const ACTIVE_STAGES = new Set<EvStage>(["play", "share", "signin", "submit"]);
 
+// Stages split by acquisition source (utm). The funnel denominator (`visit`) and the north-star
+// numerator (`first_play`) are enough to compute per-channel conversion on launch day; no other stage
+// carries a source. Mirrors the ev:mode:<day> hash pattern.
+const SOURCE_STAGES = new Set<EvStage>(["visit", "first_play"]);
+
 const CLIENT_STAGE_SET = new Set<string>(CLIENT_STAGES);
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
+// Lowercase-only acquisition label, ≤40 chars (mirrors lib/utm.ts SRC_RE). The /api/ev beacon is
+// unauthenticated, so this is the hard gate against Redis hash-field injection before a source is
+// written, and it folds "X_Launch"/"x_launch" into one bucket (the client lowercases too).
+const SRC_RE = /^[a-z0-9_.-]{1,40}$/;
 const MODES = new Set(["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon"]);
 
-export interface BeaconBody { ev: ClientStage; uid?: string; mode?: string }
+export interface BeaconBody { ev: ClientStage; uid?: string; mode?: string; source?: string }
 
 // Validate an untrusted beacon payload. Returns null for anything not a valid client-sendable beacon
 // (server-authoritative stages are rejected here so the client can't spoof the trusted funnel).
@@ -40,6 +49,10 @@ export function parseEvBody(body: unknown): BeaconBody | null {
   const out: BeaconBody = { ev: b.ev as ClientStage };
   if (typeof b.uid === "string" && UID_RE.test(b.uid)) out.uid = b.uid;
   if (b.ev === "play" && typeof b.mode === "string" && MODES.has(b.mode)) out.mode = b.mode;
+  // source is independent of stage (unlike mode, which is play-only) — keep it whenever it validates;
+  // bump() decides which stages actually persist it. Folding this into the play block would drop the
+  // source for first_play, the stage we most need attributed.
+  if (typeof b.source === "string" && SRC_RE.test(b.source)) out.source = b.source;
   return out;
 }
 
@@ -47,7 +60,7 @@ export function parseEvBody(body: unknown): BeaconBody | null {
 export async function bump(
   redis: Redis | null,
   stage: EvStage,
-  opts: { uid?: string; mode?: string; day?: string } = {},
+  opts: { uid?: string; mode?: string; source?: string; day?: string } = {},
 ): Promise<void> {
   if (!redis) return;
   const day = opts.day ?? dayUTC();
@@ -67,6 +80,11 @@ export async function bump(
     if (stage === "submit" && opts.mode && MODES.has(opts.mode)) {
       const modeKey = `ev:submode:${day}`;
       p.hincrby(modeKey, opts.mode, 1).expire(modeKey, EV_TTL);
+    }
+    // acquisition split: only visit + first_play, only when a (re-validated) source rode the beacon.
+    if (SOURCE_STAGES.has(stage) && opts.source && SRC_RE.test(opts.source)) {
+      const srcKey = `ev:src:${stage}:${day}`;
+      p.hincrby(srcKey, opts.source, 1).expire(srcKey, EV_TTL);
     }
     await p.exec();
     // play/share/signin/submit carry a uid → contribute to the day's distinct-active set.

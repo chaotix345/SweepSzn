@@ -23,6 +23,8 @@ import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
 import { markFirstPlay } from "@/lib/firstPlay";
 import { parseModeParam } from "@/lib/modeParam";
+import { getUtmSource } from "@/lib/utm";
+import { showsSaveNudge } from "@/lib/signinNudge";
 import { scrollToTop } from "@/lib/scroll";
 import { getUid } from "@/lib/streak";
 import ResultCard from "@/components/ResultCard";
@@ -309,7 +311,7 @@ export default function Game() {
   const start = useCallback((m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string }) => {
     track("mode_start", { mode: m });
     ev("play", { uid: getUid(), mode: m });
-    markFirstPlay(getUid()); // once-ever-per-device first-play signal (distinct from replays)
+    markFirstPlay(getUid(), getUtmSource() ?? undefined); // once-ever-per-device first-play signal (distinct from replays), attributed to the first-touch utm channel
     abortSimRef.current?.abort(); abortSimRef.current = null; // cancel any in-flight simulate
     setMode(m);
     let cid: string | null = null;
@@ -589,6 +591,7 @@ export default function Game() {
         afterPlayers={sgResult.afterPlayers} outIdx={sgResult.outIdx} diagnosis={sgResult.diagnosis}
         card={sgResult.card} onReset={() => start("surgeon")} />
       <SgLeaderboard date={seed.replace("surgeon-", "")} preloaded={sgResult.view} />
+      <SignInSaveNudge />
     </Shell>
   );
   if (result) return (
@@ -596,9 +599,11 @@ export default function Game() {
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} modeKey={mode} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView}
         lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} onView={setLbView} />}
-      {/* Classic/HoopIQ/Prime have no board, so they'd otherwise offer a signed-out player no reason to
-          make an account — give them the minimal save/keep-streak sign-in nudge. */}
-      {(mode === "classic" || mode === "hoopiq" || mode === "prime") && <SignInSaveNudge />}
+      {/* Every non-Daily result gets the minimal save/keep-streak sign-in nudge — not just the
+          board-less Classic/HoopIQ/Prime, but also the FactorHunt/Blueprint/Challenge results that
+          previously left a signed-out share-link arrival with no reason to make an account. Daily is
+          excluded: its Leaderboard already prompts sign-in with the richer claim-your-rank flow. */}
+      {showsSaveNudge(mode) && <SignInSaveNudge />}
       {mode === "factorhunt" && <FhLeaderboard date={seed.replace("fh-", "")} trace={result.trace} prediction={fhPrediction} readOnly={result.trace.length === 0} />}
       {mode === "blueprint" && blueprint && <BpLeaderboard date={seed.replace("bp-", "")} trace={result.trace} blueprint={blueprint} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
       {mode === "challenge" && challengeId && challengeRole && (

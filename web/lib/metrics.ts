@@ -13,6 +13,7 @@ export interface Metrics {
   d7: number | null;                           // 7-day return rate, null if window < 8
   modeSplit: Record<string, number>;           // mode → play count over the window
   submitSplit: Record<string, number>;         // mode → submit count over the window (play→submit numerator)
+  sourceSplit: { firstPlay: Record<string, number>; visit: Record<string, number> }; // utm source → count
   boardByDay: number[];                        // ZCARD lb:<day> (ascending)
   boards: { daily: number; weekly: number; alltime: number };
   winBuckets: { label: string; count: number }[]; // today's leaderboard win distribution
@@ -23,6 +24,14 @@ const num = (v: unknown): number => { const n = Number(v); return Number.isFinit
 export const pct = (a: number, b: number): number => (b > 0 ? a / b : 0);
 export const intersectCount = (a: string[], b: string[]): number => {
   const s = new Set(a); let c = 0; for (const x of b) if (s.has(x)) c++; return c;
+};
+
+// Fold a window of per-day field→count hashes (e.g. ev:mode:<day>, ev:src:first_play:<day>) into one
+// label→total map.
+const foldHashes = (hashes: (Record<string, string | number> | null)[]): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const h of hashes) if (h) for (const [k, v] of Object.entries(h)) out[k] = (out[k] ?? 0) + num(v);
+  return out;
 };
 
 const WIN_BUCKETS = [
@@ -59,15 +68,18 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
       engagement: { shareViews: 0, exploreOpen: 0, whatifOpen: 0, compareOpen: 0, compareFriend: 0 },
       rates: { firstPlay: 0, completion: 0, shareRate: 0, capture: 0 },
       dauByDay: days.map(() => 0), d1: 0, d7: null, modeSplit: {}, submitSplit: {},
+      sourceSplit: { firstPlay: {}, visit: {} },
       boardByDay: days.map(() => 0), boards: { daily: 0, weekly: 0, alltime: 0 },
       winBuckets: bucketWins([]), totals: {},
     };
   }
 
-  const [counts, modeHashes, submodeHashes, activeSets, boardCards, todayZ, totalsHash, weekCard, allCard] = await Promise.all([
+  const [counts, modeHashes, submodeHashes, srcFpHashes, srcVisitHashes, activeSets, boardCards, todayZ, totalsHash, weekCard, allCard] = await Promise.all([
     Promise.all(STAGES.map(s => redis.mget<(string | number | null)[]>(...days.map(d => `ev:${s}:${d}`)))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:mode:${d}`))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:submode:${d}`))),
+    Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:src:first_play:${d}`))),
+    Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:src:visit:${d}`))),
     Promise.all(days.map(d => redis.smembers(`ev:active:${d}`))),
     Promise.all(days.map(d => redis.zcard(`lb:${d}`))),
     redis.zrange<(string | number)[]>(`lb:${today}`, 0, -1, { withScores: true }),
@@ -107,13 +119,14 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
   for (const h of modeHashes) if (h) for (const [k, v] of Object.entries(h)) modeSplit[k] = (modeSplit[k] ?? 0) + num(v);
   const submitSplit: Record<string, number> = {};
   for (const h of submodeHashes) if (h) for (const [k, v] of Object.entries(h)) submitSplit[k] = (submitSplit[k] ?? 0) + num(v);
+  const sourceSplit = { firstPlay: foldHashes(srcFpHashes), visit: foldHashes(srcVisitHashes) };
 
   const wins: number[] = [];
   for (let i = 1; i < todayZ.length; i += 2) wins.push(decodeWins(num(todayZ[i])));
 
   const boardByDay = (boardCards as number[]).map(num);
   return {
-    days, funnel, engagement, rates, dauByDay, d1, d7, modeSplit, submitSplit, boardByDay,
+    days, funnel, engagement, rates, dauByDay, d1, d7, modeSplit, submitSplit, sourceSplit, boardByDay,
     boards: { daily: boardByDay[boardByDay.length - 1] ?? 0, weekly: num(weekCard), alltime: num(allCard) },
     winBuckets: bucketWins(wins),
     totals: Object.fromEntries(Object.entries(totalsHash ?? {}).map(([k, v]) => [k, num(v)])),

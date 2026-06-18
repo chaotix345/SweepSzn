@@ -60,4 +60,16 @@ describe("GET /api/funnel", () => {
     const { body } = await readJson(await GET(req("/api/funnel?days=abc")));
     expect((body.days as string[]).length).toBe(14);
   });
+
+  it("splits first_play and visit by acquisition source", async () => {
+    await signIn({ uid: ADMIN, name: "Charlie" });
+    ctx.redis!.hashes.set("ev:src:first_play:2026-6-18", new Map([["x_launch", "3"], ["reddit", "1"]]));
+    ctx.redis!.hashes.set("ev:src:visit:2026-6-18", new Map([["x_launch", "10"]]));
+
+    const { body } = await readJson(await GET(req("/api/funnel?days=14")));
+    const ss = body.sourceSplit as { firstPlay: Record<string, number>; visit: Record<string, number> };
+    expect(ss.firstPlay.x_launch).toBe(3);
+    expect(ss.firstPlay.reddit).toBe(1);
+    expect(ss.visit.x_launch).toBe(10);
+  });
 });

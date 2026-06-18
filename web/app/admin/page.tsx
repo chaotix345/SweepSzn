@@ -68,6 +68,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     { label: "Compare friend", value: eng.compareFriend },
   ];
   const engMax = Math.max(...engRows.map(r => r.value), 1);
+  // acquisition channels seen in the window, ordered by the conversions that matter (first-plays)
+  const sources = Array.from(new Set([...Object.keys(m.sourceSplit.firstPlay), ...Object.keys(m.sourceSplit.visit)]))
+    .sort((a, b) => (m.sourceSplit.firstPlay[b] ?? 0) - (m.sourceSplit.firstPlay[a] ?? 0));
 
   return (
     <main className="mx-auto max-w-2xl space-y-8 p-6 text-zinc-100">
@@ -109,6 +112,24 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             </div>
           );
         })}
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Acquisition by source (utm_source)</h2>
+        {sources.length === 0 ? (
+          <p className="text-xs text-zinc-500">No tagged traffic yet — append <code>?utm_source=&lt;channel&gt;</code> to launch links (e.g. <code>/play?mode=daily&amp;utm_source=x_launch</code>).</p>
+        ) : sources.map(s => {
+          const v = m.sourceSplit.visit[s] ?? 0;
+          const fp = m.sourceSplit.firstPlay[s] ?? 0;
+          return (
+            <div key={s} className="flex items-center gap-2 text-sm">
+              <span className="w-28 shrink-0 truncate text-zinc-400" title={s}>{s}</span>
+              <span className="tabular-nums text-zinc-300">{fp} first-plays / {v} visits</span>
+              <span className="text-xs text-zinc-500">{v > 0 ? fmtPct(fp / v) : "—"} conv</span>
+            </div>
+          );
+        })}
+        <p className="text-xs text-zinc-500">First-play by acquisition channel — which post/link converted a new player. Conv = first-plays ÷ visits for that source.</p>
       </section>
 
       <section className="space-y-2">
