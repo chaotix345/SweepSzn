@@ -1,6 +1,7 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import GoogleOneTap from "@/components/GoogleOneTap";
+import { buildFocusTrapHandler } from "@/components/game/useFocusTrap";
 import { getHistory } from "@/lib/streak";
 import { listResults } from "@/lib/resultHistory";
 import { syncToAccount } from "@/lib/account";
@@ -46,6 +47,12 @@ export default function SessionProvider({ children }: { children: React.ReactNod
   const [loading, setLoading] = useState(true);
   const [signInOpen, setSignInOpen] = useState(false);
   const [signInNonce, setSignInNonce] = useState(0);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Move focus into the sign-in popover when it opens (paired with the Tab/Escape trap below) so
+  // keyboard users land in the dialog and can dismiss it. Restores nothing on close — the trigger
+  // (header "Sign in" etc.) stays where it was.
+  useEffect(() => { if (signInOpen) popoverRef.current?.focus(); }, [signInOpen]);
 
   useEffect(() => {
     let on = true;
@@ -83,9 +90,17 @@ export default function SessionProvider({ children }: { children: React.ReactNod
         // standing (DESIGN.md §12). Gating the mount also keeps GSI's iframe/FedCM off the top of funnel.
         <>
           <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" onClick={() => setSignInOpen(false)} />
-          <div className="fixed right-3 top-16 z-50 w-72 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl shadow-black/50">
+          <div
+            ref={popoverRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="signin-title"
+            onKeyDown={(e) => buildFocusTrapHandler(popoverRef, () => setSignInOpen(false))(e)}
+            className="fixed right-3 top-16 z-50 w-72 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl shadow-black/50 outline-none"
+          >
             <div className="mb-2 flex items-start justify-between gap-2">
-              <div className="text-sm font-bold text-zinc-100">Save your progress</div>
+              <div id="signin-title" className="text-sm font-bold text-zinc-100">Save your progress</div>
               <button onClick={() => setSignInOpen(false)} aria-label="Close" className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition hover:text-zinc-200">✕</button>
             </div>
             <div className="mb-2 text-xs text-zinc-400">Keep your streak, results, and ranks across every device.</div>

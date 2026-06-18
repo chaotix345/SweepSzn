@@ -17,8 +17,17 @@ vi.mock("@/lib/account", () => ({ syncToAccount: vi.fn(async () => {}) }));
 import SessionProvider, { useSessionContext } from "@/components/SessionProvider";
 
 function SignInTrigger() {
-  const { promptSignIn } = useSessionContext();
-  return React.createElement("button", { onClick: promptSignIn }, "open-signin");
+  const { promptSignIn, user } = useSessionContext();
+  return (
+    <>
+      <button onClick={promptSignIn}>open-signin</button>
+      {user && <span>USER:{user.name}</span>}
+    </>
+  );
+}
+
+function renderProvider() {
+  return render(React.createElement(SessionProvider, null, React.createElement(SignInTrigger)));
 }
 
 beforeEach(() => {
@@ -29,15 +38,40 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("SessionProvider — Google One Tap is deferred to user intent (anon-first funnel, DESIGN.md §12)", () => {
   it("does NOT mount GoogleOneTap for an anonymous visitor on arrival, only after they open sign-in", async () => {
-    await act(async () => {
-      render(React.createElement(SessionProvider, null, React.createElement(SignInTrigger)));
-    });
-    // session has resolved to signed-out; the sign-in trigger is present
+    await act(async () => { renderProvider(); });
     await waitFor(() => expect(screen.getByText("open-signin")).toBeTruthy());
     // GSI must not be loaded/mounted before the user signals intent — no unsolicited prompt on landing
     expect(screen.queryByText("ONE_TAP_MOUNTED")).toBeNull();
     // user explicitly opens sign-in → the GSI button mounts
     await act(async () => { fireEvent.click(screen.getByText("open-signin")); });
     expect(screen.getByText("ONE_TAP_MOUNTED")).toBeTruthy();
+    // the popover is a labelled dialog (a11y)
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.getAttribute("aria-labelledby")).toBe("signin-title");
+  });
+
+  it("closes the sign-in popover on Escape and on backdrop click", async () => {
+    await act(async () => { renderProvider(); });
+    await act(async () => { fireEvent.click(screen.getByText("open-signin")); });
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    // Escape dismisses (keyboard users)
+    await act(async () => { fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" }); });
+    expect(screen.queryByText("ONE_TAP_MOUNTED")).toBeNull();
+    // reopen, then a click on the backdrop dismisses
+    await act(async () => { fireEvent.click(screen.getByText("open-signin")); });
+    const backdrop = document.querySelector('div[aria-hidden="true"]') as HTMLElement;
+    expect(backdrop).toBeTruthy();
+    await act(async () => { fireEvent.click(backdrop); });
+    expect(screen.queryByText("ONE_TAP_MOUNTED")).toBeNull();
+  });
+
+  it("never mounts GoogleOneTap for a signed-in user, even if promptSignIn is called", async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ user: { uid: "u1", name: "Charlie" } }) })) as unknown as typeof fetch;
+    await act(async () => { renderProvider(); });
+    await waitFor(() => expect(screen.getByText(/USER:Charlie/)).toBeTruthy()); // session resolved to signed-in
+    await act(async () => { fireEvent.click(screen.getByText("open-signin")); });
+    expect(screen.queryByText("ONE_TAP_MOUNTED")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
