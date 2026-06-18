@@ -7,6 +7,7 @@ import { decodeSurgeonCard, surgeonDiagnosis } from "@/lib/surgeon";
 import { displayName } from "@/lib/teams";
 import SurgeonResult from "@/components/SurgeonResult";
 import ShareHeader from "@/components/ShareHeader";
+import Beacon from "@/components/Beacon";
 
 // Surgeon share permalink: /sg/<beforeIds>.<outIdx>.<inId>. Both lineups are deterministic from
 // the ids, so the full BEFORE/AFTER story (records, factor breakdowns, the delta) rebuilds with
@@ -56,6 +57,9 @@ export default async function SharedSurgeon({ params }: Props) {
   if (!data) notFound();
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      {/* Share-loop close + first-arrival visit (feeds sourceSplit.visit; device key shared with home). */}
+      <Beacon name="share_view" />
+      <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <ShareHeader tagline="a friend fixed their five" cta="Fix your five →" ctaHref="/play?mode=surgeon" />
         <SurgeonResult before={data.before} after={data.after} beforePlayers={data.beforePlayers}

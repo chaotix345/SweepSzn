@@ -13,6 +13,6 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   if (!(await rateLimit(`rl:ev:${ipOf(req)}`, 60, 60))) return new Response(null, { status: 204 });
   const parsed = parseEvBody(await req.json().catch(() => null));
-  if (parsed) after(() => bump(redis, parsed.ev, { uid: parsed.uid, mode: parsed.mode }));
+  if (parsed) after(() => bump(redis, parsed.ev, { uid: parsed.uid, mode: parsed.mode, source: parsed.source }));
   return new Response(null, { status: 204 });
 }

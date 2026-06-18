@@ -99,7 +99,7 @@ describe("Game — first-play funnel signal", () => {
   it("marks the once-per-device first_play signal when a mode starts", async () => {
     render(<Game />);
     await act(async () => { fireEvent.click(findModeBtn("Classic", "Full stats visible")); });
-    expect(markFirstPlay).toHaveBeenCalledWith("test-uid-ux");
+    expect(markFirstPlay).toHaveBeenCalledWith("test-uid-ux", undefined);
   });
 });
 
@@ -121,7 +121,7 @@ describe("Game — ?mode= deep-link past the picker", () => {
     await act(async () => {});
     expect(screen.queryByText(/Pick your mode/i)).toBeNull();
     expect(findSpinBtn()).toBeTruthy();
-    expect(markFirstPlay).toHaveBeenCalledWith("test-uid-ux");
+    expect(markFirstPlay).toHaveBeenCalledWith("test-uid-ux", undefined);
   });
 
   it("strips the ?mode= param after consuming it (a refresh won't restart)", async () => {
@@ -167,6 +167,17 @@ describe("Game — ?mode= deep-link past the picker", () => {
     await act(async () => {});
     expect(screen.queryByText(/Pick your mode/i)).toBeNull(); // daily started — the restore did NOT win
     expect(window.location.search).toBe(""); // r/m stripped, so a later refresh stays clean
+  });
+
+  it("a ?mode= deep-link preserves a coexisting utm_source (acquisition attribution survives the strip)", async () => {
+    window.history.replaceState({}, "", "/play?mode=daily&utm_source=x_launch");
+    render(<Game />);
+    await act(async () => {});
+    expect(screen.queryByText(/Pick your mode/i)).toBeNull(); // daily started past the wall
+    expect(window.location.search).toBe("?utm_source=x_launch"); // utm is NOT in the strip list — it survives for the funnel
+    // and first_play is attributed to the channel — read straight off the URL so it's robust to the
+    // UtmCapture-vs-Game effect ordering (localStorage may not be written yet on a cold deep-link).
+    expect(markFirstPlay).toHaveBeenCalledWith("test-uid-ux", "x_launch");
   });
 });
 

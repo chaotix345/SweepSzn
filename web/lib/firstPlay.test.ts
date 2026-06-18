@@ -32,4 +32,14 @@ describe("markFirstPlay", () => {
     markFirstPlay("uid-abc");
     expect(localStorage.getItem("szn:ev:fp")).toBe("1");
   });
+
+  it("forwards a utm source to ev when provided (acquisition attribution)", () => {
+    markFirstPlay("uid-abc", "x_launch");
+    expect(evMock).toHaveBeenCalledWith("first_play", { uid: "uid-abc", source: "x_launch" });
+  });
+
+  it("omits the source key entirely when source is undefined (the ternary elides it, not source:undefined)", () => {
+    markFirstPlay("uid-abc", undefined);
+    expect(evMock).toHaveBeenCalledWith("first_play", expect.not.objectContaining({ source: expect.anything() }));
+  });
 });

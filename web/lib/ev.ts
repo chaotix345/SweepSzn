@@ -5,7 +5,7 @@
 import type { ClientStage } from "./evServer";
 export type EvName = ClientStage;
 
-export function ev(name: EvName, props: { uid?: string; mode?: string } = {}): void {
+export function ev(name: EvName, props: { uid?: string; mode?: string; source?: string } = {}): void {
   try {
     const payload = JSON.stringify({ ev: name, ...props });
     const nav = typeof navigator !== "undefined" ? navigator : undefined;

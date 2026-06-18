@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { Redis } from "@upstash/redis";
 import { createRedisFake } from "@/test/redisFake";
-import { parseEvBody, bump, EV_TTL, EV_ACTIVE_CAP } from "./evServer";
+import { parseEvBody, bump, EV_TTL, EV_ACTIVE_CAP, EV_SRC_CAP } from "./evServer";
 
 // --- parseEvBody ---
 describe("parseEvBody", () => {
@@ -198,5 +198,68 @@ describe("bump", () => {
     expect(Number(fake.strings.get("ev:play:2026-6-9"))).toBe(1);
     // sadd skipped when active set is at the cap
     expect(fake.sets.get("ev:active:2026-6-9")).toBe(undefined);
+  });
+});
+
+// --- source (utm acquisition attribution) ---
+describe("parseEvBody — source", () => {
+  it("keeps a valid lowercase source on first_play (NOT folded into the play-only mode block)", () => {
+    expect(parseEvBody({ ev: "first_play", uid: "abcdefgh", source: "x_launch" })?.source).toBe("x_launch");
+  });
+
+  it("keeps a valid source on visit", () => {
+    expect(parseEvBody({ ev: "visit", uid: "abcdefgh", source: "reddit" })?.source).toBe("reddit");
+  });
+
+  it("strips an uppercase source (client must pre-lowercase; tampering rejected)", () => {
+    expect(parseEvBody({ ev: "first_play", uid: "abcdefgh", source: "X_Launch" })?.source).toBe(undefined);
+  });
+
+  it("strips a source with disallowed characters or over length", () => {
+    expect(parseEvBody({ ev: "visit", uid: "abcdefgh", source: "a b" })?.source).toBe(undefined);
+    expect(parseEvBody({ ev: "visit", uid: "abcdefgh", source: "x".repeat(41) })?.source).toBe(undefined);
+  });
+});
+
+describe("bump — source split", () => {
+  it("first_play with a source: writes the ev:src:first_play:<day> hash + TTL", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "first_play", { uid: "abcdefgh", source: "x_launch", day: "2026-6-9" });
+    expect(Number(fake.hashes.get("ev:src:first_play:2026-6-9")?.get("x_launch"))).toBe(1);
+    expect(fake.calls.includes(`expire ev:src:first_play:2026-6-9 ${EV_TTL}`)).toBe(true);
+  });
+
+  it("visit with a source: writes the ev:src:visit:<day> hash", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "visit", { source: "reddit", day: "2026-6-9" });
+    expect(Number(fake.hashes.get("ev:src:visit:2026-6-9")?.get("reddit"))).toBe(1);
+  });
+
+  it("does NOT write a source hash for non-acquisition stages (play)", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "play", { uid: "abcdefgh", source: "x_launch", day: "2026-6-9" });
+    expect(fake.hashes.get("ev:src:play:2026-6-9")).toBe(undefined);
+  });
+
+  it("first_play with no source: no source hash written", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "first_play", { uid: "abcdefgh", day: "2026-6-9" });
+    expect(fake.hashes.get("ev:src:first_play:2026-6-9")).toBe(undefined);
+  });
+
+  it("share_view with a source: no source hash written (recipients are not acquisition events)", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "share_view", { uid: "abcdefgh", source: "x_launch", day: "2026-6-9" });
+    expect(fake.hashes.get("ev:src:share_view:2026-6-9")).toBe(undefined);
+  });
+
+  it("source-hash cap skips the write once the hash is full (unauthenticated-beacon memory guard)", async () => {
+    const fake = createRedisFake();
+    fake.hlen = async () => EV_SRC_CAP; // pretend today's source hash is already at the cap
+    await bump(fake as unknown as Redis, "first_play", { source: "x_launch", day: "2026-6-9" });
+    // the stage counter still increments at the cap
+    expect(Number(fake.strings.get("ev:first_play:2026-6-9"))).toBe(1);
+    // but the per-source hash write is skipped (no unbounded distinct-field growth)
+    expect(fake.hashes.get("ev:src:first_play:2026-6-9")).toBe(undefined);
   });
 });

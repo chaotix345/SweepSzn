@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Anton } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { baseUrl, SITE_NAME } from "@/lib/site";
 import SessionProvider from "@/components/SessionProvider";
+import UtmCapture from "@/components/UtmCapture";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -53,6 +54,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <SessionProvider>{children}</SessionProvider>
+        <UtmCapture />
         <Analytics />
       </body>
     </html>
