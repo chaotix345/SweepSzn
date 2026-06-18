@@ -1,8 +1,9 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
-import type { Player, Coefficients, DraftCandidate, CandidateFit, Slot } from "./types";
+import type { Player, Coefficients, DraftCandidate, CandidateFit, Slot, EraContext } from "./types";
 import { DEFAULT_COEFFICIENTS, quickScore, playerFeatures } from "./engine";
+import { decadeEraContext } from "./leagueContext";
 import { buildPrimePools, compareSzn, type PrimePools } from "./prime";
 import { playerTraits } from "./traits";
 import { mulberry32, strSeed } from "./rng";
@@ -29,6 +30,7 @@ let _cache: {
   draftKeys: string[];
   teamsByDecade: Map<string, string[]>;
   decadesByTeam: Map<string, string[]>;
+  personNames: Map<string, string>;
   coeff: Coefficients;
 } | null = null;
 
@@ -39,6 +41,7 @@ function load() {
   const coeff: Coefficients = { ...DEFAULT_COEFFICIENTS, ...coeffRaw };
 
   const byId = new Map<string, Player>();
+  const personNames = new Map<string, string>();
   const draftIndex = new Map<string, Player[]>();
   const teamsByDecade = new Map<string, string[]>();
   const decadesByTeam = new Map<string, string[]>();
@@ -48,6 +51,7 @@ function load() {
   for (const p of players) {
     p.person_id ??= p.name.toLowerCase().replace(/['.]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
     byId.set(p.id, p);
+    personNames.set(p.person_id, p.name);
     // 82-0 parity: only current franchises, only the 1960s–2020s decades are draftable
     if (!CURRENT.has(p.team) || !DECADES.has(p.decade)) continue;
     const key = `${p.team}|${p.decade}`;
@@ -63,7 +67,7 @@ function load() {
   for (const [team, set] of decSeen) decadesByTeam.set(team, [...set]);
   const draftKeys = [...draftIndex.keys()];
 
-  _cache = { players, byId, draftIndex, draftKeys, teamsByDecade, decadesByTeam, coeff };
+  _cache = { players, byId, draftIndex, draftKeys, teamsByDecade, decadesByTeam, personNames, coeff };
   return _cache;
 }
 
@@ -74,6 +78,28 @@ export function getCoefficients(): Coefficients {
 export function getPlayersByIds(ids: string[]): Player[] {
   const { byId } = load();
   return ids.map((id) => byId.get(id)).filter((p): p is Player => !!p);
+}
+
+// All franchise/era variants of one real person — powers the dossier's career-arc strip.
+export function getPersonVariants(personId: string): Player[] {
+  const { players } = load();
+  return players.filter((p) => (p.person_id ?? p.id) === personId);
+}
+
+// O(1) display-name lookup for a person_id (built once at load) — used by the crowd reveal.
+export function getPersonName(personId: string): string | undefined {
+  return load().personNames.get(personId);
+}
+
+// Draftable players for a (team, decade) eligible at `slot`, fame-sorted (compareSzn) — the post-game
+// What-If Lab's swap options. Same descriptive candidate shape as a spin; it carries NO fit/engine
+// signal and is never ordered by outcome (the Lab re-scores only after the user picks). DESIGN.md §12.
+export function getSwapOptions(team: string, decade: string, slot: Slot): DraftCandidate[] {
+  const { draftIndex, coeff } = load();
+  const pool = (draftIndex.get(`${team}|${decade}`) ?? [])
+    .filter((p) => ((p.eligible && p.eligible.length) ? p.eligible : [p.pos as Slot]).includes(slot))
+    .sort(compareSzn);
+  return pool.map((p, i) => toCandidate(p, undefined, playerFeatures(p, coeff).usage, i));
 }
 
 // Top-K draftable players by peak_score — the candidate universe the projection ticker's "ceiling"
@@ -94,6 +120,7 @@ function toCandidate(p: Player, fit?: CandidateFit, usage?: number, rank?: numbe
     pos: p.pos, eligible: (p.eligible && p.eligible.length ? p.eligible : [p.pos as Slot]),
     pts: p.pts, trb: p.trb, ast: p.ast, stl: p.stl, blk: p.blk, defense_estimated: p.defense_estimated, fit, usage,
     traits: playerTraits(p), rank,
+    z: p.z ? { pts: p.z.pts, trb: p.z.trb, ast: p.z.ast, stl: p.z.stl, blk: p.z.blk, ts: p.z.ts } : undefined,
   };
 }
 
@@ -164,6 +191,7 @@ export interface SpinResult {
   team: string;
   decade: string;
   candidates: DraftCandidate[];
+  era?: EraContext; // descriptive league-era snapshot for the spun decade (null/omitted for Prime)
 }
 
 // Spin a (team, decade) like 82-0: uniform over populated combos, full roster returned.
@@ -229,7 +257,7 @@ export function spin(seed: string, round: number, opts: SpinOptions = {}, wantFi
   // send unrounded usage so the live budget bar sums the SAME floats blueprintMetric grades on —
   // a per-player round here could straddle the A+/A boundary the bar tells the player they hit
   const candidates = pool.map((p, i) => toCandidate(p, fits?.get(p.id), playerFeatures(p, coeff).usage, i));
-  return { team, decade, candidates };
+  return { team, decade, candidates, era: decadeEraContext(decade) ?? undefined };
 }
 
 // Pool-only spin for leaderboard verification: same (team, decade) selection, candidate ids only

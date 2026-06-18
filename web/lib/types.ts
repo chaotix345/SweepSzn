@@ -4,6 +4,18 @@ export type Tier = "complete" | "partial" | "primitive";
 // Descriptive draft-board tags derived from intrinsic box stats (thresholds live in lib/traits.ts).
 export type TraitKey = "sniper" | "shooter" | "rim" | "glass" | "playmaker" | "lockdown" | "efficient" | "volume";
 
+export type ThreePtEraKey = "pre" | "early" | "modern" | "three_ball";
+// Descriptive league-era snapshot for a draftable decade (built in lib/leagueContext.ts), attached to
+// every non-Prime spin so the board can frame raw stats in their era. Public historical context only —
+// never an engine/fit signal (DESIGN.md §12 trust model).
+export interface EraContext {
+  decade: string;
+  label: string;            // e.g. "1980s NBA"
+  pace: number | null;      // decade-average pace (null for pre-tracking eras)
+  ppgEnv: number | null;    // decade-average qualified per-player scoring
+  era3pt: { key: ThreePtEraKey; label: string };
+}
+
 export interface ZScores {
   pts?: number | null;
   trb?: number | null;
@@ -83,6 +95,7 @@ export interface DraftCandidate {
   usage?: number;       // engine usage demand — sent on every spin for the live budget bar (intrinsic public player data, not seed-relative — DESIGN.md §12)
   traits?: TraitKey[];  // descriptive board tags derived from intrinsic stats (see lib/traits.ts) — informs without revealing fit
   rank?: number;        // server-assigned board ordinal (0 = top of the "Top"/szn order); client sorts "szn" by this
+  z?: Pick<ZScores, "pts" | "trb" | "ast" | "stl" | "blk" | "ts">; // league-relative standings for the era bars + compare radar (descriptive, never fit)
 }
 
 // Daily leaderboard: the client submits the draft as an ordered trace (index = round) so the

@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import ResultsHistory from "@/components/ResultsHistory";
 import { ModeGlyph } from "@/components/game/modeIcons";
 import { CloseIcon } from "@/components/ui/icons";
@@ -161,6 +162,11 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
       </button>
 
       <ResultsHistory onOpenChallenge={onOpenChallenge} />
+
+      <Link href="/dex"
+        className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-2.5 text-sm font-semibold text-zinc-300 transition hover:border-zinc-700 hover:text-orange-300">
+        🗂️ Your Drafted Dex →
+      </Link>
 
       <p className="mt-8 text-xs text-zinc-500">
         Smarter engine: every team is scored by a model fit to 1,170 real NBA seasons — and it tells you <em>why</em>.

@@ -12,6 +12,8 @@ import { WIN_GRADES, weakestSlot } from "@/lib/engine";
 import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
 import { GRADE_COLOR, isEliteGrade } from "@/lib/grades";
 import { Button, ButtonLink } from "@/components/ui/Button";
+import { WhatIfLab } from "@/components/game/WhatIfLab";
+import { RarityBadge } from "@/components/game/RarityBadge";
 
 // Crowd snapshot + your vote (and, same-session only, the spun team/era the vote was about).
 type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
@@ -214,6 +216,12 @@ export default function ResultCard({
             <span aria-hidden>🔎</span>
             <span>Lowest-value pick: your <strong className="text-zinc-300">{weakSlot}</strong> added the least to this five — something to rethink next run.</span>
           </p>
+        )}
+        <RarityBadge ids={players.map((p) => p.person_id ?? p.id).join(",")} />
+        {/* What-If Lab: post-commit swap sandbox. Gated off Prime (a candidate's decade there is its
+            peak, not the spun era, so the slot pool wouldn't match). Re-scores via /api/evaluate. */}
+        {mode !== "prime" && (
+          <WhatIfLab players={players} slots={slots} baseWins={result.wins} baseLosses={result.losses} baseGrade={result.grade} />
         )}
       </div>
 

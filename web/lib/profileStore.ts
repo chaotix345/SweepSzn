@@ -1,6 +1,7 @@
 import "server-only";
 import { redis } from "./redis";
 import { dayUTC } from "./day";
+import { decodeLineup } from "./share";
 
 // Per-account persistence for signed-in players: the cross-device home for streak, result history,
 // and the editable display handle. Anonymous players keep using localStorage (lib/streak.ts,
@@ -14,6 +15,9 @@ import { dayUTC } from "./day";
 const keyProfile = (uid: string) => `profile:${uid}`;
 const keyStreak = (uid: string) => `streak:${uid}`;
 const keyResults = (uid: string) => `results:${uid}`;
+// dex:{uid}  SET  every player-variant id ever fielded — UNBOUNDED (no 200-cap), so the Drafted Dex
+// never loses a player once seen, even past the results cap. Written alongside each result sync.
+const keyDex = (uid: string) => `dex:${uid}`;
 
 export const RESULTS_CAP = 200;
 // Streaks only need the most-recent consecutive run, bounded by the account's age, so cap the
@@ -160,5 +164,15 @@ export async function syncResults(uid: string, entries: ProfileResult[]): Promis
   // Rebuild the list newest-first: lpush leaves its LAST arg at the head, so push the reverse.
   await redis.del(keyResults(uid));
   await redis.lpush(keyResults(uid), ...[...merged].reverse());
+  // Accumulate every fielded player into the unbounded dex set, so the collection survives past the
+  // results cap. SADD is idempotent, so re-syncing the same games never double-counts.
+  const dexArr = [...new Set(fresh.flatMap((e) => decodeLineup(e.encoded)))];
+  if (dexArr.length) await redis.sadd(keyDex(uid), dexArr[0], ...dexArr.slice(1));
   return fresh.length;
+}
+
+// Every player-variant id the user has ever fielded (unbounded — survives the results cap).
+export async function getDexIds(uid: string): Promise<string[]> {
+  if (!redis) return [];
+  return (await redis.smembers<string[]>(keyDex(uid))) ?? [];
 }

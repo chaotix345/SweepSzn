@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from "react";
-import type { CandidateFit, DraftCandidate } from "@/lib/types";
+import React, { useState, useMemo, useRef } from "react";
+import type { CandidateFit, DraftCandidate, EraContext } from "@/lib/types";
 import { teamColors, eraLabel } from "@/lib/teams";
 import { TRAIT_META } from "@/lib/traits";
 import type { Mode } from "@/components/game/types";
+import { ComparePanel } from "@/components/game/ComparePanel";
+import { Dossier } from "@/components/game/Dossier";
 
-type Spin = { team: string; decade: string; candidates: DraftCandidate[] };
+type Spin = { team: string; decade: string; candidates: DraftCandidate[]; era?: EraContext };
 export type SortKey = "szn" | "fit" | "ppg" | "rpg" | "apg" | "az";
 
 // Decades that can contain pre-1985 players, whose box dominance the engine discounts (eraStrength,
@@ -46,6 +48,16 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
   const [sort, setSort] = useState<SortKey>(showFit ? "fit" : "szn");
   // if Hints is switched off mid-spin while sorted by fit, fall back to the neutral default
   const effSort: SortKey = sort === "fit" && !showFit ? "szn" : sort;
+  // Compare mode: tap two candidates to see them side by side (descriptive stats + z-score radar, no
+  // fit/engine signal). Separate from placement — comparing never locks a slot (DESIGN.md §12).
+  const [compareMode, setCompareMode] = useState(false);
+  const [cmpSel, setCmpSel] = useState<DraftCandidate[]>([]);
+  const cmpRef = useRef<HTMLDivElement>(null);
+  const toggleCompare = () => setCompareMode((on) => { if (on) setCmpSel([]); return !on; });
+  const toggleCmp = (c: DraftCandidate) =>
+    setCmpSel((s) => s.some((x) => x.id === c.id) ? s.filter((x) => x.id !== c.id) : s.length >= 2 ? [s[1], c] : [...s, c]);
+  // Which candidate's dossier (accolades + career + era context) is expanded inline. One at a time.
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const list = useMemo(() => {
     const inGroup = (c: DraftCandidate) =>
@@ -97,6 +109,13 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
             💡 Hints used up
           </span>
         ))}
+        {!hideStats && spin.candidates.length >= 2 && (
+          <button onClick={toggleCompare} aria-pressed={compareMode}
+            title="Compare two players side by side (real stats — not a fit rating)"
+            className={`flex min-h-9 items-center rounded-md px-2.5 py-1.5 text-xs font-semibold transition ${compareMode ? "bg-orange-500 text-black" : "border border-zinc-700 text-zinc-400 hover:text-zinc-200"}`}>
+            ⚖️ Compare
+          </button>
+        )}
         {!hideStats && (
           <select value={effSort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort players"
             className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-300 outline-none">
@@ -106,21 +125,37 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
           </select>
         )}
       </div>
+      {/* Era Pulse: descriptive league context for the spun decade — frames raw stats in their era
+          without any engine/fit signal (DESIGN.md §12). Hidden in HoopIQ, where the era is masked. */}
+      {!hideStats && spin.era && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-zinc-800/70 px-3 py-1.5 text-[11px] text-zinc-500">
+          <span className="font-semibold uppercase tracking-wide text-zinc-400">{spin.era.label}</span>
+          {spin.era.pace != null && (<><span aria-hidden>·</span><span className="tabular-nums">{spin.era.pace} pace</span></>)}
+          <span aria-hidden>·</span><span>{spin.era.era3pt.label}</span>
+        </div>
+      )}
       <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-zinc-500">
         <span>{list.length} player{list.length === 1 ? "" : "s"} available{hideStats ? " · stats hidden" : ""}</span>
-        {showFit && <span className="text-zinc-500">fit = net swing for <span className="text-zinc-400">your</span> roster</span>}
+        {compareMode ? <span className="text-orange-400">Tap 2 players to compare · {cmpSel.length}/2</span>
+          : showFit ? <span className="text-zinc-500">fit = net swing for <span className="text-zinc-400">your</span> roster</span> : null}
       </div>
       <div className="max-h-[min(420px,50dvh)] overflow-y-auto overscroll-contain px-2 pb-2">
         {list.map((c) => {
           const sel = selId === c.id;
+          const cmpHit = cmpSel.some((x) => x.id === c.id);
           const fits = canPlace(c);
           const showRowFit = showFit && fits && c.fit;
+          const isOpen = openId === c.id;
           return (
-            <button key={c.id} onClick={() => fits && onSelect(c)} aria-pressed={sel} aria-disabled={!fits} tabIndex={fits ? undefined : -1}
-              aria-label={`Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}${showUsage && c.usage != null ? `, ${Math.round(c.usage)} percent usage demand` : ""}${showRowFit ? `, fit ${c.fit!.delta > 0 ? "+" : ""}${c.fit!.delta}${c.fit!.adds.length ? ", adds " + c.fit!.adds.join(" and ") : ""}` : ""}`}
-              title={fits ? undefined : "No open slot for this player — re-spin or pick a different position"}
-              className={`mb-1.5 flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition active:scale-[0.98] ${
-                sel ? "border-orange-500 bg-orange-500/10"
+            <div key={c.id} className="mb-1.5">
+            <div className="flex items-stretch">
+            <button onClick={() => (compareMode ? toggleCmp(c) : fits && onSelect(c))}
+              aria-pressed={compareMode ? cmpHit : sel} aria-disabled={!compareMode && !fits} tabIndex={!compareMode && !fits ? -1 : undefined}
+              aria-label={compareMode ? `${cmpHit ? "Deselect" : "Select"} ${c.name} to compare` : `Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}${showUsage && c.usage != null ? `, ${Math.round(c.usage)} percent usage demand` : ""}${showRowFit ? `, fit ${c.fit!.delta > 0 ? "+" : ""}${c.fit!.delta}${c.fit!.adds.length ? ", adds " + c.fit!.adds.join(" and ") : ""}` : ""}`}
+              title={!compareMode && !fits ? "No open slot for this player — re-spin or pick a different position" : undefined}
+              className={`flex w-full items-center gap-3 ${hideStats ? "rounded-lg" : "rounded-l-lg"} border px-3 py-2 text-left transition active:scale-[0.98] ${
+                compareMode ? (cmpHit ? "border-orange-500 bg-orange-500/10" : "border-zinc-800 bg-zinc-950/60 hover:-translate-y-px hover:border-zinc-600")
+                  : sel ? "border-orange-500 bg-orange-500/10"
                   : showRowFit && c.fit!.best ? "border-green-600/50 bg-green-500/[0.06] shadow-[0_0_14px_-4px_rgba(52,211,153,0.45)] hover:-translate-y-px hover:border-green-500"
                   : fits ? "border-zinc-800 bg-zinc-950/60 hover:-translate-y-px hover:border-zinc-600"
                   : "cursor-not-allowed border-zinc-900 bg-zinc-950/40 opacity-55"}`}>
@@ -166,14 +201,29 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
                 </div>
               )}
             </button>
+            {!hideStats && (
+              <button onClick={() => setOpenId(isOpen ? null : c.id)} aria-expanded={isOpen} aria-label={`${isOpen ? "Hide" : "Show"} ${c.name} details`}
+                title="Player details — accolades, career, era context"
+                className={`flex w-9 shrink-0 items-center justify-center rounded-r-lg border text-sm transition ${isOpen ? "border-orange-500 bg-orange-500/10 text-orange-400" : "border-zinc-800 bg-zinc-950/60 text-zinc-500 hover:text-orange-400"}`}>
+                {isOpen ? "▴" : "ⓘ"}
+              </button>
+            )}
+            </div>
+            {isOpen && <Dossier cand={c} />}
+            </div>
           );
         })}
         {list.length === 0 && <div className="py-8 text-center text-xs text-zinc-500">No players match.</div>}
       </div>
-      {selId && (
+      {selId && !compareMode && (
         <div className="sticky bottom-0 hidden border-t border-orange-500/30 bg-zinc-900/90 py-2 text-center text-xs font-bold text-orange-400 backdrop-blur lg:block">
           Now tap a glowing position on the court →
         </div>
+      )}
+      {compareMode && cmpSel.length === 2 && (
+        <ComparePanel a={cmpSel[0]} b={cmpSel[1]} dialogRef={cmpRef}
+          onClose={() => setCmpSel([])}
+          onPick={(c) => { setCompareMode(false); setCmpSel([]); if (canPlace(c)) onSelect(c); }} />
       )}
     </div>
   );

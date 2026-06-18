@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { enableRedisEnv, freshFake, ctx } from "@/test/routeHarness";
+import { encodeLineup } from "@/lib/share";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 
@@ -25,6 +26,20 @@ describe("profileStore — pure helpers", () => {
     expect(store.streakFromDates(["2026-6-13"], now)).toBe(0); // two-day gap → broken
     expect(store.streakFromDates(["2026-6-15", "2026-6-13"], now)).toBe(1); // gap breaks the run at 1
     expect(store.streakFromDates([], now)).toBe(0);
+  });
+});
+
+describe("profileStore — dex set (unbounded collection)", () => {
+  const DIDS = ["michael_jordan_chi_1980s_1988", "larry_bird_bos_1980s_1986", "magic_johnson_lal_1980s_1987", "kareem_lal_1980s_1986", "james_worthy_lal_1980s_1988"];
+  it("syncResults records every fielded player in dex:{uid}; getDexIds reads them back", async () => {
+    await store.syncResults("u-dex1", [{ encoded: encodeLineup(DIDS), mode: "classic", wins: 1, losses: 81, grade: "F", ts: 1 }]);
+    expect(new Set(await store.getDexIds("u-dex1"))).toEqual(new Set(DIDS));
+  });
+  it("is idempotent — re-syncing the same game keeps the set at 5", async () => {
+    const e = { encoded: encodeLineup(DIDS), mode: "classic", wins: 1, losses: 81, grade: "F", ts: 1 };
+    await store.syncResults("u-dex2", [e]);
+    await store.syncResults("u-dex2", [{ ...e, ts: 2 }]);
+    expect((await store.getDexIds("u-dex2")).length).toBe(5);
   });
 });
 
