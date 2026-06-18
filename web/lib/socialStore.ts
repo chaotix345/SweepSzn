@@ -52,3 +52,46 @@ export async function logCore(redis: Redis | null, personIds: string[]): Promise
     logError("social.core", err);
   }
 }
+
+// --- read side (crowd reveal + rarity badge) ---
+// Volume gates: below these, a "% chose X" / "X% built this" reading is noise and reads as near-
+// prescriptive at tiny N, so we suppress it entirely (show nothing, never a misleading number).
+export const CROWD_MIN = 20;   // plays per (mode, spin, slot)
+export const RARITY_MIN = 100; // total completed cores
+
+export interface CrowdChoice { personId: string; pct: number }
+export interface CrowdResult { total: number; choices: CrowdChoice[] }
+
+// Top-3 picks at a slot for a (mode, spin) config, with their share — only once the slot has enough
+// plays to be meaningful. Returns null below the gate. Read-only; never reveals an engine ranking.
+export async function crowdForSlot(redis: Redis | null, mode: string, spinKey: string, slot: string): Promise<CrowdResult | null> {
+  if (!redis) return null;
+  try {
+    const h = await redis.hgetall<Record<string, number | string>>(slotPickHashKey(mode, spinKey, slot));
+    if (!h) return null;
+    const total = Number(h.__total__ ?? 0);
+    if (total < CROWD_MIN) return null;
+    const choices = Object.entries(h)
+      .filter(([k]) => k !== "__total__")
+      .map(([personId, v]) => ({ personId, pct: Math.round((Number(v) / total) * 1000) / 10 }))
+      .sort((a, b) => b.pct - a.pct)
+      .slice(0, 3);
+    return { total, choices };
+  } catch {
+    return null;
+  }
+}
+
+// What fraction of completed cores were this exact five — only once the global sample is meaningful.
+// Returns null below the gate. Rarity is orthogonal to quality; callers must never frame it otherwise.
+export async function coreRarity(redis: Redis | null, personIds: string[]): Promise<{ pct: number; total: number } | null> {
+  if (!redis || personIds.length !== 5) return null;
+  try {
+    const total = Number((await redis.get("core_picks:total")) ?? 0);
+    if (total < RARITY_MIN) return null;
+    const count = Number((await redis.hget("core_picks", coreKeyOf(personIds))) ?? 0);
+    return { pct: Math.round((count / total) * 1000) / 10, total };
+  } catch {
+    return null;
+  }
+}

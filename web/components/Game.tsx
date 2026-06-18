@@ -75,6 +75,7 @@ export default function Game() {
   const [roster, setRoster] = useState<Roster>(EMPTY);
   const [current, setCurrent] = useState<Spin | null>(null);
   const [spinning, setSpinning] = useState(false);
+  const [crowdNote, setCrowdNote] = useState<string | null>(null); // post-lock "how others played this slot" reveal
   const [reel, setReel] = useState<{ team: string; era: string }>({ team: "ATL", era: "60's" });
   const [lockedReel, setLockedReel] = useState<"team" | "era" | null>(null);
   const [selPlayer, setSelPlayer] = useState<DraftCandidate | null>(null);
@@ -192,7 +193,7 @@ export default function Game() {
 
   const runSpin = useCallback(async (opts: SpinOpts, locked: "team" | "era" | null = null) => {
     if (spinning) return;
-    setError(null); setSpinning(true); setCurrent(null); setSelPlayer(null); setSelSlot(null); setLockedReel(locked);
+    setError(null); setSpinning(true); setCurrent(null); setSelPlayer(null); setSelSlot(null); setLockedReel(locked); setCrowdNote(null);
     if (tickRef.current) clearTimeout(tickRef.current);
     const reduce = typeof window !== "undefined" && (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false);
     // Cosmetic reel churn: a fast blur while the (deterministic) spin resolves, then a slot-machine
@@ -437,6 +438,16 @@ export default function Game() {
           body: JSON.stringify({ mode, spinKey: `${current.team}|${current.decade}`, slot, personId: selPlayer.person_id ?? selPlayer.id }),
         }).catch(() => {});
       } catch { /* beacon is best-effort */ }
+      // Post-lock crowd reveal: how others played THIS slot for this spin. Volume-gated server-side
+      // (usually null pre-launch). Post-commit, read-only — never a pre-commit hint. Skipped in HoopIQ
+      // to keep its mystery. The read sees plays BEFORE this one, so it reflects how others went.
+      if (mode !== "hoopiq") {
+        const sp = `${current.team}|${current.decade}`;
+        fetch(`/api/crowd?mode=${mode}&spinKey=${encodeURIComponent(sp)}&slot=${slot}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => { const top = d?.crowd?.choices?.[0]; if (top) setCrowdNote(`${top.pct}% of players took ${top.name} at ${slot} here.`); })
+          .catch(() => {});
+      }
     }
     const next = { ...roster, [slot]: selPlayer };
     setRoster(next); setSelPlayer(null); setCurrent(null); setLockedReel(null);
@@ -679,6 +690,7 @@ export default function Game() {
                 </>
               ) : (
                 <>
+                  {crowdNote && <p className="mb-2 text-xs text-zinc-500"><span className="text-violet-300" aria-hidden>◆</span> {crowdNote}</p>}
                   <p className="text-sm text-zinc-500">{filled === 0 ? "Spin to draft your first player." : `Spin for round ${roundNum} of 5.`}</p>
                   <button onClick={spin} disabled={spinning}
                     className="mt-3 rounded-xl bg-orange-500 px-6 py-2.5 font-bold text-black transition hover:bg-orange-400 disabled:opacity-50">
