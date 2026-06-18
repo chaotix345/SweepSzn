@@ -49,6 +49,7 @@ const ROUTE_TO_TEST: Record<string, string> = {
   "cron/streak-saver":              "cronStreakSaver",
   "daily/leaderboard":              "dailyLeaderboard",
   "daily/submit":                   "dailySubmit",
+  "dex":                            "dex",
   "ev":                             "ev",
   "evaluate":                       "evaluate",
   "factorhunt/choices":             "factorhuntChoices",
