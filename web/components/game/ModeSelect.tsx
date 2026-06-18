@@ -139,7 +139,8 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
               </div>
               <div className="mt-3 font-bold text-zinc-100">{m.title}</div>
               <p className="mt-1 flex-1 text-sm text-zinc-400">{m.desc}</p>
-              <div className={`mt-3 text-sm font-bold ${a.text} group-hover:underline`}>Play →</div>
+              {/* CTA stays the action orange (DESIGN.md): the mode accent lives on the icon + dots only */}
+              <div className="mt-3 text-sm font-bold text-orange-400 group-hover:underline">Play →</div>
             </button>
           );
         })}

@@ -8,6 +8,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["{lib,app,components,test}/**/*.test.{ts,tsx}"],
+    setupFiles: ["./test/setup.ts"],
     // Never discover the sibling git worktrees under .claude/worktrees (each carries a full copy of the
     // test tree) — they pollute the run and fail against this checkout's app/api + ROUTE_TO_TEST.
     exclude: [...configDefaults.exclude, "**/.claude/**"],
