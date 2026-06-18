@@ -30,8 +30,10 @@ launch day (~Jun 23). The existing `/admin` + `lib/metrics.ts` funnel already co
 - `bump()` active-set membership becomes an explicit allow-list `{play, share, signin, submit}` so the
   new stages don't inflate DAU (visit/share_view shouldn't; first_play/engagement uids are already
   active via `play`).
-- Dedupe: `visit` once/session, `first_play` once/device, `share_view` once/page-view. Logic in a
-  testable `lib/once.ts`.
+- Dedupe: `visit` once/device, `first_play` once/device, `share_view` once/page-view. Logic in a
+  testable `lib/once.ts` (with an in-memory fallback so storage failures emit once/page-load, never
+  per-call). `visit` is device-scoped (not session) so `rates.firstPlay = firstPlays/visits` divides
+  two per-device signals — a clean new-device conversion rate.
 
 ## Read path
 
@@ -45,9 +47,11 @@ launch day (~Jun 23). The existing `/admin` + `lib/metrics.ts` funnel already co
 
 ## Wiring
 
-- `<VisitBeacon/>` mounted on the home page → `ev("visit")` once/session.
+- `<Beacon name="visit">` (device-scoped) mounted on the home page AND the `/r/` + `/pe/` permalink
+  pages → `ev("visit")` once/device. Permalinks are counted so the share-acquisition path isn't
+  missing from the denominator.
 - `first_play` gate in `Game.tsx start()` → `ev("first_play")` once/device, beside `ev("play")`.
-- `<ShareViewBeacon/>` on `/r/[lineup]` + `/pe/[card]` → `ev("share_view")` once/view.
+- `<Beacon name="share_view">` on `/r/[lineup]` + `/pe/[card]` → `ev("share_view")` once/view.
 - Dual-fire `ev()` next to the 4 engagement `track()` calls (ResultCard ExploreZone onOpen,
   WhatIfLab, CompareLineup ×2).
 

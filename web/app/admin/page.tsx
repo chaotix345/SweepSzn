@@ -26,9 +26,9 @@ function Funnel({ m }: { m: Metrics }) {
   const rows = [
     { label: "Visitors", value: m.funnel.visits, rate: "" },
     { label: "First play", value: m.funnel.firstPlays, rate: fmtRate(m.rates.firstPlay) + " of visitors" },
-    { label: "Plays", value: m.funnel.plays, rate: "" },
+    { label: "Plays", value: m.funnel.plays, rate: "incl. replays" },
     { label: "Completed", value: m.funnel.completes, rate: fmtRate(m.rates.completion) + " of plays" },
-    { label: "Shared", value: m.funnel.shares, rate: fmtRate(m.rates.shareRate) + " of completes" },
+    { label: "Shared", value: m.funnel.shares, rate: fmtRate(m.rates.shareRate) + " of completes (incl. reshares)" },
     { label: "Signed in", value: m.funnel.signins, rate: fmtRate(m.rates.capture) + " of completes" },
   ];
   const max = Math.max(m.funnel.visits, m.funnel.plays, 1);
@@ -120,7 +120,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </section>
 
       <section className="text-xs text-zinc-500">
-        All-time events — {["visit", "first_play", "play", "complete", "share", "share_view", "signin", "submit", "compare_friend"].map(k => `${k}: ${m.totals[k] ?? 0}`).join(" · ")}
+        All-time events — {["visit", "first_play", "play", "complete", "share", "share_view", "signin", "submit", "explore_open", "whatif_open", "compare_open", "compare_friend"].map(k => `${k}: ${m.totals[k] ?? 0}`).join(" · ")}
       </section>
     </main>
   );

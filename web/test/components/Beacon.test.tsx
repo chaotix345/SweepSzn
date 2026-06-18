@@ -49,4 +49,12 @@ describe("Beacon", () => {
     render(<Beacon name="visit" dedupe={{ scope: "session", key: "szn:ev:visit" }} />);
     expect(sessionStorage.getItem("szn:ev:visit")).toBe("1");
   });
+
+  it("device dedupe: persists in localStorage and survives a later mount (once per device)", () => {
+    render(<Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />);
+    expect(localStorage.getItem("szn:ev:visit")).toBe("1");
+    cleanup();
+    render(<Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />);
+    expect(evMock).toHaveBeenCalledTimes(1);
+  });
 });

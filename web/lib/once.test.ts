@@ -54,4 +54,25 @@ describe("once", () => {
       expect(once("device", "x")).toBe(true);
     });
   });
+
+  describe("write blocked (quota / private mode — the real incognito path)", () => {
+    let orig: typeof Storage.prototype.setItem;
+    beforeEach(() => {
+      orig = Storage.prototype.setItem;
+      Storage.prototype.setItem = () => {
+        throw new DOMException("QuotaExceededError");
+      };
+    });
+    afterEach(() => {
+      Storage.prototype.setItem = orig;
+    });
+
+    it("emits once per page-load via the in-memory fallback, NOT on every call", () => {
+      // The persisted gate can never be written, so without the fallback this would fire forever
+      // (collapsing first_play into a per-start signal). Use a unique key to avoid cross-test memo.
+      expect(once("device", "quota-key-1")).toBe(true);
+      expect(once("device", "quota-key-1")).toBe(false);
+      expect(once("device", "quota-key-1")).toBe(false);
+    });
+  });
 });

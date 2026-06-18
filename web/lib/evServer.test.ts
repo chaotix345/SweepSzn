@@ -166,10 +166,11 @@ describe("bump", () => {
     expect(fake.sets.get("ev:active:2026-6-9")).toBe(undefined);
   });
 
-  it("share_view with uid: counter only, NOT the active set (recipients are not DAU)", async () => {
+  it("share_view with uid: counter + totals only, NOT the active set (recipients are not DAU)", async () => {
     const fake = createRedisFake();
     await bump(fake as unknown as Redis, "share_view", { uid: "abcdefgh", day: "2026-6-9" });
     expect(Number(fake.strings.get("ev:share_view:2026-6-9"))).toBe(1);
+    expect(Number(fake.hashes.get("ev:totals")?.get("share_view"))).toBe(1);
     expect(fake.sets.get("ev:active:2026-6-9")).toBe(undefined);
   });
 

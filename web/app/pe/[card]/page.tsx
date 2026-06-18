@@ -55,6 +55,9 @@ export default async function SharedPickem({ params }: Props) {
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       {/* Share-loop close: count each view of a shared Pick'Em permalink (once per page view). */}
       <Beacon name="share_view" />
+      {/* Count share-link arrivals as visitors too (device-scoped, shared key with home) so the
+          visitor→first-play denominator includes the share-acquisition path. */}
+      <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <Link href="/" className="flex items-baseline text-2xl tracking-tight">
           <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>

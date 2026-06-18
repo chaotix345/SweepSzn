@@ -45,6 +45,10 @@ export default async function SharedResult({ params }: Props) {
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       {/* Share-loop close: count each view of a shared permalink (once per page view). */}
       <Beacon name="share_view" />
+      {/* Many first-time arrivals land here, not on home — count them as visitors too, or the
+          visitor→first-play denominator misses the whole share-acquisition path. Device-scoped key
+          shared with home so a visitor who lands here then opens home is still one visit. */}
+      <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <Link href="/" className="flex items-baseline text-2xl tracking-tight">

@@ -11,6 +11,7 @@ vi.mock("next/link", () => ({
 }));
 vi.mock("@vercel/analytics", () => ({ track: vi.fn() }));
 vi.mock("@/lib/ev", () => ({ ev: vi.fn() }));
+vi.mock("@/lib/firstPlay", () => ({ markFirstPlay: vi.fn() }));
 vi.mock("@/lib/streak", () => ({
   getUid: () => "test-uid-ux", getName: () => "", setName: vi.fn(),
   recordDailyDone: vi.fn(), getStreak: () => ({ current: 0, longest: 0 }), msToNextUtcMidnight: () => 3600000,
@@ -25,6 +26,7 @@ vi.mock("@/components/RankShareButton", () => ({ default: () => null }));
 vi.mock("@/components/game/PickemOverlay", () => ({ PickemOverlay: () => null }));
 
 import Game from "@/components/Game";
+import { markFirstPlay } from "@/lib/firstPlay";
 
 const makeSpin = (team = "CHI", decade = "1990s") => ({
   team, decade,
@@ -80,6 +82,24 @@ describe("Game — usage cap visible from round 1 (R1)", () => {
     await act(async () => { fireEvent.click(findModeBtn("HoopIQ", "test your ball knowledge")); });
     await spinAndWait();
     expect(screen.queryByText(/Usage limit/i)).toBeNull();
+  });
+});
+
+describe("Game — first-play funnel signal", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", makeFetchMock());
+    try { localStorage.clear(); } catch { /* */ }
+  });
+  afterEach(async () => {
+    await act(async () => {});
+    cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks();
+  });
+
+  it("marks the once-per-device first_play signal when a mode starts", async () => {
+    render(<Game />);
+    await act(async () => { fireEvent.click(findModeBtn("Classic", "Full stats visible")); });
+    expect(markFirstPlay).toHaveBeenCalledWith("test-uid-ux");
   });
 });
 
