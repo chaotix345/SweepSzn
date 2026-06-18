@@ -7,7 +7,7 @@ import type { LineupResult, Player, PlayerBreakdown, Slot } from "@/lib/types";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { encodeLineup, cardImageUrl } from "@/lib/share";
 import { bpCode, type BlueprintView } from "@/lib/blueprint";
-import { factorViews, lineupRoles, headline, historyAnchor, playerContribRows, type ContribRow } from "@/lib/explain";
+import { factorViews, lineupRoles, headline, historyAnchor, scoutingAnchor, playerContribRows, type ContribRow } from "@/lib/explain";
 import { WIN_GRADES, weakestSlot } from "@/lib/engine";
 import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
 import { GRADE_COLOR, isEliteGrade } from "@/lib/grades";
@@ -222,6 +222,7 @@ export default function ResultCard({
           </p>
         )}
         <RarityBadge ids={players.map((p) => p.person_id ?? p.id).join(",")} />
+        <ScoutingAnchor result={result} />
         {/* What-If Lab: post-commit swap sandbox. Gated off Prime (a candidate's decade there is its
             peak, not the spun era, so the slot pool wouldn't match). Re-scores via /api/evaluate. */}
         {mode !== "prime" && (
@@ -453,6 +454,42 @@ function BlueprintStrip({ result, bp }: { result: LineupResult; bp: BlueprintVie
       </div>
       <p className="mt-2 text-center text-[11px] text-zinc-500">
         {result.wins} wins × {bp.mult.toFixed(2)} execution = your score on the {bp.label} board
+      </p>
+    </div>
+  );
+}
+
+// Post-commit scouting report: your five's projected ORtg/DRtg/Net beside a comparable real team's
+// actual ratings (from the win-band anchor). Descriptive — the round is already scored, so juxtaposing
+// the engine's own numbers (already shown above) with a real yardstick is fair (DESIGN.md §12).
+function ScoutingAnchor({ result }: { result: LineupResult }) {
+  const s = scoutingAnchor(result);
+  if (!s) return null;
+  const rows = [
+    { label: "Your five (projected)", ortg: s.est.ortg, drtg: s.est.drtg, net: s.est.netRtg, you: true },
+    { label: `${s.anchor.record} ${s.anchor.team} (${s.anchor.season})`, ortg: s.anchor.ortg, drtg: s.anchor.drtg, net: s.anchor.nrtg, you: false },
+  ];
+  return (
+    <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide text-zinc-500">📋 Scouting report</span>
+        <span className="text-[10px] text-zinc-600">per 100 possessions</span>
+      </div>
+      <div className="grid grid-cols-[1fr_3.25rem_3.25rem_3.25rem] gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-600">
+        <span /><span className="text-right">ORtg</span><span className="text-right">DRtg</span><span className="text-right">Net</span>
+      </div>
+      <div className="mt-1 space-y-1">
+        {rows.map((r) => (
+          <div key={r.label} className="grid grid-cols-[1fr_3.25rem_3.25rem_3.25rem] items-center gap-1 text-[11px] tabular-nums">
+            <span className={`truncate ${r.you ? "font-semibold text-zinc-200" : "text-zinc-400"}`}>{r.label}</span>
+            <span className="text-right text-zinc-300">{r.ortg.toFixed(1)}</span>
+            <span className="text-right text-zinc-300">{r.drtg.toFixed(1)}</span>
+            <span className={`text-right ${r.net >= 0 ? "text-green-400" : "text-red-400"}`}>{r.net > 0 ? "+" : ""}{r.net.toFixed(1)}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[10px] leading-snug text-zinc-600">
+        Your five&apos;s engine projection beside {s.anchor.team}&apos;s actual {s.anchor.season} ratings — a real-history yardstick, not a fit score.
       </p>
     </div>
   );

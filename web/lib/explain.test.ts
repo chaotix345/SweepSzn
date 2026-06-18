@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { factorBlurb, factorViews, playerContribRows, historyAnchor, headline } from "./explain";
+import { factorBlurb, factorViews, playerContribRows, historyAnchor, scoutingAnchor, headline } from "./explain";
 import type { LineupResult, PlayerBreakdown } from "./types";
 
 const GENERIC = "Contribution to the team rating.";
@@ -96,6 +96,20 @@ describe("historyAnchor — verified real-team reference per win band", () => {
   it("41 and below → no anchor (an average team wins 41)", () => {
     expect(historyAnchor(41)).toBeNull();
     expect(historyAnchor(20)).toBeNull();
+  });
+});
+
+describe("scoutingAnchor — your five's projection beside a comparable real team", () => {
+  it("pairs the win-band anchor with the result's projected ratings + the team's actuals", () => {
+    const s = scoutingAnchor(mkResult({ wins: 57, ortg: 112, drtg: 104, netRtg: 8 }))!;
+    expect(s).not.toBeNull();
+    expect(s.anchor.team).toMatch(/Spurs/);
+    expect(s.est).toEqual({ ortg: 112, drtg: 104, netRtg: 8 });
+    expect(s.anchor.ortg).toBeCloseTo(108.3, 1); // the real 2012-13 Spurs ORtg
+  });
+
+  it("returns null below the 42-win anchor floor", () => {
+    expect(scoutingAnchor(mkResult({ wins: 30 }))).toBeNull();
   });
 });
 

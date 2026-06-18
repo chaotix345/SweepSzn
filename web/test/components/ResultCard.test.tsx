@@ -414,6 +414,20 @@ describe("ResultCard — shareable card image (screenshots are the product)", ()
   });
 });
 
+describe("ResultCard — scouting anchor (projected ratings vs a comparable real team)", () => {
+  it("renders the matched real team's actual ORtg/DRtg/Net beside your five for a 55-win result", () => {
+    const { container } = renderCard(); // wins=55 → 58-24 Spurs (ORtg 108.3, DRtg 101.6, Net +6.7)
+    expect(container.textContent).toMatch(/Scouting report/i);
+    expect(container.textContent).toContain("101.6"); // Spurs DRtg — appears only in the scouting block
+    expect(container.textContent).toContain("+6.7");   // Spurs Net
+  });
+
+  it("omits the scouting report below the 42-win anchor floor", () => {
+    const { container } = renderCard({ result: makeResult({ wins: 30, losses: 52, grade: "D", label: "Lottery team" }) });
+    expect(container.textContent).not.toMatch(/Scouting report/i);
+  });
+});
+
 describe("ResultCard — roster-row player dossier (descriptive, post-commit §12)", () => {
   afterEach(() => { vi.unstubAllGlobals(); });
 

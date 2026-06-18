@@ -48,25 +48,44 @@ export function playerContribRows(breakdowns: PlayerBreakdown[]): ContribRow[] {
   return breakdowns.map((b) => ({ id: b.id, name: b.name, offPts: r1(c.offScale * b.off), defPts: r1(c.defScale * b.def) }));
 }
 
-export interface HistoryAnchor { team: string; record: string; season: string; hook: string; }
+// `name`/`year` index the real team_lookup.json record; `ortg`/`drtg`/`nrtg` are that season's actual
+// ratings (the team_lookup.test asserts these stay in sync with the data file — single source of truth).
+export interface HistoryAnchor {
+  team: string; record: string; season: string; hook: string;
+  name: string; year: number; ortg: number; drtg: number; nrtg: number;
+}
 
 // Real-team reference points per win band — every record verified against Basketball-Reference.
 // Anchoring a simulated record to a famous real season is the single strongest "this number is
 // real basketball" signal for a casual fan. No anchor below 42 wins: the card says an average
 // NBA team wins 41 instead.
 const ANCHORS: { min: number; a: HistoryAnchor }[] = [
-  { min: 73, a: { team: "Warriors", record: "73-9", season: "2015-16", hook: "the best regular season in NBA history" } },
-  { min: 69, a: { team: "Bulls", record: "72-10", season: "1995-96", hook: "MJ's greatest team" } },
-  { min: 65, a: { team: "Heat", record: "66-16", season: "2012-13", hook: "27-game win streak" } },
-  { min: 60, a: { team: "Celtics", record: "64-18", season: "2023-24", hook: "won the championship" } },
-  { min: 55, a: { team: "Spurs", record: "58-24", season: "2012-13", hook: "made the Finals" } },
-  { min: 50, a: { team: "Nuggets", record: "53-29", season: "2022-23", hook: "won the title" } },
-  { min: 47, a: { team: "Rockets", record: "47-35", season: "1994-95", hook: "won the title as a 6 seed" } },
-  { min: 42, a: { team: "Lakers", record: "43-39", season: "2022-23", hook: "made the conference finals" } },
+  { min: 73, a: { team: "Warriors", record: "73-9", season: "2015-16", hook: "the best regular season in NBA history", name: "Golden State Warriors", year: 2016, ortg: 114.5, drtg: 103.8, nrtg: 10.7 } },
+  { min: 69, a: { team: "Bulls", record: "72-10", season: "1995-96", hook: "MJ's greatest team", name: "Chicago Bulls", year: 1996, ortg: 115.2, drtg: 101.8, nrtg: 13.4 } },
+  { min: 65, a: { team: "Heat", record: "66-16", season: "2012-13", hook: "27-game win streak", name: "Miami Heat", year: 2013, ortg: 112.3, drtg: 103.7, nrtg: 8.6 } },
+  { min: 60, a: { team: "Celtics", record: "64-18", season: "2023-24", hook: "won the championship", name: "Boston Celtics", year: 2024, ortg: 123.2, drtg: 111.6, nrtg: 11.6 } },
+  { min: 55, a: { team: "Spurs", record: "58-24", season: "2012-13", hook: "made the Finals", name: "San Antonio Spurs", year: 2013, ortg: 108.3, drtg: 101.6, nrtg: 6.7 } },
+  { min: 50, a: { team: "Nuggets", record: "53-29", season: "2022-23", hook: "won the title", name: "Denver Nuggets", year: 2023, ortg: 117.6, drtg: 114.2, nrtg: 3.4 } },
+  { min: 47, a: { team: "Rockets", record: "47-35", season: "1994-95", hook: "won the title as a 6 seed", name: "Houston Rockets", year: 1995, ortg: 109.7, drtg: 107.4, nrtg: 2.3 } },
+  { min: 42, a: { team: "Lakers", record: "43-39", season: "2022-23", hook: "made the conference finals", name: "Los Angeles Lakers", year: 2023, ortg: 114.5, drtg: 113.9, nrtg: 0.6 } },
 ];
 export function historyAnchor(wins: number): HistoryAnchor | null {
   const hit = ANCHORS.find((x) => wins >= x.min);
   return hit ? hit.a : null;
+}
+
+export interface ScoutingView {
+  anchor: HistoryAnchor;
+  est: { ortg: number; drtg: number; netRtg: number }; // your five's engine-projected ratings
+}
+
+// Post-commit scouting report: pair the win-band anchor (a comparable real team + its actual ratings)
+// with the round's already-shown projected ORtg/DRtg/NetRtg. Descriptive — the round is scored, so
+// the engine's own ratings beside a real yardstick is fair, never a pre-commit hint (DESIGN.md §12).
+export function scoutingAnchor(result: LineupResult): ScoutingView | null {
+  const anchor = historyAnchor(result.wins);
+  if (!anchor) return null;
+  return { anchor, est: { ortg: result.ortg, drtg: result.drtg, netRtg: result.netRtg } };
 }
 
 export interface RoleView { role: string; blurb: string; }
