@@ -38,7 +38,7 @@ export default function LandingSection() {
 
           <div className="order-2 flex flex-col items-center gap-4 lg:order-none lg:col-start-1 lg:row-start-2 lg:items-start">
             <div className="flex flex-col items-center gap-1 lg:items-start">
-              <ButtonLink href="/play" size="lg">
+              <ButtonLink href="/play?mode=daily" size="lg">
                 Draft your five →
               </ButtonLink>
               <p className="text-xs text-zinc-400">No account needed · free forever</p>
@@ -122,7 +122,7 @@ export default function LandingSection() {
           Spin the reels. Draft your five. Go for <span className="text-gold">82-0</span>.
         </h2>
         <div className="mt-5 flex justify-center">
-          <ButtonLink href="/play" size="lg">
+          <ButtonLink href="/play?mode=daily" size="lg">
             Draft your five →
           </ButtonLink>
         </div>

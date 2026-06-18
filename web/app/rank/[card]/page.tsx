@@ -42,7 +42,7 @@ export default async function RankPage({ params }: Props) {
           <div className="mt-1 text-sm text-zinc-400">of {c.total.toLocaleString()} players</div>
           <div className="mt-5 text-lg font-bold text-zinc-100">{c.name}</div>
           <div className="mt-1 text-zinc-300">{metric(c)}</div>
-          <ButtonLink href="/play" size="md" className="mt-7">Build your five →</ButtonLink>
+          <ButtonLink href="/play?mode=daily" size="md" className="mt-7">Build your five →</ButtonLink>
         </div>
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">engine calibrated to real NBA team-seasons</footer>

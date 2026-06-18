@@ -22,6 +22,7 @@ import { SLOTS, FRANCHISES, DECADES, teamName, displayName, eraLabel } from "@/l
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
 import { markFirstPlay } from "@/lib/firstPlay";
+import { parseModeParam } from "@/lib/modeParam";
 import { scrollToTop } from "@/lib/scroll";
 import { getUid } from "@/lib/streak";
 import ResultCard from "@/components/ResultCard";
@@ -370,6 +371,21 @@ export default function Game() {
         const own = params.get("own");
         if (own && idRe.test(own)) { if (!cancelled) setOwnerId(own); return; }
 
+        // Deep-link straight into a mode (skip the picker) for cold first-timers: /play?mode=daily.
+        // Lower priority than ?c=/?own= above; challenge is excluded (it needs ?c=<id> to replay the
+        // creator's seed), so /play?mode=challenge — and anything unknown — falls through to the picker.
+        // Mutually exclusive with the ?r=/?sg= restore params in practice. Mirrors the ?c= cleanup so a
+        // later refresh restores from ?r= (not this fresh-start param).
+        const dl = parseModeParam(params.get("mode"));
+        if (dl) {
+          if (cancelled) return;
+          start(dl);
+          params.delete("mode");
+          const qs = params.toString();
+          window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
+          return;
+        }
+
         // Surgeon same-session restore: the full before/after lives in lastResult (the result is a
         // two-lineup delta, not a single encoded five). Cold restore (other device) falls through
         // to the picker — the /sg/<card> permalink is the shareable artifact and the board persists.
@@ -565,7 +581,7 @@ export default function Game() {
   const bpView = mode === "blueprint" && blueprint && result ? gradeBlueprint(blueprint, result.result) : undefined;
   // Surgeon reveal: its own before/after layout + delta board, not the single-lineup ResultCard.
   if (mode === "surgeon" && sgResult) return (
-    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} showRestart>
+    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart>
       <SurgeonResult before={sgResult.before} after={sgResult.after} beforePlayers={sgResult.beforePlayers}
         afterPlayers={sgResult.afterPlayers} outIdx={sgResult.outIdx} diagnosis={sgResult.diagnosis}
         card={sgResult.card} onReset={() => start("surgeon")} />
@@ -573,7 +589,7 @@ export default function Game() {
     </Shell>
   );
   if (result) return (
-    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart>
+    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} modeKey={mode} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView}
         lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} onView={setLbView} />}
@@ -602,7 +618,7 @@ export default function Game() {
     </Shell>
   );
   if (loading) return (
-    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} showRestart>
+    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart>
       <ResultSkeleton label={mode === "surgeon" ? "Diagnosing your lineup…" : mode === "factorhunt" ? "Building your question…" : "Running all 82 games…"} />
     </Shell>
   );
@@ -620,7 +636,7 @@ export default function Game() {
   const showUsageBar = discBar || !hideIQ;
 
   return (
-    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} showRestart={filled > 0 || !!current}>
+    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart={filled > 0 || !!current}>
       <div className="grid gap-5 lg:grid-cols-[1fr_minmax(300px,380px)]">
         {/* Desktop: the reels + controls fold into the LEFT column so the sticky court becomes a right
             rail spanning from the top (no dead space top-right). Mobile is single-column, so the DOM

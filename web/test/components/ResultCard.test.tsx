@@ -204,10 +204,12 @@ describe("ResultCard — grade/verdict render branches", () => {
     expect(btns.length).toBeGreaterThan(0);
   });
 
-  it("shows 'Build your own five' link in shared mode", () => {
+  it("shows 'Build your own five' link in shared mode, deep-linking the cold viewer into Daily", () => {
     renderCard({ shared: true });
     const link = screen.getByRole("link", { name: /Build your own five/i });
     expect(link).toBeTruthy();
+    // skip the mode-select wall — the cold permalink viewer's first play is the conversion that matters
+    expect(link.getAttribute("href")).toBe("/play?mode=daily");
   });
 
   it("PickemStrip: solo vote 'yes' + hit shows 'you called it' verdict", () => {

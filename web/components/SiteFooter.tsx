@@ -23,7 +23,7 @@ export default function SiteFooter() {
             </p>
             <div className="mt-4 flex items-center gap-4">
               <ButtonLink href="/play" size="sm">
-                Build your five →
+                Draft your five →
               </ButtonLink>
               <a
                 href="https://x.com/SweepSeason"

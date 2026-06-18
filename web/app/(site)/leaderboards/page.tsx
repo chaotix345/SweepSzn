@@ -32,11 +32,11 @@ export default function Leaderboards() {
         <div className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500">Other boards</div>
         <div className="grid gap-3 sm:grid-cols-3">
           {[
-            { label: "Factor Hunt", accent: "text-violet-400", tile: "bg-violet-500/15", desc: "Predict the engine's biggest factor for a leaderboard bonus." },
-            { label: "Blueprint", accent: "text-cyan-400", tile: "bg-cyan-500/15", desc: "Commit to a game plan; get graded on execution." },
-            { label: "Surgeon", accent: "text-rose-400", tile: "bg-rose-500/15", desc: "One swap to fix your lineup's worst factor." },
+            { label: "Factor Hunt", mode: "factorhunt", accent: "text-violet-400", tile: "bg-violet-500/15", desc: "Predict the engine's biggest factor for a leaderboard bonus." },
+            { label: "Blueprint", mode: "blueprint", accent: "text-cyan-400", tile: "bg-cyan-500/15", desc: "Commit to a game plan; get graded on execution." },
+            { label: "Surgeon", mode: "surgeon", accent: "text-rose-400", tile: "bg-rose-500/15", desc: "One swap to fix your lineup's worst factor." },
           ].map((b) => (
-            <Link key={b.label} href="/play" className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 transition hover:border-zinc-600">
+            <Link key={b.label} href={`/play?mode=${b.mode}`} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 transition hover:border-zinc-600">
               <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-black uppercase tracking-wide ${b.tile} ${b.accent}`}>{b.label}</span>
               <p className="mt-2 text-sm text-zinc-400">{b.desc}</p>
               <span className="mt-2 inline-block text-sm font-bold text-orange-400">Play →</span>
@@ -46,7 +46,7 @@ export default function Leaderboards() {
       </div>
 
       <div className="mt-6 flex justify-center">
-        <ButtonLink href="/play" size="lg">Play today&apos;s Daily →</ButtonLink>
+        <ButtonLink href="/play?mode=daily" size="lg">Play today&apos;s Daily →</ButtonLink>
       </div>
     </div>
   );
