@@ -18,11 +18,11 @@ type Props = { params: Promise<{ card: string }> };
 const loadCard = cache((card: string) => {
   const dec = decodePickemCard(card);
   if (!dec) return null;
-  const { ids, hinted } = decodeShare(dec.lineup);
+  const { ids, hinted, prime } = decodeShare(dec.lineup);
   if (ids.length !== 5 || new Set(ids).size !== 5) return null;
   const players = getPlayersByIds(ids);
   if (players.length !== 5) return null;
-  return { players, result: evaluateLineup(players, getCoefficients()), hinted, view: dec.view };
+  return { players, result: evaluateLineup(players, getCoefficients()), hinted, prime, view: dec.view };
 });
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -57,7 +57,7 @@ export default async function SharedPickem({ params }: Props) {
           <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
           <span className="ml-3 text-sm font-semibold text-zinc-500">a friend took on the crowd</span>
         </Link>
-        <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared pickem={data.view} />
+        <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared prime={data.prime} pickem={data.view} />
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">
         engine calibrated to real NBA team-seasons

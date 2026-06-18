@@ -73,7 +73,7 @@ describe("CompareLineup — post-game compare (vs real team / vs friend)", () =>
   it("fires a compare_open analytics event when the compare CTA opens (the friend loop is a growth surface)", () => {
     const { getByRole } = setup();
     fireEvent.click(getByRole("button", { name: /compare your lineup/i }));
-    expect(track).toHaveBeenCalledWith("compare_open");
+    expect(track).toHaveBeenCalledWith("compare_open", expect.objectContaining({ grade: expect.any(String), wins: expect.any(Number) }));
   });
 
   it("fires a compare_friend event when a friend's five resolves", async () => {
@@ -90,7 +90,7 @@ describe("CompareLineup — post-game compare (vs real team / vs friend)", () =>
     fireEvent.click(getByRole("button", { name: /vs a friend/i }));
     fireEvent.change(getByPlaceholderText(/paste/i), { target: { value: "https://sweepszn.com/r/x,y,z,w,v" } });
     fireEvent.click(getByRole("button", { name: /compare with friend/i }));
-    await waitFor(() => expect(track).toHaveBeenCalledWith("compare_friend"));
+    await waitFor(() => expect(track).toHaveBeenCalledWith("compare_friend", expect.objectContaining({ your_grade: expect.any(String), friend_grade: expect.any(String) })));
   });
 
   it("vs Friend: surfaces an error when the link does not resolve", async () => {

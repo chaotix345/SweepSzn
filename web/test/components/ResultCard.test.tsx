@@ -18,6 +18,7 @@ vi.mock("@/lib/streak", () => ({ getUid: () => "test-uid" }));
 
 // --- import the component under test AFTER mocks ---
 import ResultCard, { ShareButton } from "@/components/ResultCard";
+import { track } from "@vercel/analytics";
 import type { LineupResult, Player, Slot } from "@/lib/types";
 import type { BlueprintView } from "@/lib/blueprint";
 
@@ -461,6 +462,12 @@ describe("ResultCard — share-first sequencing (deep tools disclosed below Shar
     const explore = within(container).getByRole("button", { name: /explore your five/i });
     // Node.DOCUMENT_POSITION_FOLLOWING (4) set => explore comes AFTER share in document order
     expect(share.compareDocumentPosition(explore) & 4).toBeTruthy();
+  });
+
+  it("fires an explore_open analytics event carrying the result grade when the zone opens", () => {
+    const { container } = renderCard();
+    openExplore(container);
+    expect(track).toHaveBeenCalledWith("explore_open", expect.objectContaining({ grade: "A" }));
   });
 
   it("gates the What-If Lab out of the Explore zone in Prime (peak-era pools wouldn't match the spun era)", () => {

@@ -95,9 +95,9 @@ export function SaveCardImage({ path }: { path: string }) {
 }
 
 export default function ResultCard({
-  result, players, slots, mode, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint, lbRank,
+  result, players, slots, mode, modeKey, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint, lbRank,
 }: {
-  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean; blueprint?: BlueprintView; lbRank?: LbRankProp | null;
+  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; modeKey?: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean; blueprint?: BlueprintView; lbRank?: LbRankProp | null;
 }) {
   const factors = factorViews(result);
   // split by the value's sign (what actually helped/hurt), not the engine's fixed label —
@@ -294,7 +294,7 @@ export default function ResultCard({
 
       {/* Deep tools sit BELOW Share so the growth loop isn't buried under a wall of analysis.
           Collapsed + lazy-mounted (a cold permalink viewer never fires their /api fetches). */}
-      <ExploreZone summary={exploreSummary} onOpen={() => track("explore_open", { mode })}>
+      <ExploreZone summary={exploreSummary} onOpen={() => track("explore_open", { mode: modeKey ?? "shared", grade: result.grade, wins: result.wins })}>
         <ScoutingAnchor result={result} />
         {/* What-If Lab: post-commit swap sandbox. Gated off Prime — a candidate's decade there is
             his peak, not the spun era, so the slot pool wouldn't match. Re-scores via /api/evaluate. */}

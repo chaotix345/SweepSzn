@@ -16,9 +16,12 @@ describe("ExploreZone — progressive disclosure for the post-game deep tools", 
         <div>DEEP_CONTENT</div>
       </ExploreZone>,
     );
-    expect(getByRole("button").getAttribute("aria-expanded")).toBe("false");
-    // lazy-mount: a cold permalink viewer never fires the children's on-mount fetches
+    const btn = getByRole("button");
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    // lazy children: a cold permalink viewer never fires the children's on-mount fetches
     expect(queryByText("DEEP_CONTENT")).toBeNull();
+    // ...but the panel element itself is in the DOM, so aria-controls always resolves
+    expect(document.getElementById(btn.getAttribute("aria-controls")!)).toBeTruthy();
   });
 
   it("reveals children and flips aria-expanded on open, wiring aria-controls to a labelled region", () => {
@@ -35,7 +38,8 @@ describe("ExploreZone — progressive disclosure for the post-game deep tools", 
     expect(onOpen).toHaveBeenCalledTimes(1);
     const panel = getByRole("region");
     expect(btn.getAttribute("aria-controls")).toBe(panel.getAttribute("id"));
-    expect(panel.getAttribute("aria-labelledby")).toBe(btn.getAttribute("id"));
+    // stable region name — NOT derived from the mutable button text ("Show less")
+    expect(panel.getAttribute("aria-label")).toBe("Explore your five");
   });
 
   it("keeps children mounted but hidden after collapsing (state persists across reopen)", () => {
@@ -53,7 +57,7 @@ describe("ExploreZone — progressive disclosure for the post-game deep tools", 
     expect(panel.hasAttribute("hidden")).toBe(true);
   });
 
-  it("does not re-fire onOpen on collapse", () => {
+  it("fires onOpen only on the FIRST open — a discovery signal, not a per-toggle event", () => {
     const onOpen = vi.fn();
     const { getByRole } = render(
       <ExploreZone onOpen={onOpen}>
@@ -63,6 +67,7 @@ describe("ExploreZone — progressive disclosure for the post-game deep tools", 
     const btn = getByRole("button");
     fireEvent.click(btn); // open → 1
     fireEvent.click(btn); // close → still 1
+    fireEvent.click(btn); // reopen → still 1 (not re-counted)
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 

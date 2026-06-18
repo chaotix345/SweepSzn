@@ -88,13 +88,13 @@ export function CompareLineup({ players, result, lineupSeg }: { players: Player[
       setFriend({ players: d.players, result: d.result });
       setFriendSeg(seg);
       setStatus("ok");
-      track("compare_friend");
+      track("compare_friend", { your_grade: result.grade, friend_grade: d.result.grade });
     } catch { setStatus("error"); }
   }
 
   if (!open) {
     return (
-      <button onClick={() => { setOpen(true); track("compare_open"); }} aria-label="Compare your lineup"
+      <button onClick={() => { setOpen(true); track("compare_open", { grade: result.grade, wins: result.wins }); }} aria-label="Compare your lineup"
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/60 py-2.5 text-sm font-bold text-zinc-300 transition hover:border-cyan-600/60 hover:text-cyan-300">
         ⚖️ Compare lineup — vs a real team or a friend
       </button>
