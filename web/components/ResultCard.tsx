@@ -282,9 +282,12 @@ export default function ResultCard({
       <div className="border-t border-zinc-800 px-6 py-4">
         <p className="mb-2.5 text-center text-xs font-medium text-zinc-400">{shareNudge(result)}</p>
         <div className="flex gap-3">
-          <ShareButton primary result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint} />
+          {/* On a shared permalink the cold viewer's "build your own" is the conversion that matters,
+              so it takes the primary orange and Share drops to secondary. In-game it's the reverse —
+              Share is the sharer's growth action. (DESIGN.md: exactly one orange CTA per row.) */}
+          <ShareButton primary={!shared} result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint} />
           {shared ? (
-            <ButtonLink href="/play" variant="secondary" className="flex-1">Build your own five →</ButtonLink>
+            <ButtonLink href="/play" variant="primary" className="flex-1">Build your own five →</ButtonLink>
           ) : (
             <Button variant="secondary" onClick={onReset} className="flex-1">Build Another</Button>
           )}

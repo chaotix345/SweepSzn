@@ -63,7 +63,7 @@ export default function ResultPreview({ reveal = false }: { reveal?: boolean } =
           <FactorColumn title="What's hurting" items={hurts} kind="bad" />
         </div>
         <p className="mt-4 text-center text-xs font-semibold text-orange-400">
-          No other version explains why your five wins or loses.
+          Live engine output — the same model that grades your draft.
         </p>
       </div>
     </div>

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { cache } from "react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { resolveSharedLineup, type SharedLineup } from "@/lib/sharedLineup";
 import { fmtNet } from "@/lib/explain";
@@ -8,7 +7,7 @@ import { avgZ } from "@/lib/radar";
 import { ZRadar } from "@/components/game/ZRadar";
 import { displayName } from "@/lib/teams";
 import { GRADE_COLOR } from "@/lib/grades";
-import { ButtonLink } from "@/components/ui/Button";
+import ShareHeader from "@/components/ShareHeader";
 
 type Props = { params: Promise<{ id1: string; id2: string }> };
 
@@ -72,13 +71,7 @@ export default async function ComparePage({ params }: Props) {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <Link href="/" className="flex items-baseline text-2xl tracking-tight">
-            <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
-            <span className="ml-3 text-sm font-semibold text-zinc-500">lineup compare</span>
-          </Link>
-          <ButtonLink href="/play" size="sm">Build your own →</ButtonLink>
-        </div>
+        <ShareHeader tagline="lineup compare" cta="Build your own →" />
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Side data={left} color={A_COLOR} tag="Five A" />

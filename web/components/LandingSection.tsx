@@ -11,7 +11,8 @@ export default function LandingSection() {
   return (
     <div className="bg-zinc-950 text-zinc-100">
       {/* ── Section 1: Scoreboard hero ─────────────────────────────────────
-          Mobile order (single column): headline → result card (proof) → CTA + live strip.
+          Mobile order (single column, verified): headline → CTA + live strip → result card.
+          The ready-to-play visitor gets the orange CTA above the fold; the proof card follows.
           Desktop (lg): two columns — headline + CTA stack on the left, the result card fills
           the right, vertically centered. Grid placement drives both without duplicating the CTA. */}
       <section className="bg-arena-glow px-5 pt-12 pb-10 sm:px-8 sm:pt-16">
@@ -24,18 +25,21 @@ export default function LandingSection() {
               Can you go <span className="text-gold">82-0</span>?
             </h1>
             <p className="mx-auto mt-5 max-w-md text-base text-zinc-400 sm:text-lg lg:mx-0">
-              {"Draft an all-time NBA starting five. An engine fit to 1,170 real seasons simulates a full season — and finds every hole in your lineup."}
+              {"Draft an all-time NBA five. An engine fit to 1,170 real seasons simulates all 82 games — and finds every hole in your lineup."}
             </p>
           </div>
 
           <div className="order-3 mx-auto w-full max-w-lg lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mx-0">
-            <ResultPreview reveal />
+            {/* No `reveal`: the buzzer slam + gold pulse is the EARNED in-game payoff (DESIGN.md). The
+                static example keeps its ambient gold ring/glow so it still reads elite, without
+                spending the reveal before the visitor has done anything. */}
+            <ResultPreview />
           </div>
 
           <div className="order-2 flex flex-col items-center gap-4 lg:order-none lg:col-start-1 lg:row-start-2 lg:items-start">
             <div className="flex flex-col items-center gap-1 lg:items-start">
               <ButtonLink href="/play" size="lg">
-                Find out →
+                Draft your five →
               </ButtonLink>
               <p className="text-xs text-zinc-400">No account needed · free forever</p>
             </div>
@@ -119,7 +123,7 @@ export default function LandingSection() {
         </h2>
         <div className="mt-5 flex justify-center">
           <ButtonLink href="/play" size="lg">
-            Build your five →
+            Draft your five →
           </ButtonLink>
         </div>
         <p className="mt-3 text-xs text-zinc-500">

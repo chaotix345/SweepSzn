@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import { cache } from "react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { resolveSharedLineup } from "@/lib/sharedLineup";
 import { SLOTS, displayName } from "@/lib/teams";
 import ResultCard from "@/components/ResultCard";
 import Beacon from "@/components/Beacon";
-import { ButtonLink } from "@/components/ui/Button";
+import ShareHeader from "@/components/ShareHeader";
 
 type Props = { params: Promise<{ lineup: string }> };
 
@@ -50,13 +49,7 @@ export default async function SharedResult({ params }: Props) {
           shared with home so a visitor who lands here then opens home is still one visit. */}
       <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <Link href="/" className="flex items-baseline text-2xl tracking-tight">
-            <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
-            <span className="ml-3 text-sm font-semibold text-zinc-500">a friend shared their five</span>
-          </Link>
-          <ButtonLink href="/play" size="sm">Build your own →</ButtonLink>
-        </div>
+        <ShareHeader tagline="a friend shared their five" cta="Can you beat this? →" />
         <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared prime={data.prime} blueprint={data.blueprint ?? undefined} />
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">

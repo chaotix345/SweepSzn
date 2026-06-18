@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { cache } from "react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { decodeDexShare } from "@/lib/share";
 import { getPlayersByIds } from "@/lib/data";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { ButtonLink } from "@/components/ui/Button";
+import ShareHeader from "@/components/ShareHeader";
 
 type Props = { params: Promise<{ card: string }> };
 
@@ -40,13 +40,7 @@ export default async function SharedDex({ params }: Props) {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <Link href="/" className="flex items-baseline text-2xl tracking-tight">
-            <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
-            <span className="ml-3 text-sm font-semibold text-zinc-500">a friend&apos;s Drafted Dex</span>
-          </Link>
-          <ButtonLink href="/play" size="sm">Build your own →</ButtonLink>
-        </div>
+        <ShareHeader tagline="a friend's Drafted Dex" cta="Build your own →" />
 
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
           <div className="flex items-end justify-between gap-4">
