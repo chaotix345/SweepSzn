@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/authServer";
-import { getResults } from "@/lib/profileStore";
+import { getResults, getDexIds } from "@/lib/profileStore";
 import { decodeLineup } from "@/lib/share";
 import { getPlayersByIds } from "@/lib/data";
 import { playerTraits } from "@/lib/traits";
@@ -22,6 +22,8 @@ export async function GET(req: Request) {
   const results = await getResults(session.uid);
   const seen = new Set<string>();
   for (const r of results) for (const id of decodeLineup(r.encoded)) seen.add(id);
+  // Union the unbounded dex set so players from games evicted past the 200-result cap aren't lost.
+  for (const id of await getDexIds(session.uid)) seen.add(id);
 
   const players: DexPlayer[] = getPlayersByIds([...seen]).map((p) => ({
     id: p.id, personId: p.person_id ?? p.id, name: p.name, team: p.team, decade: p.decade,

@@ -46,6 +46,14 @@ describe("GET /api/dex", () => {
     expect(body.total).toBe(2);
   });
 
+  it("includes players from the unbounded dex set even when results are empty (past the cap)", async () => {
+    await signIn({ uid: "user-dexonly", name: "U" });
+    ctx.redis!.sets.set("dex:user-dexonly", new Set(FIVE));
+    const { body } = await readJson(await GET(req("/api/dex")));
+    expect((body.players as unknown[]).length).toBe(5); // from the dex set alone
+    expect(body.total).toBe(0); // no result rows
+  });
+
   it("429 when the per-IP bucket is exhausted", async () => {
     exhaustRateLimit("rl:dex:1.2.3.4", 60);
     expect((await readJson(await GET(req("/api/dex", { ip: "1.2.3.4" })))).status).toBe(429);
