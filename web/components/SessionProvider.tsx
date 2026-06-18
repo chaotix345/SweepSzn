@@ -1,6 +1,7 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import GoogleOneTap from "@/components/GoogleOneTap";
+import { buildFocusTrapHandler } from "@/components/game/useFocusTrap";
 import { getHistory } from "@/lib/streak";
 import { listResults } from "@/lib/resultHistory";
 import { syncToAccount } from "@/lib/account";
@@ -46,6 +47,12 @@ export default function SessionProvider({ children }: { children: React.ReactNod
   const [loading, setLoading] = useState(true);
   const [signInOpen, setSignInOpen] = useState(false);
   const [signInNonce, setSignInNonce] = useState(0);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Move focus into the sign-in popover when it opens (paired with the Tab/Escape trap below) so
+  // keyboard users land in the dialog and can dismiss it. Restores nothing on close — the trigger
+  // (header "Sign in" etc.) stays where it was.
+  useEffect(() => { if (signInOpen) popoverRef.current?.focus(); }, [signInOpen]);
 
   useEffect(() => {
     let on = true;
@@ -75,24 +82,25 @@ export default function SessionProvider({ children }: { children: React.ReactNod
   return (
     <Ctx.Provider value={{ user, loading, refresh, signOut, promptSignIn, signInNonce }}>
       {children}
-      {AUTH_ENABLED && !loading && !user && (
-        // One mounted GoogleOneTap: its One Tap bubble auto-greets signed-out visitors app-wide, and its
-        // fallback button lives in this container — offscreen until promptSignIn() reveals it as a popover
-        // (so the header "Sign in" button and the leaderboard CTA both surface the same single instance).
+      {AUTH_ENABLED && !loading && !user && signInOpen && (
+        // Google sign-in is deferred to user INTENT: GSI (the Google button) loads only when the player
+        // opens sign-in — the header "Sign in", a leaderboard CTA, or the post-game "Save with Google"
+        // nudge, all via promptSignIn(). There is no unsolicited One Tap prompt on the landing page:
+        // anon play is the funnel; signing in is the opt-in upgrade for anyone who cares about their
+        // standing (DESIGN.md §12). Gating the mount also keeps GSI's iframe/FedCM off the top of funnel.
         <>
-          {signInOpen && (
-            <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" onClick={() => setSignInOpen(false)} />
-          )}
+          <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" onClick={() => setSignInOpen(false)} />
           <div
-            inert={!signInOpen}
-            className={
-              signInOpen
-                ? "fixed right-3 top-16 z-50 w-72 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl shadow-black/50"
-                : "pointer-events-none fixed left-[-9999px] top-0 opacity-0"
-            }
+            ref={popoverRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="signin-title"
+            onKeyDown={(e) => buildFocusTrapHandler(popoverRef, () => setSignInOpen(false))(e)}
+            className="fixed right-3 top-16 z-50 w-72 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl shadow-black/50 outline-none"
           >
             <div className="mb-2 flex items-start justify-between gap-2">
-              <div className="text-sm font-bold text-zinc-100">Save your progress</div>
+              <div id="signin-title" className="text-sm font-bold text-zinc-100">Save your progress</div>
               <button onClick={() => setSignInOpen(false)} aria-label="Close" className="-mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition hover:text-zinc-200">✕</button>
             </div>
             <div className="mb-2 text-xs text-zinc-400">Keep your streak, results, and ranks across every device.</div>
