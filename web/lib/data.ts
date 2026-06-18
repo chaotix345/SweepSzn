@@ -77,6 +77,12 @@ export function getPlayersByIds(ids: string[]): Player[] {
   return ids.map((id) => byId.get(id)).filter((p): p is Player => !!p);
 }
 
+// All franchise/era variants of one real person — powers the dossier's career-arc strip.
+export function getPersonVariants(personId: string): Player[] {
+  const { players } = load();
+  return players.filter((p) => (p.person_id ?? p.id) === personId);
+}
+
 // Top-K draftable players by peak_score — the candidate universe the projection ticker's "ceiling"
 // (best-possible completion) is chosen from. Public global pool only (never a seed's future spins),
 // so it leaks nothing. Prime draws from the all-time peak-variant pools; everything else from the

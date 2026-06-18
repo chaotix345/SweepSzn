@@ -4,6 +4,7 @@ import { teamColors, eraLabel } from "@/lib/teams";
 import { TRAIT_META } from "@/lib/traits";
 import type { Mode } from "@/components/game/types";
 import { ComparePanel } from "@/components/game/ComparePanel";
+import { Dossier } from "@/components/game/Dossier";
 
 type Spin = { team: string; decade: string; candidates: DraftCandidate[]; era?: EraContext };
 export type SortKey = "szn" | "fit" | "ppg" | "rpg" | "apg" | "az";
@@ -55,6 +56,8 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
   const toggleCompare = () => setCompareMode((on) => { if (on) setCmpSel([]); return !on; });
   const toggleCmp = (c: DraftCandidate) =>
     setCmpSel((s) => s.some((x) => x.id === c.id) ? s.filter((x) => x.id !== c.id) : s.length >= 2 ? [s[1], c] : [...s, c]);
+  // Which candidate's dossier (accolades + career + era context) is expanded inline. One at a time.
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const list = useMemo(() => {
     const inGroup = (c: DraftCandidate) =>
@@ -142,12 +145,15 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
           const cmpHit = cmpSel.some((x) => x.id === c.id);
           const fits = canPlace(c);
           const showRowFit = showFit && fits && c.fit;
+          const isOpen = openId === c.id;
           return (
-            <button key={c.id} onClick={() => (compareMode ? toggleCmp(c) : fits && onSelect(c))}
+            <div key={c.id} className="mb-1.5">
+            <div className="flex items-stretch">
+            <button onClick={() => (compareMode ? toggleCmp(c) : fits && onSelect(c))}
               aria-pressed={compareMode ? cmpHit : sel} aria-disabled={!compareMode && !fits} tabIndex={!compareMode && !fits ? -1 : undefined}
               aria-label={compareMode ? `${cmpHit ? "Deselect" : "Select"} ${c.name} to compare` : `Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}${showUsage && c.usage != null ? `, ${Math.round(c.usage)} percent usage demand` : ""}${showRowFit ? `, fit ${c.fit!.delta > 0 ? "+" : ""}${c.fit!.delta}${c.fit!.adds.length ? ", adds " + c.fit!.adds.join(" and ") : ""}` : ""}`}
               title={!compareMode && !fits ? "No open slot for this player — re-spin or pick a different position" : undefined}
-              className={`mb-1.5 flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition active:scale-[0.98] ${
+              className={`flex w-full items-center gap-3 ${hideStats ? "rounded-lg" : "rounded-l-lg"} border px-3 py-2 text-left transition active:scale-[0.98] ${
                 compareMode ? (cmpHit ? "border-orange-500 bg-orange-500/10" : "border-zinc-800 bg-zinc-950/60 hover:-translate-y-px hover:border-zinc-600")
                   : sel ? "border-orange-500 bg-orange-500/10"
                   : showRowFit && c.fit!.best ? "border-green-600/50 bg-green-500/[0.06] shadow-[0_0_14px_-4px_rgba(52,211,153,0.45)] hover:-translate-y-px hover:border-green-500"
@@ -195,6 +201,16 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
                 </div>
               )}
             </button>
+            {!hideStats && (
+              <button onClick={() => setOpenId(isOpen ? null : c.id)} aria-expanded={isOpen} aria-label={`${isOpen ? "Hide" : "Show"} ${c.name} details`}
+                title="Player details — accolades, career, era context"
+                className={`flex w-9 shrink-0 items-center justify-center rounded-r-lg border text-sm transition ${isOpen ? "border-orange-500 bg-orange-500/10 text-orange-400" : "border-zinc-800 bg-zinc-950/60 text-zinc-500 hover:text-orange-400"}`}>
+                {isOpen ? "▴" : "ⓘ"}
+              </button>
+            )}
+            </div>
+            {isOpen && <Dossier cand={c} />}
+            </div>
           );
         })}
         {list.length === 0 && <div className="py-8 text-center text-xs text-zinc-500">No players match.</div>}
