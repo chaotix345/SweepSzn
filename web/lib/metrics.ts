@@ -5,8 +5,9 @@ import { recentDays } from "./day";
 
 export interface Metrics {
   days: string[];                              // ascending date-keys
-  funnel: { plays: number; completes: number; shares: number; signins: number; submits: number };
-  rates: { completion: number; shareRate: number; capture: number }; // 0..1
+  funnel: { visits: number; firstPlays: number; plays: number; completes: number; shares: number; signins: number; submits: number };
+  engagement: { shareViews: number; exploreOpen: number; whatifOpen: number; compareOpen: number; compareFriend: number };
+  rates: { firstPlay: number; completion: number; shareRate: number; capture: number }; // 0..1
   dauByDay: number[];                          // distinct active uids per day (ascending)
   d1: number;                                  // next-day return rate, 0..1
   d7: number | null;                           // 7-day return rate, null if window < 8
@@ -40,7 +41,11 @@ export const sparkline = (vals: number[]): string => {
   return vals.map(v => SPARK[Math.min(SPARK.length - 1, Math.floor((v / max) * (SPARK.length - 1)))]).join("");
 };
 
-const STAGES = ["play", "complete", "share", "signin", "submit"] as const;
+// Read order is irrelevant — counts are indexed back by stage name below.
+const STAGES = [
+  "visit", "first_play", "play", "complete", "share", "share_view", "signin", "submit",
+  "explore_open", "whatif_open", "compare_open", "compare_friend",
+] as const;
 
 export async function getMetrics(redis: Redis | null, opts: { days?: number; now?: Date } = {}): Promise<Metrics> {
   const n = opts.days ?? 14;
@@ -50,8 +55,9 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
   if (!redis) {
     return {
       days,
-      funnel: { plays: 0, completes: 0, shares: 0, signins: 0, submits: 0 },
-      rates: { completion: 0, shareRate: 0, capture: 0 },
+      funnel: { visits: 0, firstPlays: 0, plays: 0, completes: 0, shares: 0, signins: 0, submits: 0 },
+      engagement: { shareViews: 0, exploreOpen: 0, whatifOpen: 0, compareOpen: 0, compareFriend: 0 },
+      rates: { firstPlay: 0, completion: 0, shareRate: 0, capture: 0 },
       dauByDay: days.map(() => 0), d1: 0, d7: null, modeSplit: {}, submitSplit: {},
       boardByDay: days.map(() => 0), boards: { daily: 0, weekly: 0, alltime: 0 },
       winBuckets: bucketWins([]), totals: {},
@@ -71,11 +77,19 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
   ]);
 
   const sumDays = (arr: (string | number | null)[]) => arr.reduce<number>((a, v) => a + num(v), 0);
+  const byStage: Record<(typeof STAGES)[number], number> = Object.fromEntries(
+    STAGES.map((s, i) => [s, sumDays(counts[i])]),
+  ) as Record<(typeof STAGES)[number], number>;
   const funnel = {
-    plays: sumDays(counts[0]), completes: sumDays(counts[1]), shares: sumDays(counts[2]),
-    signins: sumDays(counts[3]), submits: sumDays(counts[4]),
+    visits: byStage.visit, firstPlays: byStage.first_play, plays: byStage.play,
+    completes: byStage.complete, shares: byStage.share, signins: byStage.signin, submits: byStage.submit,
+  };
+  const engagement = {
+    shareViews: byStage.share_view, exploreOpen: byStage.explore_open, whatifOpen: byStage.whatif_open,
+    compareOpen: byStage.compare_open, compareFriend: byStage.compare_friend,
   };
   const rates = {
+    firstPlay: pct(funnel.firstPlays, funnel.visits),
     completion: pct(funnel.completes, funnel.plays),
     shareRate: pct(funnel.shares, funnel.completes),
     capture: pct(funnel.signins, funnel.completes),
@@ -99,7 +113,7 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
 
   const boardByDay = (boardCards as number[]).map(num);
   return {
-    days, funnel, rates, dauByDay, d1, d7, modeSplit, submitSplit, boardByDay,
+    days, funnel, engagement, rates, dauByDay, d1, d7, modeSplit, submitSplit, boardByDay,
     boards: { daily: boardByDay[boardByDay.length - 1] ?? 0, weekly: num(weekCard), alltime: num(allCard) },
     winBuckets: bucketWins(wins),
     totals: Object.fromEntries(Object.entries(totalsHash ?? {}).map(([k, v]) => [k, num(v)])),

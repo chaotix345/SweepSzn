@@ -24,12 +24,14 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
 
 function Funnel({ m }: { m: Metrics }) {
   const rows = [
+    { label: "Visitors", value: m.funnel.visits, rate: "" },
+    { label: "First play", value: m.funnel.firstPlays, rate: fmtRate(m.rates.firstPlay) + " of visitors" },
     { label: "Plays", value: m.funnel.plays, rate: "" },
     { label: "Completed", value: m.funnel.completes, rate: fmtRate(m.rates.completion) + " of plays" },
     { label: "Shared", value: m.funnel.shares, rate: fmtRate(m.rates.shareRate) + " of completes" },
     { label: "Signed in", value: m.funnel.signins, rate: fmtRate(m.rates.capture) + " of completes" },
   ];
-  const max = Math.max(m.funnel.plays, 1);
+  const max = Math.max(m.funnel.visits, m.funnel.plays, 1);
   return (
     <section className="space-y-2">
       <h2 className="text-lg font-semibold">Funnel · last {m.days.length}d</h2>
@@ -57,6 +59,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   const modeMax = Math.max(...Object.values(m.modeSplit), 1);
   const winMax = Math.max(...m.winBuckets.map(b => b.count), 1);
+  const eng = m.engagement;
+  const engRows = [
+    { label: "Share views", value: eng.shareViews },
+    { label: "Explore open", value: eng.exploreOpen },
+    { label: "What-If open", value: eng.whatifOpen },
+    { label: "Compare open", value: eng.compareOpen },
+    { label: "Compare friend", value: eng.compareFriend },
+  ];
+  const engMax = Math.max(...engRows.map(r => r.value), 1);
 
   return (
     <main className="mx-auto max-w-2xl space-y-8 p-6 text-zinc-100">
@@ -66,6 +77,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </header>
 
       <Funnel m={m} />
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Engagement &amp; share loop</h2>
+        {engRows.map(r => <Bar key={r.label} label={r.label} value={r.value} max={engMax} />)}
+        <p className="text-xs text-zinc-500">Share views = shared /r/·/pe/ links opened (the loop closing). Compare friend = the viral mechanic.</p>
+      </section>
 
       <section className="space-y-1">
         <h2 className="text-lg font-semibold">Retention</h2>
@@ -103,7 +120,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </section>
 
       <section className="text-xs text-zinc-500">
-        All-time events — {["play", "complete", "share", "signin", "submit"].map(k => `${k}: ${m.totals[k] ?? 0}`).join(" · ")}
+        All-time events — {["visit", "first_play", "play", "complete", "share", "share_view", "signin", "submit", "compare_friend"].map(k => `${k}: ${m.totals[k] ?? 0}`).join(" · ")}
       </section>
     </main>
   );

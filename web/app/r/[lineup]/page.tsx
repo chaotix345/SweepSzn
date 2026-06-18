@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { resolveSharedLineup } from "@/lib/sharedLineup";
 import { SLOTS, displayName } from "@/lib/teams";
 import ResultCard from "@/components/ResultCard";
+import Beacon from "@/components/Beacon";
 import { ButtonLink } from "@/components/ui/Button";
 
 type Props = { params: Promise<{ lineup: string }> };
@@ -42,6 +43,8 @@ export default async function SharedResult({ params }: Props) {
   if (!data) notFound();
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      {/* Share-loop close: count each view of a shared permalink (once per page view). */}
+      <Beacon name="share_view" />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <Link href="/" className="flex items-baseline text-2xl tracking-tight">

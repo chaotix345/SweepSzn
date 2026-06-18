@@ -56,6 +56,7 @@ const ROUTE_TO_TEST: Record<string, string> = {
   "factorhunt/choices":             "factorhuntChoices",
   "factorhunt/leaderboard":         "factorhuntLeaderboard",
   "factorhunt/submit":              "factorhuntSubmit",
+  "funnel":                         "funnel",
   "health":                         "health",
   "notifications":                  "notifications",
   "notifications/read":             "notificationsRead",

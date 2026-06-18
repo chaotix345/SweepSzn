@@ -19,6 +19,7 @@ vi.mock("@/lib/streak", () => ({ getUid: () => "test-uid" }));
 // --- import the component under test AFTER mocks ---
 import ResultCard, { ShareButton } from "@/components/ResultCard";
 import { track } from "@vercel/analytics";
+import { ev } from "@/lib/ev";
 import type { LineupResult, Player, Slot } from "@/lib/types";
 import type { BlueprintView } from "@/lib/blueprint";
 
@@ -468,6 +469,8 @@ describe("ResultCard — share-first sequencing (deep tools disclosed below Shar
     const { container } = renderCard();
     openExplore(container);
     expect(track).toHaveBeenCalledWith("explore_open", expect.objectContaining({ grade: "A" }));
+    // dual-fire to the server-side funnel beacon so /admin + /api/funnel see deep-tool engagement
+    expect(ev).toHaveBeenCalledWith("explore_open", { uid: "test-uid" });
   });
 
   it("gates the What-If Lab out of the Explore zone in Prime (peak-era pools wouldn't match the spun era)", () => {

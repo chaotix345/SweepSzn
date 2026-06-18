@@ -3,6 +3,8 @@ import { useState } from "react";
 import { track } from "@vercel/analytics";
 import type { Player, Slot, DraftCandidate } from "@/lib/types";
 import { gradeColor } from "@/lib/grades";
+import { ev } from "@/lib/ev";
+import { getUid } from "@/lib/streak";
 
 // Post-game What-If Lab: swap any player for an alternative from that slot's team+era pool, re-score
 // the season live, and watch the record move. Pure post-commit learning — the round is already
@@ -51,7 +53,7 @@ export function WhatIfLab({ players, slots, baseWins, baseLosses, baseGrade }: {
 
   if (!open) {
     return (
-      <button onClick={() => { setOpen(true); track("whatif_open", { grade: baseGrade, wins: baseWins }); }}
+      <button onClick={() => { setOpen(true); track("whatif_open", { grade: baseGrade, wins: baseWins }); ev("whatif_open", { uid: getUid() }); }}
         className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/60 py-2.5 text-sm font-bold text-zinc-300 transition hover:border-orange-600/60 hover:text-orange-300">
         🧪 Open the What-If Lab — swap a player, watch the season change
       </button>

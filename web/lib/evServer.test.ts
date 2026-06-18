@@ -36,6 +36,29 @@ describe("parseEvBody", () => {
   it("mode ignored for share", () => {
     expect(parseEvBody({ ev: "share", uid: "abcdefgh", mode: "daily" })?.mode).toBe(undefined);
   });
+
+  it("visit / first_play / share_view parsed", () => {
+    for (const e of ["visit", "first_play", "share_view"] as const) {
+      expect(parseEvBody({ ev: e, uid: "abcdefgh" })).toStrictEqual({ ev: e, uid: "abcdefgh" });
+    }
+  });
+
+  it("engagement events parsed", () => {
+    for (const e of ["explore_open", "whatif_open", "compare_open", "compare_friend"] as const) {
+      expect(parseEvBody({ ev: e, uid: "abcdefgh" })).toStrictEqual({ ev: e, uid: "abcdefgh" });
+    }
+  });
+
+  it("server-authoritative stages are rejected from the client beacon", () => {
+    expect(parseEvBody({ ev: "complete", uid: "abcdefgh" })).toBe(null);
+    expect(parseEvBody({ ev: "signin", uid: "abcdefgh" })).toBe(null);
+    expect(parseEvBody({ ev: "submit", uid: "abcdefgh" })).toBe(null);
+  });
+
+  it("mode is only attached for play (stripped for first_play and engagement)", () => {
+    expect(parseEvBody({ ev: "first_play", uid: "abcdefgh", mode: "daily" })?.mode).toBe(undefined);
+    expect(parseEvBody({ ev: "compare_open", uid: "abcdefgh", mode: "daily" })?.mode).toBe(undefined);
+  });
 });
 
 // --- bump ---
@@ -125,6 +148,43 @@ describe("bump", () => {
     let threw = false;
     try { await bump(thrower as unknown as Redis, "complete", { day: "2026-6-9" }); } catch { threw = true; }
     expect(threw).toBe(false);
+  });
+
+  it("visit with uid: counter + totals but NOT the active set (visitors are not DAU)", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "visit", { uid: "abcdefgh", day: "2026-6-9" });
+    expect(Number(fake.strings.get("ev:visit:2026-6-9"))).toBe(1);
+    expect(Number(fake.hashes.get("ev:totals")?.get("visit"))).toBe(1);
+    expect(fake.sets.get("ev:active:2026-6-9")).toBe(undefined);
+  });
+
+  it("first_play with uid: counter + totals but NOT the active set (uid already active via play)", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "first_play", { uid: "abcdefgh", day: "2026-6-9" });
+    expect(Number(fake.strings.get("ev:first_play:2026-6-9"))).toBe(1);
+    expect(Number(fake.hashes.get("ev:totals")?.get("first_play"))).toBe(1);
+    expect(fake.sets.get("ev:active:2026-6-9")).toBe(undefined);
+  });
+
+  it("share_view with uid: counter only, NOT the active set (recipients are not DAU)", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "share_view", { uid: "abcdefgh", day: "2026-6-9" });
+    expect(Number(fake.strings.get("ev:share_view:2026-6-9"))).toBe(1);
+    expect(fake.sets.get("ev:active:2026-6-9")).toBe(undefined);
+  });
+
+  it("engagement event (compare_friend) with uid: counter + totals, NOT the active set", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "compare_friend", { uid: "abcdefgh", day: "2026-6-9" });
+    expect(Number(fake.strings.get("ev:compare_friend:2026-6-9"))).toBe(1);
+    expect(Number(fake.hashes.get("ev:totals")?.get("compare_friend"))).toBe(1);
+    expect(fake.sets.get("ev:active:2026-6-9")).toBe(undefined);
+  });
+
+  it("share with uid: still added to the active set (allow-list preserved)", async () => {
+    const fake = createRedisFake();
+    await bump(fake as unknown as Redis, "share", { uid: "abcdefgh", day: "2026-6-9" });
+    expect(fake.sets.get("ev:active:2026-6-9")?.has("abcdefgh")).toBe(true);
   });
 
   it("active-set cap skips sadd once the set is full (memory-exhaustion guard)", async () => {
