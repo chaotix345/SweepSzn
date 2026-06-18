@@ -95,6 +95,7 @@ function toCandidate(p: Player, fit?: CandidateFit, usage?: number, rank?: numbe
     pos: p.pos, eligible: (p.eligible && p.eligible.length ? p.eligible : [p.pos as Slot]),
     pts: p.pts, trb: p.trb, ast: p.ast, stl: p.stl, blk: p.blk, defense_estimated: p.defense_estimated, fit, usage,
     traits: playerTraits(p), rank,
+    z: p.z ? { pts: p.z.pts, trb: p.z.trb, ast: p.z.ast, stl: p.z.stl, blk: p.z.blk, ts: p.z.ts } : undefined,
   };
 }
 

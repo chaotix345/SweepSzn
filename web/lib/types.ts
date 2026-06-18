@@ -95,6 +95,7 @@ export interface DraftCandidate {
   usage?: number;       // engine usage demand — sent on every spin for the live budget bar (intrinsic public player data, not seed-relative — DESIGN.md §12)
   traits?: TraitKey[];  // descriptive board tags derived from intrinsic stats (see lib/traits.ts) — informs without revealing fit
   rank?: number;        // server-assigned board ordinal (0 = top of the "Top"/szn order); client sorts "szn" by this
+  z?: Pick<ZScores, "pts" | "trb" | "ast" | "stl" | "blk" | "ts">; // league-relative standings for the era bars + compare radar (descriptive, never fit)
 }
 
 // Daily leaderboard: the client submits the draft as an ordered trace (index = round) so the
