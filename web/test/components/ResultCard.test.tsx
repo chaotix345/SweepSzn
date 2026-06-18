@@ -17,8 +17,9 @@ vi.mock("@/lib/ev", () => ({ ev: vi.fn() }));
 vi.mock("@/lib/streak", () => ({ getUid: () => "test-uid" }));
 
 // --- import the component under test AFTER mocks ---
-import ResultCard from "@/components/ResultCard";
+import ResultCard, { ShareButton } from "@/components/ResultCard";
 import type { LineupResult, Player, Slot } from "@/lib/types";
+import type { BlueprintView } from "@/lib/blueprint";
 
 // --- fixtures ---
 
@@ -351,6 +352,58 @@ describe("ResultCard — one-tap share CTAs", () => {
     const { container } = renderCard();
     const x = container.querySelector('a[aria-label="Post to X"]')?.getAttribute("href") ?? "";
     expect(x).not.toContain("hashtags=");
+  });
+
+  // Growth loop: every share must credit the @SweepSeason account so a cold viewer who sees a
+  // shared result can find and follow the source — at launch this is the whole word-of-mouth loop.
+  it("the X intent text credits the @SweepSeason account", () => {
+    const { container } = renderCard();
+    const x = container.querySelector('a[aria-label="Post to X"]')?.getAttribute("href") ?? "";
+    expect(decodeURIComponent(x)).toContain("via @SweepSeason");
+  });
+
+  it("non-X shares (Bluesky) also credit @SweepSeason", () => {
+    const { container } = renderCard();
+    const bsky = container.querySelector('a[aria-label="Post to Bluesky"]')?.getAttribute("href") ?? "";
+    expect(decodeURIComponent(bsky)).toContain("via @SweepSeason");
+  });
+
+  it("the pick'em defy-the-crowd share still credits @SweepSeason", () => {
+    const { container } = renderCard({
+      result: makeResult({ wins: 40, losses: 42 }),
+      pickem: { y: 59, n: 41, vote: "n" },
+    });
+    const x = container.querySelector('a[aria-label="Post to X"]')?.getAttribute("href") ?? "";
+    expect(decodeURIComponent(x)).toContain("via @SweepSeason");
+  });
+});
+
+describe("ShareButton — attribution on the override & blueprint paths", () => {
+  // Surgeon reuses ShareButton via a full `text` override — the credit must still be appended.
+  it("the Surgeon override share (textOverride) still credits @SweepSeason", () => {
+    const { container } = render(
+      <ShareButton
+        result={makeResult()}
+        path="/sg/abc"
+        names={["Player A", "Player B"]}
+        text="One swap, +12 wins — 30-52 → 42-40 on today's SweepSzn Surgeon (diagnosis: Rim Protection Gap). Can you out-operate me?"
+      />,
+    );
+    const x = container.querySelector('a[aria-label="Post to X"]')?.getAttribute("href") ?? "";
+    expect(decodeURIComponent(x)).toContain("Can you out-operate me? via @SweepSeason");
+  });
+
+  it("the blueprint share credits @SweepSeason", () => {
+    const blueprint: BlueprintView = {
+      key: "spacing", label: "SPACING BOMB", metric: 12, metricLabel: "3PA",
+      metricText: "12 3PA", grade: "A", mult: 1.2, score: 66,
+    };
+    const { container } = render(
+      <ShareButton result={makeResult()} path="/r/x" names={["Player A", "Player B"]} blueprint={blueprint} />,
+    );
+    const x = container.querySelector('a[aria-label="Post to X"]')?.getAttribute("href") ?? "";
+    expect(decodeURIComponent(x)).toContain("I went SPACING BOMB on SweepSzn");
+    expect(decodeURIComponent(x)).toContain("via @SweepSeason");
   });
 });
 

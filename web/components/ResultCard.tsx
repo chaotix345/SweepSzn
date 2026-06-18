@@ -279,7 +279,8 @@ const getCanNative = () => typeof navigator !== "undefined" && "share" in naviga
 const getServerCanNative = () => false;
 
 // Exported so modes with their own result layout (Surgeon) reuse the exact share affordance
-// (native share / popover / copy / per-platform links). Pass `text` to fully override the copy.
+// (native share / popover / copy / per-platform links). Pass `text` to override the auto-generated
+// copy (the @SweepSeason credit is still appended to every share).
 export function ShareButton({ result, path, names, usedHints, pickem, prime, blueprint, text: textOverride, primary }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp; prime?: boolean; blueprint?: BlueprintView; text?: string; primary?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -294,7 +295,7 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
   const anchorBit = shareAnchor
     ? ` — comparable to the ${shareAnchor.record} ${shareAnchor.team}`
     : ` — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`;
-  const text = textOverride
+  const baseText = textOverride
     ? textOverride
     : defyLine
     ? `${defyLine} Can you beat the crowd on SweepSzn?`
@@ -302,6 +303,8 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
       // the committed objective is the identity-rich share hook (spec: "I went SPACING BOMB…")
       ? `I went ${blueprint.label} on SweepSzn — ${result.wins}-${result.losses} (${result.label}) with ${blueprint.grade} blueprint execution${usedHints ? " (with hints)" : ""}, board score ${blueprint.score % 1 === 0 ? blueprint.score : blueprint.score.toFixed(1)}. Can you out-execute me?`
       : `My ${prime ? "PRIME cross-era five" : "all-time five"} (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""}${anchorBit}. Can you build a better one?`;
+  // Credit @SweepSeason on every share — a cold viewer who sees a shared result can find the source.
+  const text = `${baseText} via @SweepSeason`;
   const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
 
