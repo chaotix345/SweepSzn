@@ -3,6 +3,7 @@ import { getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
+import { logCore } from "@/lib/socialStore";
 
 export const runtime = "nodejs";
 
@@ -26,5 +27,7 @@ export async function POST(req: Request) {
   }
   const result = evaluateLineup(players, getCoefficients());
   after(() => bump(redis, "complete"));
+  // Silent rarity logging: count this completed five-man core (post-commit; never a pre-commit hint).
+  after(() => logCore(redis, players.map((p) => p.person_id ?? p.id)));
   return NextResponse.json({ result, players });
 }

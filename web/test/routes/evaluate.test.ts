@@ -114,6 +114,32 @@ describe("POST /api/evaluate — after() ev:complete counter", () => {
   });
 });
 
+describe("POST /api/evaluate — core-pick logging (rarity)", () => {
+  it("increments the core_picks hash and global total after a valid request", async () => {
+    await post({ ids: FIVE_IDS });
+    await flushAfter();
+    expect(Number(ctx.redis!.strings.get("core_picks:total"))).toBe(1);
+    const h = ctx.redis!.hashes.get("core_picks");
+    expect(h && [...h.values()].some((v) => Number(v) === 1)).toBe(true);
+  });
+
+  it("counts the same five (any slot order) as one core", async () => {
+    await post({ ids: FIVE_IDS });
+    await post({ ids: [...FIVE_IDS].reverse() });
+    await flushAfter();
+    expect(Number(ctx.redis!.strings.get("core_picks:total"))).toBe(2);
+    const h = ctx.redis!.hashes.get("core_picks");
+    expect(h!.size).toBe(1); // one distinct sorted-core key
+    expect([...h!.values()][0]).toBe("2");
+  });
+
+  it("does not log a core on a 400 response", async () => {
+    await post({ ids: [] });
+    await flushAfter();
+    expect(ctx.redis!.strings.has("core_picks:total")).toBe(false);
+  });
+});
+
 describe("POST /api/evaluate — rate limit", () => {
   it("429s when the bucket is exhausted", async () => {
     exhaustRateLimit("rl:evaluate:1.2.3.4", 60);

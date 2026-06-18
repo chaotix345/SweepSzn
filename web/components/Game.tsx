@@ -428,10 +428,20 @@ export default function Game() {
     if (!selPlayer || roster[slot] || !selPlayer.eligible.includes(slot)) return;
     traceRef.current.push({ slot, pickedId: selPlayer.id, respins: [...roundRespinsRef.current] });
     roundRespinsRef.current = [];
+    // Silent crowd-signal beacon: count this pick for the (mode, spin) config. Fired AFTER the slot
+    // is committed, so it can never act as a pre-commit hint (DESIGN.md §12). Best-effort, ignored on error.
+    if (current) {
+      try {
+        void fetch("/api/slot-pick", {
+          method: "POST", headers: { "content-type": "application/json" }, keepalive: true,
+          body: JSON.stringify({ mode, spinKey: `${current.team}|${current.decade}`, slot, personId: selPlayer.person_id ?? selPlayer.id }),
+        }).catch(() => {});
+      } catch { /* beacon is best-effort */ }
+    }
     const next = { ...roster, [slot]: selPlayer };
     setRoster(next); setSelPlayer(null); setCurrent(null); setLockedReel(null);
     if (SLOTS.every((s) => next[s])) finishDraft(next);
-  }, [selPlayer, roster, finishDraft]);
+  }, [selPlayer, roster, finishDraft, current, mode]);
 
   const canSwap = useCallback((a: Slot, b: Slot) => {
     if (a === b) return false;

@@ -64,6 +64,7 @@ const ROUTE_TO_TEST: Record<string, string> = {
   "profile/sync":                   "profileSync",
   "push/subscribe":                 "pushSubscribe",
   "push/unsubscribe":               "pushUnsubscribe",
+  "slot-pick":                      "slotPick",
   "spin":                           "spin",
   "surgeon/leaderboard":            "surgeonLeaderboard",
   "surgeon/pool":                   "surgeonPool",
