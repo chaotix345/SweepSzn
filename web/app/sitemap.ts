@@ -5,7 +5,7 @@ import { baseUrl } from "@/lib/site";
 // they carry their own `noindex` metadata. /admin is disallowed in robots.ts.
 export default function sitemap(): MetadataRoute.Sitemap {
   // Fixed lastModified (not new Date()) so the value is stable across requests.
-  const lastModified = "2026-06-09";
+  const lastModified = "2026-06-18";
   return [
     { url: baseUrl, lastModified, changeFrequency: "daily", priority: 1 },
     { url: `${baseUrl}/play`, lastModified, changeFrequency: "daily", priority: 0.9 },
