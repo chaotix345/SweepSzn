@@ -18,6 +18,9 @@ const keyResults = (uid: string) => `results:${uid}`;
 // dex:{uid}  SET  every player-variant id ever fielded — UNBOUNDED (no 200-cap), so the Drafted Dex
 // never loses a player once seen, even past the results cap. Written alongside each result sync.
 const keyDex = (uid: string) => `dex:${uid}`;
+// badges:{uid}  SET  the achievement-badge keys this account has ever earned — the snapshot the sync
+// route diffs against to fire a one-time "badge unlocked" notification (SADD-only, so monotonic).
+const keyBadges = (uid: string) => `badges:${uid}`;
 
 export const RESULTS_CAP = 200;
 // Streaks only need the most-recent consecutive run, bounded by the account's age, so cap the
@@ -175,4 +178,17 @@ export async function syncResults(uid: string, entries: ProfileResult[]): Promis
 export async function getDexIds(uid: string): Promise<string[]> {
   if (!redis) return [];
   return (await redis.smembers<string[]>(keyDex(uid))) ?? [];
+}
+
+// --- badge snapshot (drives one-time "badge unlocked" notifications) ---
+
+export async function getStoredBadges(uid: string): Promise<string[]> {
+  if (!redis) return [];
+  return (await redis.smembers<string[]>(keyBadges(uid))) ?? [];
+}
+
+// SADD-only (monotonic) — record newly-earned badge keys so the same unlock never pings twice.
+export async function addStoredBadges(uid: string, badges: string[]): Promise<void> {
+  if (!redis || !badges.length) return;
+  await redis.sadd(keyBadges(uid), badges[0], ...badges.slice(1));
 }

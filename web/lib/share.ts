@@ -40,6 +40,23 @@ export function decodeLineup(segment: string): string[] {
   return decodeShare(segment).ids;
 }
 
+// "Share your Dex" card payload: the user's top collected player ids (for the OG/page visuals) plus the
+// collection size + badge count. "<count>.<badges>~<id,id,…>" — ids are [a-z0-9_], so the separators are
+// path-safe. Capped at 12 ids so the URL stays bounded.
+const DEX_CARD_CAP = 12;
+export function encodeDexShare(ids: string[], count: number, badges: number): string {
+  const c = Math.max(0, Math.trunc(count));
+  const b = Math.max(0, Math.trunc(badges));
+  return `${c}.${b}~${ids.slice(0, DEX_CARD_CAP).join(LINEUP_SEP)}`;
+}
+export function decodeDexShare(segment: string): { ids: string[]; count: number; badges: number } | null {
+  const m = /^(\d{1,5})\.(\d{1,3})~([a-z0-9_,]+)$/.exec(decodeURIComponent(segment));
+  if (!m) return null;
+  const ids = m[3].split(LINEUP_SEP).map((x) => x.trim()).filter(Boolean).slice(0, DEX_CARD_CAP);
+  if (!ids.length) return null;
+  return { ids, count: Number(m[1]), badges: Number(m[2]) };
+}
+
 // Pull the lineup segment out of whatever a friend pastes into the compare box — a full
 // https://…/r/<seg> URL, a "/r/<seg>" path, or a bare "<seg>". Strips a query/hash and any wrapping
 // path; returns null for empty input. The downstream GET /api/result/<seg> validates the segment.

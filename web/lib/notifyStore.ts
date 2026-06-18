@@ -9,7 +9,10 @@ import type { Notif, NotifView } from "./types";
 
 const keyList = (uid: string) => `notif:${uid}`;
 const keyRead = (uid: string) => `notif:${uid}:read`;
-const keyDedup = (uid: string, n: Notif) => `notif:dedup:${uid}:${n.challengeId}:${n.opponent}:${n.outcome}`;
+const keyDedup = (uid: string, n: Notif) =>
+  n.type === "badge_unlock"
+    ? `notif:dedup:${uid}:badge:${n.badge}`
+    : `notif:dedup:${uid}:${n.challengeId}:${n.opponent}:${n.outcome}`;
 
 const NOTIF_DEDUP_TTL = 60 * 60; // collapse repeat same-outcome pings from one responder for 1h
 

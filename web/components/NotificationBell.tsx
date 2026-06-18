@@ -113,7 +113,7 @@ export default function NotificationBell() {
         >
           <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-2.5">
             <span className="text-sm font-bold text-zinc-200">Notifications</span>
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Challenge results</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Activity</span>
           </div>
 
           {items.length === 0 ? (
@@ -126,10 +126,11 @@ export default function NotificationBell() {
               {items.map((n, i) => {
                 const { title, body } = notificationText(n);
                 const isNew = i < highlight;
+                const href = n.type === "badge_unlock" ? "/dex" : `/play?own=${encodeURIComponent(n.challengeId)}`;
                 return (
                   <li key={`${n.id}:${i}`}>
                     <Link
-                      href={`/play?own=${encodeURIComponent(n.challengeId)}`}
+                      href={href}
                       onClick={() => setOpen(false)}
                       className="flex gap-3 px-4 py-3 transition hover:bg-zinc-800/60"
                     >

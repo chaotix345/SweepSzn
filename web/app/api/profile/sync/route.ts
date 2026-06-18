@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getSession } from "@/lib/authServer";
 import { isRedisEnabled, rateLimit, ipOf } from "@/lib/redis";
-import { syncStreakDates, syncResults, getStreakCount, type ProfileResult } from "@/lib/profileStore";
+import { syncStreakDates, syncResults, getStreakCount, getStoredBadges, addStoredBadges, type ProfileResult } from "@/lib/profileStore";
+import { loadDexState } from "@/lib/dexState";
+import { enqueueNotif } from "@/lib/notifyStore";
+import { buildBadgeNotification } from "@/lib/notify";
+import { BADGES } from "@/lib/dex";
 
 export const runtime = "nodejs";
 
@@ -53,5 +57,26 @@ export async function POST(req: Request) {
   await syncStreakDates(session.uid, history);
   const merged = await syncResults(session.uid, results);
   const streak = await getStreakCount(session.uid, Date.now());
+
+  // Fire a notification when a Dex badge NEWLY unlocks (post-commit, descriptive — §12). Diffed against
+  // the badges:{uid} snapshot so it never re-pings; suppressed on the first-ever sync (the sign-in
+  // backfill) so a returning player isn't flooded with their whole history's worth at once. Deferred so
+  // the extra reads never slow the hot sync path; best-effort (notifications must not break the route).
+  if (merged > 0) {
+    const uid = session.uid;
+    after(async () => {
+      const prev = await getStoredBadges(uid);
+      const { badges } = await loadDexState(uid);
+      const fresh = badges.filter((b) => !prev.includes(b));
+      if (!fresh.length) return;
+      await addStoredBadges(uid, fresh);
+      if (!prev.length) return; // first snapshot — record it silently, don't backfill-spam the inbox
+      const now = Date.now();
+      for (const b of fresh) {
+        const name = BADGES.find((d) => d.key === b)?.name ?? b;
+        await enqueueNotif(uid, buildBadgeNotification(b, name, now));
+      }
+    });
+  }
   return NextResponse.json({ streak, results: merged });
 }

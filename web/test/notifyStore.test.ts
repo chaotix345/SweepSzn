@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { enableRedisEnv, freshFake, ctx } from "@/test/routeHarness";
-import type { Notif } from "@/lib/types";
+import type { Notif, ChallengeNotif } from "@/lib/types";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 
@@ -10,7 +10,7 @@ const { NOTIF_CAP } = await import("@/lib/notify");
 
 beforeEach(() => { freshFake(); });
 
-const mkNotif = (over: Partial<Notif> = {}): Notif => ({
+const mkNotif = (over: Partial<ChallengeNotif> = {}): Notif => ({
   id: "n1",
   type: "challenge_response",
   challengeId: "c1",

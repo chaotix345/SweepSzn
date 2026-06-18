@@ -109,8 +109,9 @@ export async function sendRawPushToUid(uid: string, payload: { title: string; bo
   }
 }
 
-// Fan a challenge notification out to all of a uid's devices. Never throws.
+// Fan a notification out to all of a uid's devices. Never throws.
 export async function sendPushToUid(uid: string, n: Notif): Promise<void> {
   const { title, body } = notificationText(n);
-  await sendRawPushToUid(uid, { title, body, url: `/play?own=${n.challengeId}` });
+  const url = n.type === "badge_unlock" ? "/dex" : `/play?own=${n.challengeId}`;
+  await sendRawPushToUid(uid, { title, body, url });
 }

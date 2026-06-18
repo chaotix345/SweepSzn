@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BADGES, type BadgeKey, type DexPlayer } from "@/lib/dex";
 import { eraLabel } from "@/lib/teams";
 import { TRAIT_META } from "@/lib/traits";
+import { encodeDexShare } from "@/lib/share";
 
 // The Drafted Dex collection screen. Fetches /api/dex (auth-gated), then renders a completion
 // counter, the milestone shelf, filters, and the player-card grid — all descriptive (DESIGN.md §12).
@@ -24,6 +25,7 @@ export function DexBoard() {
   const [phase, setPhase] = useState<"loading" | "signedOut" | "error" | "ok">("loading");
   const [decade, setDecade] = useState("All");
   const [pos, setPos] = useState("All");
+  const [shareState, setShareState] = useState<"idle" | "copied">("idle");
 
   useEffect(() => {
     let alive = true;
@@ -48,6 +50,15 @@ export function DexBoard() {
   if (!data.players.length) return <Empty msg="You haven't drafted anyone yet." />;
 
   const earned = new Set(data.badges);
+  // Share the collection: top players by fame (descriptive) + the collection/badge counts → /dex/s card.
+  const shareDex = async () => {
+    const topIds = [...data.players].sort((a, b) => b.fame - a.fame).slice(0, 10).map((p) => p.id);
+    const card = encodeDexShare(topIds, data.players.length, data.badges.length);
+    const url = `${window.location.origin}/dex/s/${card}`;
+    const text = `My Drafted Dex: ${data.players.length} all-time players collected on SweepSzn. Build your own → via @SweepSeason`;
+    try { if (navigator.share) { await navigator.share({ title: "My Drafted Dex", text, url }); return; } } catch { /* dismissed */ }
+    try { await navigator.clipboard.writeText(`${text} ${url}`); setShareState("copied"); setTimeout(() => setShareState("idle"), 1800); } catch { /* ignore */ }
+  };
   return (
     <div>
       <div className="flex items-end justify-between gap-4">
@@ -60,6 +71,10 @@ export function DexBoard() {
           <div className="text-xs text-zinc-500">of {TOTAL_PEOPLE.toLocaleString()} players</div>
         </div>
       </div>
+      <button onClick={shareDex} aria-label="Share your Dex"
+        className="mt-4 inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-2 text-sm font-bold text-zinc-200 transition hover:border-orange-500 hover:text-orange-300">
+        {shareState === "copied" ? "Link copied ✓" : "📤 Share your Dex"}
+      </button>
 
       <div className="mt-6">
         <div className="text-xs font-bold uppercase tracking-wide text-zinc-500">Milestones · {earned.size}/{BADGES.length}</div>
