@@ -96,7 +96,7 @@ export default function About() {
           One way to find out if your five can go <span className="text-gold">82-0</span>.
         </h2>
         <div className="mt-5 flex justify-center">
-          <ButtonLink href="/play" size="lg">Build your five →</ButtonLink>
+          <ButtonLink href="/play?mode=daily" size="lg">Build your five →</ButtonLink>
         </div>
       </div>
     </div>

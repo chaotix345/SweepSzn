@@ -287,7 +287,7 @@ export default function ResultCard({
               Share is the sharer's growth action. (DESIGN.md: exactly one orange CTA per row.) */}
           <ShareButton primary={!shared} result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint} />
           {shared ? (
-            <ButtonLink href="/play" variant="primary" className="flex-1">Build your own five →</ButtonLink>
+            <ButtonLink href="/play?mode=daily" variant="primary" className="flex-1">Build your own five →</ButtonLink>
           ) : (
             <Button variant="secondary" onClick={onReset} className="flex-1">Build Another</Button>
           )}

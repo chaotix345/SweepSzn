@@ -103,6 +103,73 @@ describe("Game — first-play funnel signal", () => {
   });
 });
 
+describe("Game — ?mode= deep-link past the picker", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", makeFetchMock());
+    try { localStorage.clear(); } catch { /* */ }
+  });
+  afterEach(async () => {
+    await act(async () => {});
+    cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks();
+    window.history.replaceState({}, "", "/"); // don't leak the deep-link URL into the next test
+  });
+
+  it("/play?mode=daily starts the game and skips the mode picker", async () => {
+    window.history.replaceState({}, "", "/play?mode=daily");
+    render(<Game />);
+    await act(async () => {});
+    expect(screen.queryByText(/Pick your mode/i)).toBeNull();
+    expect(findSpinBtn()).toBeTruthy();
+    expect(markFirstPlay).toHaveBeenCalledWith("test-uid-ux");
+  });
+
+  it("strips the ?mode= param after consuming it (a refresh won't restart)", async () => {
+    window.history.replaceState({}, "", "/play?mode=classic");
+    render(<Game />);
+    await act(async () => {});
+    expect(window.location.search).toBe("");
+  });
+
+  it("/play?mode=challenge falls through to the picker (challenge needs ?c=)", async () => {
+    window.history.replaceState({}, "", "/play?mode=challenge");
+    render(<Game />);
+    await act(async () => {});
+    expect(screen.queryByText(/Pick your mode/i)).toBeTruthy();
+  });
+
+  it("/play?mode=bogus falls through to the picker", async () => {
+    window.history.replaceState({}, "", "/play?mode=bogus");
+    render(<Game />);
+    await act(async () => {});
+    expect(screen.queryByText(/Pick your mode/i)).toBeTruthy();
+  });
+
+  it("a bare /play shows the picker", async () => {
+    window.history.replaceState({}, "", "/play");
+    render(<Game />);
+    await act(async () => {});
+    expect(screen.queryByText(/Pick your mode/i)).toBeTruthy();
+  });
+
+  it("clicking ← Modes from a deep-linked game returns to the picker (the escape hatch)", async () => {
+    window.history.replaceState({}, "", "/play?mode=daily");
+    render(<Game />);
+    await act(async () => {});
+    expect(screen.queryByText(/Pick your mode/i)).toBeNull(); // started in-game
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /modes/i })); });
+    expect(screen.queryByText(/Pick your mode/i)).toBeTruthy(); // back at the wall (discovery preserved)
+  });
+
+  it("a fresh ?mode= start drops any coexisting restore params (a refresh won't resurrect them)", async () => {
+    window.history.replaceState({}, "", "/play?mode=daily&r=abcde&m=classic");
+    render(<Game />);
+    await act(async () => {});
+    expect(screen.queryByText(/Pick your mode/i)).toBeNull(); // daily started — the restore did NOT win
+    expect(window.location.search).toBe(""); // r/m stripped, so a later refresh stays clean
+  });
+});
+
 describe("Game — first-run levers tip (R6)", () => {
   beforeEach(() => {
     vi.useFakeTimers();

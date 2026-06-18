@@ -39,11 +39,12 @@ describe("LandingSection — top-of-funnel hero", () => {
     expect(document.body.textContent ?? "").toContain("1,170");
   });
 
-  it("uses one consistent action verb across both primary CTAs, each → /play", () => {
+  it("uses one consistent action verb across both primary CTAs, each deep-linking into Daily", () => {
     render(<LandingSection />);
     const ctas = screen.getAllByRole("link", { name: /Draft your five/i });
     expect(ctas.length).toBeGreaterThanOrEqual(2); // hero + final, same verb (no Find out / Build mismatch)
-    for (const cta of ctas) expect(cta.getAttribute("href")).toBe("/play");
+    // both skip the 8-option wall — a ready visitor drops straight into a guided first spin
+    for (const cta of ctas) expect(cta.getAttribute("href")).toBe("/play?mode=daily");
   });
 
   it("does NOT play the buzzer reveal animation on the static hero example card (DESIGN.md: save the drama for the earned reveal)", () => {

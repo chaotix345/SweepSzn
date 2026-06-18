@@ -9,7 +9,7 @@ import { ButtonLink } from "@/components/ui/Button";
 export default function ShareHeader({
   tagline,
   cta,
-  ctaHref = "/play",
+  ctaHref = "/play?mode=daily",
 }: {
   tagline: string;
   cta: string;

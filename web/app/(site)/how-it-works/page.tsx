@@ -165,7 +165,7 @@ export default function HowItWorks() {
           Spin the reels. Draft your five. Go for <span className="text-gold">82-0</span>.
         </h2>
         <div className="mt-5 flex justify-center">
-          <ButtonLink href="/play" size="lg">Build your five →</ButtonLink>
+          <ButtonLink href="/play?mode=daily" size="lg">Build your five →</ButtonLink>
         </div>
       </div>
     </div>

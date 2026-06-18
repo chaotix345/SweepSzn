@@ -15,11 +15,12 @@ import ShareHeader from "@/components/ShareHeader";
 afterEach(cleanup);
 
 describe("ShareHeader — the shared permalink header (prevents the /pe/ + /sg/ CTA drift)", () => {
-  it("renders the wordmark, the tagline, and a play CTA pointing to /play", () => {
+  it("renders the wordmark, the tagline, and a play CTA that deep-links a cold arrival into Daily", () => {
     render(<ShareHeader tagline="a friend shared their five" cta="Can you beat this? →" />);
     expect(screen.getByText("a friend shared their five")).toBeTruthy();
     const cta = screen.getByRole("link", { name: /Can you beat this\?/i });
-    expect(cta.getAttribute("href")).toBe("/play");
+    // deep-link past the mode-select wall: a cold X arrival drops straight into a guided first spin
+    expect(cta.getAttribute("href")).toBe("/play?mode=daily");
   });
 
   it("renders the CTA at the md (44px) size and in the action orange (DESIGN.md: only CTA color)", () => {

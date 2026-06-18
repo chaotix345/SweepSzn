@@ -65,7 +65,7 @@ export default async function ChallengePage({ params }: Props) {
             <p className="mx-auto mt-3 max-w-sm text-sm text-zinc-400">
               It may have expired, or challenges aren&apos;t configured right now. Build your own all-time five instead.
             </p>
-            <Link href="/play" className="mt-6 inline-block rounded-xl bg-orange-500 px-8 py-3 text-base font-black text-black hover:bg-orange-400">
+            <Link href="/play?mode=daily" className="mt-6 inline-block rounded-xl bg-orange-500 px-8 py-3 text-base font-black text-black hover:bg-orange-400">
               Build your five →
             </Link>
           </div>

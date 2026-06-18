@@ -204,10 +204,13 @@ describe("ResultCard — grade/verdict render branches", () => {
     expect(btns.length).toBeGreaterThan(0);
   });
 
-  it("shows 'Build your own five' link in shared mode", () => {
-    renderCard({ shared: true });
-    const link = screen.getByRole("link", { name: /Build your own five/i });
+  it("shows 'Build your own five' link in shared mode, deep-linking the cold viewer into Daily", () => {
+    const { container } = renderCard({ shared: true });
+    // scoped to this render's container — the block has no afterEach(cleanup) (see note below)
+    const link = within(container).getByRole("link", { name: /Build your own five/i });
     expect(link).toBeTruthy();
+    // skip the mode-select wall — the cold permalink viewer's first play is the conversion that matters
+    expect(link.getAttribute("href")).toBe("/play?mode=daily");
   });
 
   it("PickemStrip: solo vote 'yes' + hit shows 'you called it' verdict", () => {
