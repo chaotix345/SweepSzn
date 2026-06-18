@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { zRadius, axisPoint, polygonPoints } from "@/lib/radar";
+import { zRadius, axisPoint, polygonPoints, avgZ } from "@/lib/radar";
 
 // Pure SVG geometry for the z-score radar. Shape is descriptive (how a player compares to his era),
 // never an engine signal — a five-axis radar of one player says nothing about lineup fit (DESIGN.md §12).
@@ -41,5 +41,31 @@ describe("polygonPoints", () => {
     const pts = polygonPoints([1, 1, 1, 1, 1], 200).split(" ");
     expect(pts).toHaveLength(5);
     expect(pts[0]).toBe("100,0");
+  });
+});
+
+describe("avgZ — average a lineup's z-scores into one radar series", () => {
+  it("averages each axis across players, ignoring null/undefined values", () => {
+    const z = avgZ([
+      { z: { pts: 2, trb: 0, ast: 1, stl: null, blk: 1, ts: 0.5 } },
+      { z: { pts: 0, trb: 2, ast: 1, stl: 1, blk: undefined, ts: 1.5 } },
+    ]);
+    expect(z.pts).toBeCloseTo(1);
+    expect(z.trb).toBeCloseTo(1);
+    expect(z.ast).toBeCloseTo(1);
+    expect(z.stl).toBeCloseTo(1); // null ignored → mean of [1]
+    expect(z.blk).toBeCloseTo(1); // undefined ignored → mean of [1]
+    expect(z.ts).toBeCloseTo(1);
+  });
+
+  it("returns null for an axis no player carries", () => {
+    const z = avgZ([{ z: { pts: 1 } }, { z: { pts: 3 } }]);
+    expect(z.pts).toBeCloseTo(2);
+    expect(z.trb).toBeNull();
+  });
+
+  it("tolerates players with no z block at all", () => {
+    const z = avgZ([{}, { z: { pts: 4 } }]);
+    expect(z.pts).toBeCloseTo(4);
   });
 });

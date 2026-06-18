@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { factorBlurb, factorViews, playerContribRows, historyAnchor, scoutingAnchor, headline } from "./explain";
+import { factorBlurb, factorViews, playerContribRows, historyAnchor, scoutingAnchor, FAMOUS_TEAMS, headline } from "./explain";
 import type { LineupResult, PlayerBreakdown } from "./types";
 
 const GENERIC = "Contribution to the team rating.";
@@ -110,6 +110,19 @@ describe("scoutingAnchor — your five's projection beside a comparable real tea
 
   it("returns null below the 42-win anchor floor", () => {
     expect(scoutingAnchor(mkResult({ wins: 30 }))).toBeNull();
+  });
+});
+
+describe("FAMOUS_TEAMS — the curated real-team set the compare picker offers", () => {
+  it("exposes every anchor team with real ratings for the picker", () => {
+    expect(FAMOUS_TEAMS.length).toBe(8);
+    for (const t of FAMOUS_TEAMS) {
+      expect(typeof t.name).toBe("string");
+      expect(typeof t.year).toBe("number");
+      expect(typeof t.ortg).toBe("number");
+      expect(typeof t.drtg).toBe("number");
+    }
+    expect(FAMOUS_TEAMS[0].team).toMatch(/Warriors/);
   });
 });
 

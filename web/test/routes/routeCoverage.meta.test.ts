@@ -68,6 +68,7 @@ const ROUTE_TO_TEST: Record<string, string> = {
   "push/subscribe":                 "pushSubscribe",
   "push/unsubscribe":               "pushUnsubscribe",
   "rarity":                         "rarity",
+  "result/[lineup]":                "result",
   "slot-pick":                      "slotPick",
   "spin":                           "spin",
   "surgeon/leaderboard":            "surgeonLeaderboard",

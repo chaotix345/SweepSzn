@@ -40,6 +40,19 @@ export function decodeLineup(segment: string): string[] {
   return decodeShare(segment).ids;
 }
 
+// Pull the lineup segment out of whatever a friend pastes into the compare box — a full
+// https://…/r/<seg> URL, a "/r/<seg>" path, or a bare "<seg>". Strips a query/hash and any wrapping
+// path; returns null for empty input. The downstream GET /api/result/<seg> validates the segment.
+export function extractLineupSegment(input: string): string | null {
+  let s = input.trim();
+  if (!s) return null;
+  const i = s.lastIndexOf("/r/");
+  if (i >= 0) s = s.slice(i + 3);
+  s = s.split(/[?#]/)[0].replace(/\/+$/, "");
+  if (s.includes("/")) s = s.slice(s.lastIndexOf("/") + 1); // a stray URL without /r/ → last path part
+  return s.trim() || null;
+}
+
 // The dynamic OG card (1200×630 PNG) for a share path is served by that route's opengraph-image
 // handler at `<path>/opengraph-image`. Exposing it as a saveable/copyable image turns every result
 // into an attachable asset — the launch content workflow needs the card as a file, not just a

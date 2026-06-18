@@ -16,6 +16,7 @@ import { WhatIfLab } from "@/components/game/WhatIfLab";
 import { RarityBadge } from "@/components/game/RarityBadge";
 import { Dossier } from "@/components/game/Dossier";
 import { DexStrip } from "@/components/game/DexStrip";
+import { CompareLineup } from "@/components/game/CompareLineup";
 
 // Crowd snapshot + your vote (and, same-session only, the spun team/era the vote was about).
 type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
@@ -228,6 +229,7 @@ export default function ResultCard({
         {mode !== "prime" && (
           <WhatIfLab players={players} slots={slots} baseWins={result.wins} baseLosses={result.losses} baseGrade={result.grade} />
         )}
+        <CompareLineup players={players} result={result} lineupSeg={lineupSeg} />
       </div>
 
       {/* roster */}

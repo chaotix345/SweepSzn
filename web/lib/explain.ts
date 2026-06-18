@@ -74,6 +74,10 @@ export function historyAnchor(wins: number): HistoryAnchor | null {
   return hit ? hit.a : null;
 }
 
+// The curated real teams the post-game "vs Real Team" compare picker offers (highest win band first),
+// each carrying its actual ratings. Descriptive history — a yardstick, never a fit target (DESIGN.md §12).
+export const FAMOUS_TEAMS: HistoryAnchor[] = ANCHORS.map((x) => x.a);
+
 export interface ScoutingView {
   anchor: HistoryAnchor;
   est: { ortg: number; drtg: number; netRtg: number }; // your five's engine-projected ratings
