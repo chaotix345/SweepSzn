@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { cache } from "react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
@@ -9,6 +8,7 @@ import { decodePickemCard, pickemVerdict } from "@/lib/pickem";
 import { SLOTS, displayName } from "@/lib/teams";
 import ResultCard from "@/components/ResultCard";
 import Beacon from "@/components/Beacon";
+import ShareHeader from "@/components/ShareHeader";
 
 // Pick'Em share permalink: /pe/<y>.<n>.<vote|x>.<lineup>. Same deterministic rebuild as
 // /r/<lineup>, plus the crowd snapshot frozen at share time (counts keep moving in Redis;
@@ -59,10 +59,7 @@ export default async function SharedPickem({ params }: Props) {
           visitor→first-play denominator includes the share-acquisition path. */}
       <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <Link href="/" className="flex items-baseline text-2xl tracking-tight">
-          <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
-          <span className="ml-3 text-sm font-semibold text-zinc-500">a friend took on the crowd</span>
-        </Link>
+        <ShareHeader tagline="a friend took on the crowd" cta="Beat the crowd →" />
         <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared prime={data.prime} pickem={data.view} />
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">

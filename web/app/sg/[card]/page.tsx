@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { cache } from "react";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPlayersByIds, getCoefficients } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
 import { decodeSurgeonCard, surgeonDiagnosis } from "@/lib/surgeon";
 import { displayName } from "@/lib/teams";
 import SurgeonResult from "@/components/SurgeonResult";
+import ShareHeader from "@/components/ShareHeader";
 
 // Surgeon share permalink: /sg/<beforeIds>.<outIdx>.<inId>. Both lineups are deterministic from
 // the ids, so the full BEFORE/AFTER story (records, factor breakdowns, the delta) rebuilds with
@@ -57,10 +57,7 @@ export default async function SharedSurgeon({ params }: Props) {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <Link href="/" className="flex items-baseline text-2xl tracking-tight">
-          <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
-          <span className="ml-3 text-sm font-semibold text-zinc-500">a friend fixed their five</span>
-        </Link>
+        <ShareHeader tagline="a friend fixed their five" cta="Fix your five →" />
         <SurgeonResult before={data.before} after={data.after} beforePlayers={data.beforePlayers}
           afterPlayers={data.afterPlayers} outIdx={data.outIdx} diagnosis={data.diagnosis} card={card} shared />
       </div>

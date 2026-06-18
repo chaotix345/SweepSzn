@@ -67,7 +67,7 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 text-center sm:py-12">
       <h1 className="font-display text-3xl tracking-tight sm:text-5xl">Pick your mode</h1>
-      <p className="mt-2 text-lg text-zinc-400">Build an all-time NBA starting five. Can you go undefeated?</p>
+      <p className="mt-2 text-lg text-zinc-400">Build an all-time NBA starting five. The best ever found is 79-3 — can you top it?</p>
 
       {showIntro && (
         <div className="relative mx-auto mt-6 max-w-xl rounded-xl border border-zinc-800 bg-zinc-900/70 px-4 py-3 pr-10 text-left text-sm text-zinc-300">

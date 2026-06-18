@@ -502,3 +502,26 @@ describe("ResultCard — roster-row player dossier (descriptive, post-commit §1
     expect(container.textContent).toMatch(/Loading…/);
   });
 });
+
+describe("ResultCard — shared-permalink CTA hierarchy (cold-viewer conversion)", () => {
+  // On a shared /r/·/pe/ permalink the dominant audience is cold viewers, not the sharer — so the
+  // emphasized (primary orange) action must be "build your own", and Share drops to secondary.
+  it("on a shared permalink, 'Build your own five' is the primary orange CTA and Share is secondary", () => {
+    const { container } = renderCard({ shared: true });
+    const build = within(container).getByRole("link", { name: /Build your own five/i });
+    expect(build.className).toContain("bg-orange-500");
+    const share = within(container).getByRole("button", { name: /^(Share|Copied!|Copy failed)$/ });
+    expect(share.className).not.toContain("bg-orange-500");
+    expect(share.className).toContain("border-zinc-700");
+  });
+
+  // In-game (non-shared) the sharer's growth action is Share — it must STAY the primary orange CTA.
+  it("in-game (non-shared), Share stays the primary orange CTA and 'Build Another' is secondary", () => {
+    const { container } = renderCard({ shared: false });
+    const share = within(container).getByRole("button", { name: /^(Share|Copied!|Copy failed)$/ });
+    expect(share.className).toContain("bg-orange-500");
+    // the other half of the one-orange-per-row rule: Build Another must NOT be orange
+    const buildAnother = within(container).getByRole("button", { name: /Build Another/i });
+    expect(buildAnother.className).not.toContain("bg-orange-500");
+  });
+});

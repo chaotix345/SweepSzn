@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { decodeRankCard, type RankCard } from "@/lib/rankShare";
+import { ButtonLink } from "@/components/ui/Button";
 
 type Props = { params: Promise<{ card: string }> };
 
@@ -41,9 +42,7 @@ export default async function RankPage({ params }: Props) {
           <div className="mt-1 text-sm text-zinc-400">of {c.total.toLocaleString()} players</div>
           <div className="mt-5 text-lg font-bold text-zinc-100">{c.name}</div>
           <div className="mt-1 text-zinc-300">{metric(c)}</div>
-          <Link href="/play" className="mt-7 inline-block rounded-xl bg-orange-500 px-6 py-2.5 text-sm font-bold text-black hover:bg-orange-400">
-            Build your five →
-          </Link>
+          <ButtonLink href="/play" size="md" className="mt-7">Build your five →</ButtonLink>
         </div>
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">engine calibrated to real NBA team-seasons</footer>

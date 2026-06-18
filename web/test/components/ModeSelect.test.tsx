@@ -29,6 +29,11 @@ describe("ModeSelect", () => {
     }
   });
 
+  it("surfaces the 79-3 competitive target in the subhead for cold /play arrivals (§12-safe public fact)", () => {
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    expect(screen.getByText(/79-3/)).toBeTruthy();
+  });
+
   it("renders every 'Play →' CTA in the action orange — never a mode accent (DESIGN.md: orange is the only CTA color)", () => {
     render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
     const ctas = screen.getAllByText("Play →");
