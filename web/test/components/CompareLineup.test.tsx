@@ -11,8 +11,11 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("@vercel/analytics", () => ({ track: vi.fn() }));
+vi.mock("@/lib/ev", () => ({ ev: vi.fn() }));
+vi.mock("@/lib/streak", () => ({ getUid: () => "uid-x" }));
 
 import { track } from "@vercel/analytics";
+import { ev } from "@/lib/ev";
 import { CompareLineup } from "@/components/game/CompareLineup";
 import type { Player, LineupResult } from "@/lib/types";
 
@@ -74,6 +77,7 @@ describe("CompareLineup — post-game compare (vs real team / vs friend)", () =>
     const { getByRole } = setup();
     fireEvent.click(getByRole("button", { name: /compare your lineup/i }));
     expect(track).toHaveBeenCalledWith("compare_open", expect.objectContaining({ grade: expect.any(String), wins: expect.any(Number) }));
+    expect(ev).toHaveBeenCalledWith("compare_open", { uid: "uid-x" });
   });
 
   it("fires a compare_friend event when a friend's five resolves", async () => {
@@ -91,6 +95,7 @@ describe("CompareLineup — post-game compare (vs real team / vs friend)", () =>
     fireEvent.change(getByPlaceholderText(/paste/i), { target: { value: "https://sweepszn.com/r/x,y,z,w,v" } });
     fireEvent.click(getByRole("button", { name: /compare with friend/i }));
     await waitFor(() => expect(track).toHaveBeenCalledWith("compare_friend", expect.objectContaining({ your_grade: expect.any(String), friend_grade: expect.any(String) })));
+    expect(ev).toHaveBeenCalledWith("compare_friend", { uid: "uid-x" });
   });
 
   it("vs Friend: surfaces an error when the link does not resolve", async () => {

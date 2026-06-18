@@ -1,6 +1,9 @@
 // Client-only analytics beacon. Fire-and-forget; must NEVER throw into the UI.
 // Runs alongside the existing Vercel track() calls (we keep both — see spec §2).
-export type EvName = "play" | "share";
+// EvName mirrors the server's client-sendable stage set (type-only import — erased at build, so no
+// server code is pulled into the client bundle); the /api/ev route re-validates via parseEvBody.
+import type { ClientStage } from "./evServer";
+export type EvName = ClientStage;
 
 export function ev(name: EvName, props: { uid?: string; mode?: string } = {}): void {
   try {

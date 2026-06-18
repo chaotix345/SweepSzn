@@ -48,11 +48,18 @@ describe("getMetrics", () => {
   const now = new Date("2026-06-09T12:00:00Z");
 
   const counters: Record<string, number> = {
+    "ev:visit:2026-6-7": 500, "ev:visit:2026-6-8": 600, "ev:visit:2026-6-9": 400,        // Σ 1500
+    "ev:first_play:2026-6-7": 50, "ev:first_play:2026-6-8": 60, "ev:first_play:2026-6-9": 40, // Σ 150
     "ev:play:2026-6-7": 100, "ev:play:2026-6-8": 120, "ev:play:2026-6-9": 80,
     "ev:complete:2026-6-7": 60, "ev:complete:2026-6-8": 90, "ev:complete:2026-6-9": 50,
     "ev:share:2026-6-7": 12, "ev:share:2026-6-8": 18, "ev:share:2026-6-9": 10,
+    "ev:share_view:2026-6-7": 5, "ev:share_view:2026-6-8": 8, "ev:share_view:2026-6-9": 2, // Σ 15
     "ev:signin:2026-6-7": 6, "ev:signin:2026-6-8": 9, "ev:signin:2026-6-9": 5,
     "ev:submit:2026-6-7": 30, "ev:submit:2026-6-8": 40, "ev:submit:2026-6-9": 20,
+    "ev:explore_open:2026-6-7": 10, "ev:explore_open:2026-6-8": 12, "ev:explore_open:2026-6-9": 8, // Σ 30
+    "ev:whatif_open:2026-6-7": 4, "ev:whatif_open:2026-6-8": 6, "ev:whatif_open:2026-6-9": 2,       // Σ 12
+    "ev:compare_open:2026-6-7": 3, "ev:compare_open:2026-6-8": 3, "ev:compare_open:2026-6-9": 1,    // Σ 7
+    "ev:compare_friend:2026-6-7": 1, "ev:compare_friend:2026-6-8": 2, "ev:compare_friend:2026-6-9": 1, // Σ 4
   };
   const setsData: Record<string, string[]> = {
     "ev:active:2026-6-7": ["u1", "u2", "u3", "u4"],
@@ -128,6 +135,29 @@ describe("getMetrics", () => {
     expect(m.funnel.plays).toBe(300);
     expect(m.funnel.completes).toBe(200);
     expect(m.funnel.shares).toBe(40);
+  });
+
+  it("visit + first_play sums (the top of the north-star funnel)", async () => {
+    const fake = buildFake();
+    const m = await getMetrics(fake as unknown as Redis, { days: 3, now });
+    expect(m.funnel.visits).toBe(1500);
+    expect(m.funnel.firstPlays).toBe(150);
+  });
+
+  it("firstPlay rate = firstPlays / visits (the north star)", async () => {
+    const fake = buildFake();
+    const m = await getMetrics(fake as unknown as Redis, { days: 3, now });
+    expect(Math.abs(m.rates.firstPlay - 150 / 1500)).toBeLessThan(1e-9);
+  });
+
+  it("engagement sums (share_view + the 4 PR-#70 deep-tool opens)", async () => {
+    const fake = buildFake();
+    const m = await getMetrics(fake as unknown as Redis, { days: 3, now });
+    expect(m.engagement.shareViews).toBe(15);
+    expect(m.engagement.exploreOpen).toBe(30);
+    expect(m.engagement.whatifOpen).toBe(12);
+    expect(m.engagement.compareOpen).toBe(7);
+    expect(m.engagement.compareFriend).toBe(4);
   });
 
   it("signin/submit sums", async () => {
@@ -226,6 +256,11 @@ describe("getMetrics", () => {
   it("null redis → zeroed metrics, no throw", async () => {
     const empty = await getMetrics(null, { days: 3, now });
     expect(empty.funnel.plays).toBe(0);
+    expect(empty.funnel.visits).toBe(0);
+    expect(empty.funnel.firstPlays).toBe(0);
+    expect(empty.engagement.shareViews).toBe(0);
+    expect(empty.engagement.compareFriend).toBe(0);
+    expect(empty.rates.firstPlay).toBe(0);
     expect(empty.d1).toBe(0);
     expect(empty.days.length).toBe(3);
   });

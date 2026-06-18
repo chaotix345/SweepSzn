@@ -2,24 +2,42 @@ import type { Redis } from "@upstash/redis";
 import { dayUTC } from "./day";
 import { logError } from "./log";
 
-// Owned funnel-counter writer. Five stages; play/share also arrive via the /api/ev beacon.
-// All writes are best-effort: this module must NEVER throw or block a user-facing route.
-export type EvStage = "play" | "complete" | "share" | "signin" | "submit";
+// Owned funnel-counter writer. All writes are best-effort: this module must NEVER throw or block a
+// user-facing route.
+//
+// CLIENT_STAGES arrive via the unauthenticated /api/ev beacon, so the client may inflate them — they
+// are usage signals, not scores. The three server-authoritative stages (complete/signin/submit) are
+// bumped only from inside trusted routes (evaluate / auth / *submit) and are rejected by parseEvBody
+// so the client can never spoof a completion, sign-in, or competitive submit.
+export const CLIENT_STAGES = [
+  "visit", "first_play", "play", "share", "share_view",
+  "explore_open", "whatif_open", "compare_open", "compare_friend",
+] as const;
+export type ClientStage = (typeof CLIENT_STAGES)[number];
+export type EvStage = ClientStage | "complete" | "signin" | "submit";
 
 export const EV_TTL = 60 * 60 * 24 * 45; // ~45 days, enough for a 14-day window + retention look-back
 export const EV_ACTIVE_CAP = 50_000;     // max distinct uids tracked per day (far above realistic DAU)
 
+// Stages whose uid counts toward the day's distinct-active set (DAU / D1 / D7). Deliberately an
+// engaged-action allow-list: `visit` and `share_view` are non-engaging (a bouncer / a share recipient
+// shouldn't inflate DAU), and `first_play` + the engagement events ride a uid that `play` already
+// added — so only play/share/signin/submit qualify.
+const ACTIVE_STAGES = new Set<EvStage>(["play", "share", "signin", "submit"]);
+
+const CLIENT_STAGE_SET = new Set<string>(CLIENT_STAGES);
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
 const MODES = new Set(["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon"]);
 
-export interface BeaconBody { ev: "play" | "share"; uid?: string; mode?: string }
+export interface BeaconBody { ev: ClientStage; uid?: string; mode?: string }
 
-// Validate an untrusted beacon payload. Returns null for anything not a valid play/share beacon.
+// Validate an untrusted beacon payload. Returns null for anything not a valid client-sendable beacon
+// (server-authoritative stages are rejected here so the client can't spoof the trusted funnel).
 export function parseEvBody(body: unknown): BeaconBody | null {
   if (!body || typeof body !== "object") return null;
   const b = body as Record<string, unknown>;
-  if (b.ev !== "play" && b.ev !== "share") return null;
-  const out: BeaconBody = { ev: b.ev };
+  if (typeof b.ev !== "string" || !CLIENT_STAGE_SET.has(b.ev)) return null;
+  const out: BeaconBody = { ev: b.ev as ClientStage };
   if (typeof b.uid === "string" && UID_RE.test(b.uid)) out.uid = b.uid;
   if (b.ev === "play" && typeof b.mode === "string" && MODES.has(b.mode)) out.mode = b.mode;
   return out;
@@ -55,7 +73,7 @@ export async function bump(
     // Cap distinct-member growth: the beacon is unauthenticated, so without a bound a flood of
     // unique uids could exhaust shared Redis memory (the set lives EV_TTL and is materialised by
     // /admin). Beyond the cap, DAU/retention become approximate — acceptable for internal metrics.
-    if (opts.uid && stage !== "complete") {
+    if (opts.uid && ACTIVE_STAGES.has(stage)) {
       const activeKey = `ev:active:${day}`;
       if ((await redis.scard(activeKey)) < EV_ACTIVE_CAP) {
         await redis.pipeline().sadd(activeKey, opts.uid).expire(activeKey, EV_TTL).exec();

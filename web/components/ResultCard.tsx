@@ -294,7 +294,7 @@ export default function ResultCard({
 
       {/* Deep tools sit BELOW Share so the growth loop isn't buried under a wall of analysis.
           Collapsed + lazy-mounted (a cold permalink viewer never fires their /api fetches). */}
-      <ExploreZone summary={exploreSummary} onOpen={() => track("explore_open", { mode: modeKey ?? "shared", grade: result.grade, wins: result.wins })}>
+      <ExploreZone summary={exploreSummary} onOpen={() => { track("explore_open", { mode: modeKey ?? "shared", grade: result.grade, wins: result.wins }); ev("explore_open", { uid: getUid() }); }}>
         <ScoutingAnchor result={result} />
         {/* What-If Lab: post-commit swap sandbox. Gated off Prime — a candidate's decade there is
             his peak, not the spun era, so the slot pool wouldn't match. Re-scores via /api/evaluate. */}

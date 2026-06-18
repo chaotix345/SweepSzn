@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import LandingSection from "@/components/LandingSection";
+import Beacon from "@/components/Beacon";
 import { baseUrl } from "@/lib/site";
 
 // Canonical lives here (homepage only) — NOT in the shared root layout, so the noindex
@@ -62,6 +63,9 @@ export default function Home() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdHtml }} />
+      {/* Top-of-funnel: one visit beacon per device (visitor → first-play denominator). Device-scoped
+          to match first_play's per-device identity, so rates.firstPlay is a clean new-device rate. */}
+      <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <LandingSection />
       {/* Calibration proof, scoreboard-style, plus the keyword-dense SEO prose kept crawlable inside
           a <details> (rendered in the DOM, just collapsed) so the page reads premium, not like a wall. */}

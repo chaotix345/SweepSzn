@@ -21,6 +21,7 @@ import type { DraftCandidate, DraftStep, EraContext, LeaderboardView, LineupResu
 import { SLOTS, FRANCHISES, DECADES, teamName, displayName, eraLabel } from "@/lib/teams";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
+import { markFirstPlay } from "@/lib/firstPlay";
 import { getUid } from "@/lib/streak";
 import ResultCard from "@/components/ResultCard";
 import Leaderboard from "@/components/Leaderboard";
@@ -306,6 +307,7 @@ export default function Game() {
   const start = useCallback((m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string }) => {
     track("mode_start", { mode: m });
     ev("play", { uid: getUid(), mode: m });
+    markFirstPlay(getUid()); // once-ever-per-device first-play signal (distinct from replays)
     abortSimRef.current?.abort(); abortSimRef.current = null; // cancel any in-flight simulate
     setMode(m);
     let cid: string | null = null;
