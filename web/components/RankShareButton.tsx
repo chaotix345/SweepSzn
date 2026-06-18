@@ -28,7 +28,7 @@ export default function RankShareButton({ card }: { card: RankCard }) {
 
   const where = card.scope === "daily" ? "today's Daily board" : card.scope === "week" ? "this week's board" : "the all-time board";
   const metric = card.scope === "daily" ? `${card.wins}-${card.losses}` : `${card.wins.toLocaleString()} wins`;
-  const text = `I'm #${card.rank} of ${card.total.toLocaleString()} on ${where} (${metric}) at SweepSzn. Can you rank higher?`;
+  const text = `I'm #${card.rank} of ${card.total.toLocaleString()} on ${where} (${metric}) at SweepSzn. Can you rank higher? via @SweepSeason`;
   const path = `/rank/${encodeRankCard(card)}`;
   const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
