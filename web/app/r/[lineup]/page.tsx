@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { X_HANDLE } from "@/lib/site";
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { resolveSharedLineup } from "@/lib/sharedLineup";
@@ -32,7 +33,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     description,
     robots: { index: false },
     openGraph: { title, description, type: "website", url: `/r/${lineup}` },
-    twitter: { card: "summary_large_image", title, description, site: "@SweepSeason", creator: "@SweepSeason" },
+    twitter: { card: "summary_large_image", title, description, site: X_HANDLE, creator: X_HANDLE },
   };
 }
 

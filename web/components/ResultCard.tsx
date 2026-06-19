@@ -6,6 +6,8 @@ import { getUid } from "@/lib/streak";
 import type { LineupResult, Player, PlayerBreakdown, Slot } from "@/lib/types";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { encodeLineup, cardImageUrl } from "@/lib/share";
+import { X_HANDLE } from "@/lib/site";
+import { getOwnRefCode } from "@/lib/referral";
 import { bpCode, type BlueprintView } from "@/lib/blueprint";
 import { factorViews, lineupRoles, headline, historyAnchor, scoutingAnchor, fmtNet, playerContribRows, type ContribRow } from "@/lib/explain";
 import { WIN_GRADES, weakestSlot } from "@/lib/engine";
@@ -341,8 +343,16 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
       ? `I went ${blueprint.label} on SweepSzn — ${result.wins}-${result.losses} (${result.label}) with ${blueprint.grade} blueprint execution${usedHints ? " (with hints)" : ""}, board score ${blueprint.score % 1 === 0 ? blueprint.score : blueprint.score.toFixed(1)}. Can you out-execute me?`
       : `My ${prime ? "PRIME cross-era five" : "all-time five"} (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""}${anchorBit}. Can you build a better one?`;
   // Credit @SweepSeason on every share — a cold viewer who sees a shared result can find the source.
-  const text = `${baseText} via @SweepSeason`;
-  const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
+  const text = `${baseText} via ${X_HANDLE}`;
+  // Every share doubles as a referral: append the sharer's own code (if minted) so a cold viewer's
+  // first_play is credited back to them. Canonical/OG are bare-path, so the query has no SEO impact.
+  const url = (() => {
+    if (typeof window === "undefined") return path;
+    const u = new URL(path, window.location.origin);
+    const own = getOwnRefCode();
+    if (own) u.searchParams.set("ref", own);
+    return u.toString();
+  })();
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
 
   // close the popover on outside-click or Escape (keyboard + mouse dismissal)

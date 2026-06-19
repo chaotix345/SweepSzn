@@ -5,6 +5,8 @@ import { BADGES, type BadgeKey, type DexPlayer } from "@/lib/dex";
 import { eraLabel } from "@/lib/teams";
 import { TRAIT_META } from "@/lib/traits";
 import { encodeDexShare } from "@/lib/share";
+import { X_HANDLE } from "@/lib/site";
+import { getOwnRefCode } from "@/lib/referral";
 
 // The Drafted Dex collection screen. Fetches /api/dex (auth-gated), then renders a completion
 // counter, the milestone shelf, filters, and the player-card grid — all descriptive (DESIGN.md §12).
@@ -54,8 +56,12 @@ export function DexBoard() {
   const shareDex = async () => {
     const topIds = [...data.players].sort((a, b) => b.fame - a.fame).slice(0, 10).map((p) => p.id);
     const card = encodeDexShare(topIds, data.players.length, data.badges.length);
-    const url = `${window.location.origin}/dex/s/${card}`;
-    const text = `My Drafted Dex: ${data.players.length} all-time players collected on SweepSzn. Build your own → via @SweepSeason`;
+    // every share doubles as a referral — append the sharer's code if minted (canonical is bare-path).
+    const u = new URL(`/dex/s/${card}`, window.location.origin);
+    const own = getOwnRefCode();
+    if (own) u.searchParams.set("ref", own);
+    const url = u.toString();
+    const text = `My Drafted Dex: ${data.players.length} all-time players collected on SweepSzn. Build your own → via ${X_HANDLE}`;
     try { if (navigator.share) { await navigator.share({ title: "My Drafted Dex", text, url }); return; } } catch { /* dismissed */ }
     try { await navigator.clipboard.writeText(`${text} ${url}`); setShareState("copied"); setTimeout(() => setShareState("idle"), 1800); } catch { /* ignore */ }
   };

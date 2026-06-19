@@ -44,6 +44,13 @@ describe("computeBadges", () => {
     expect(computeBadges([mk({ fame: 5 })], [])).not.toContain("underdog");
     expect(computeBadges([{ ...mk({ fame: 0 }), pts: null }], [])).not.toContain("underdog"); // data-absent, not obscure
   });
+  it("awards referral badges from the flags, not from collection data (descriptive — §12-safe)", () => {
+    expect(computeBadges([mk({})], [], { isReferrer: true })).toContain("recruiter");
+    expect(computeBadges([mk({})], [], { isReferee: true })).toContain("invited");
+    expect(computeBadges([mk({})], [])).not.toContain("recruiter");
+    expect(computeBadges([mk({})], [])).not.toContain("invited");
+    expect(computeBadges([mk({})], [], { isReferrer: true })).not.toContain("invited");
+  });
 });
 
 describe("BADGES catalogue", () => {
@@ -52,7 +59,7 @@ describe("BADGES catalogue", () => {
       mk({ id: "a", personId: "a", decade: "1960s", pts: 31, trb: 16, blk: 3.2, ast: 12.5, eligible: ["PG", "SG", "SF"], fame: 0, team: "ATL" }),
       ...["1970s", "1980s", "1990s", "2000s", "2010s", "2020s"].map((d, i) =>
         mk({ id: `p${i}`, personId: `p${i}`, decade: d, team: ["BOS", "CHI", "DAL", "DEN", "GSW", "HOU"][i] })),
-    ], [{ grade: "S" }]);
+    ], [{ grade: "S" }], { isReferrer: true, isReferee: true });
     for (const k of all) expect(BADGES.find((b) => b.key === k)).toBeDefined();
     expect(new Set(BADGES.map((b) => b.key)).size).toBe(BADGES.length);
   });

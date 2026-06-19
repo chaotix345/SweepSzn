@@ -7,3 +7,8 @@ export const baseUrl =
   : "http://localhost:3000";
 
 export const SITE_NAME = "SweepSzn";
+
+// The brand's X account — one source of truth for the handle (twitter card site/creator + the
+// "via @SweepSeason" share-credit) and the profile URL (footer follow link + JSON-LD sameAs).
+export const X_HANDLE = "@SweepSeason";
+export const X_URL = "https://x.com/SweepSeason";

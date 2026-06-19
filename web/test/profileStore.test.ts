@@ -128,3 +128,13 @@ describe("migratePushSubs (sign-in: carry anon subscriptions onto the account)",
     await expect(push.migratePushSubs("same", "same")).resolves.toBeUndefined();
   });
 });
+
+describe("getReferralFlags", () => {
+  it("reports referrer/referee membership from the referral sets", async () => {
+    await ctx.redis!.sadd("ref:referrers", "alice");
+    await ctx.redis!.sadd("ref:referred", "bob");
+    expect(await store.getReferralFlags("alice")).toEqual({ isReferrer: true, isReferee: false });
+    expect(await store.getReferralFlags("bob")).toEqual({ isReferrer: false, isReferee: true });
+    expect(await store.getReferralFlags("carol")).toEqual({ isReferrer: false, isReferee: false });
+  });
+});

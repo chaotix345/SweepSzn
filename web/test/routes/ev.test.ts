@@ -12,7 +12,7 @@ enableRedisEnv();
 vi.useFakeTimers({ now: new Date("2026-06-15T12:00:00Z"), toFake: ["Date"] });
 
 const { POST } = await import("@/app/api/ev/route");
-const { EV_TTL } = await import("@/lib/evServer");
+const { EV_TTL, EV_REF_CAP } = await import("@/lib/evServer");
 
 // dayUTC() returns YYYY-MM-DD for today UTC — we replicate its logic here so assertions match.
 function dayUTC(): string {
@@ -277,5 +277,60 @@ describe("POST /api/ev", () => {
     await post({ ev: "claim_nudge_tap", uid: "user-abc00001", mode: "classic" });
     const day = dayUTC();
     expect(ctx.redis!.sets.has(`ev:active:${day}`)).toBe(false);
+  });
+});
+
+describe("POST /api/ev — referral attribution", () => {
+  it("credits the referrer (decoded from the opaque code) on a referred first_play", async () => {
+    ctx.redis!.strings.set("ref:code:rabc123def45", "referrer-uid-001");
+    await post({ ev: "first_play", uid: "referee-uid-002", ref: "rabc123def45" });
+    const day = dayUTC();
+    expect(Number(ctx.redis!.strings.get("ref:credits:referrer-uid-001"))).toBe(1);
+    expect(ctx.redis!.sets.get("ref:referrers")?.has("referrer-uid-001")).toBe(true);
+    expect(ctx.redis!.sets.get("ref:referred")?.has("referee-uid-002")).toBe(true);
+    expect(Number(ctx.redis!.hashes.get(`ev:ref:first_play:${day}`)?.get("rabc123def45"))).toBe(1);
+    expect(ctx.redis!.strings.get("ref:fp:referee-uid-002")).toBe("rabc123def45");
+  });
+
+  it("ignores an unknown referral code (no reverse map → no credit)", async () => {
+    await post({ ev: "first_play", uid: "referee-uid-003", ref: "rfff000aaa11" });
+    expect(ctx.redis!.strings.has("ref:credits:referrer-uid-001")).toBe(false);
+    expect(ctx.redis!.sets.has("ref:referrers")).toBe(false);
+  });
+
+  it("refuses self-referral (the code maps to the same uid as the beacon)", async () => {
+    ctx.redis!.strings.set("ref:code:rbbbccc00011", "selfie-uid-001");
+    await post({ ev: "first_play", uid: "selfie-uid-001", ref: "rbbbccc00011" });
+    expect(ctx.redis!.strings.has("ref:credits:selfie-uid-001")).toBe(false);
+    expect(ctx.redis!.sets.has("ref:referrers")).toBe(false);
+  });
+
+  it("credits a given referee at most once (anti-replay via the ref:fp NX latch)", async () => {
+    ctx.redis!.strings.set("ref:code:rdddeee00012", "ref-uid-replay");
+    await post({ ev: "first_play", uid: "referee-replay1", ref: "rdddeee00012" });
+    await post({ ev: "first_play", uid: "referee-replay1", ref: "rdddeee00012" });
+    expect(Number(ctx.redis!.strings.get("ref:credits:ref-uid-replay"))).toBe(1);
+    // the per-code dashboard counter must also stay at 1 (it's gated by the same NX latch)
+    expect(Number(ctx.redis!.hashes.get(`ev:ref:first_play:${dayUTC()}`)?.get("rdddeee00012"))).toBe(1);
+  });
+
+  it("does NOT attribute a referral for a non-first_play stage even with a valid ref", async () => {
+    ctx.redis!.strings.set("ref:code:rabc123def45", "referrer-uid-001");
+    await post({ ev: "play", uid: "referee-uid-004", mode: "daily", ref: "rabc123def45" });
+    expect(ctx.redis!.strings.has("ref:credits:referrer-uid-001")).toBe(false);
+  });
+
+  it("stops writing the ev:ref hash past EV_REF_CAP but still credits the referrer", async () => {
+    const day = dayUTC();
+    const full = new Map<string, string>();
+    for (let i = 0; i < EV_REF_CAP; i++) full.set(`rseedseed${i}`, "1");
+    ctx.redis!.hashes.set(`ev:ref:first_play:${day}`, full);
+    ctx.redis!.strings.set("ref:code:rcccaaa00011", "ref-uid-cap");
+    await post({ ev: "first_play", uid: "referee-cap-1", ref: "rcccaaa00011" });
+    // the hash is at the cap, so the new code is NOT added…
+    expect(ctx.redis!.hashes.get(`ev:ref:first_play:${day}`)?.size).toBe(EV_REF_CAP);
+    expect(ctx.redis!.hashes.get(`ev:ref:first_play:${day}`)?.has("rcccaaa00011")).toBe(false);
+    // …but the credit + badge sets (unbounded) still fire
+    expect(Number(ctx.redis!.strings.get("ref:credits:ref-uid-cap"))).toBe(1);
   });
 });

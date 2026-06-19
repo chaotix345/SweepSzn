@@ -24,6 +24,7 @@ import { ev } from "@/lib/ev";
 import { markFirstPlay } from "@/lib/firstPlay";
 import { parseModeParam } from "@/lib/modeParam";
 import { currentUtmSource, getUtmSource } from "@/lib/utm";
+import { currentRefCode, getRefCode } from "@/lib/referral";
 import { showsSaveNudge } from "@/lib/signinNudge";
 import { scrollToTop } from "@/lib/scroll";
 import { getUid } from "@/lib/streak";
@@ -31,6 +32,7 @@ import ResultCard from "@/components/ResultCard";
 import Leaderboard from "@/components/Leaderboard";
 import SignInSaveNudge from "@/components/SignInSaveNudge";
 import ChallengeResult from "@/components/ChallengeResult";
+import InviteFriend from "@/components/InviteFriend";
 import ChallengeOwner from "@/components/ChallengeOwner";
 import { newChallengeId, challengeSeed } from "@/lib/challenge";
 import { encodeLineup, decodeShare } from "@/lib/share";
@@ -315,7 +317,7 @@ export default function Game() {
     // Read the URL FIRST (a cold /play?mode=…&utm_source=… deep-link fires this before UtmCapture's
     // layout effect has persisted the source), falling back to the stored first-touch source — same
     // ordering-robust pattern as Beacon.tsx.
-    markFirstPlay(getUid(), currentUtmSource() ?? getUtmSource() ?? undefined);
+    markFirstPlay(getUid(), currentUtmSource() ?? getUtmSource() ?? undefined, currentRefCode() ?? getRefCode() ?? undefined);
     abortSimRef.current?.abort(); abortSimRef.current = null; // cancel any in-flight simulate
     setMode(m);
     let cid: string | null = null;
@@ -594,6 +596,7 @@ export default function Game() {
       <SurgeonResult before={sgResult.before} after={sgResult.after} beforePlayers={sgResult.beforePlayers}
         afterPlayers={sgResult.afterPlayers} outIdx={sgResult.outIdx} diagnosis={sgResult.diagnosis}
         card={sgResult.card} onReset={() => start("surgeon")} />
+      <InviteFriend />
       <SgLeaderboard date={seed.replace("surgeon-", "")} preloaded={sgResult.view} />
       {showsSaveNudge(mode) && <SignInSaveNudge mode={mode} />}
     </Shell>
@@ -602,6 +605,7 @@ export default function Game() {
     <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} modeKey={mode} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView}
         lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} />
+      <InviteFriend />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} onView={setLbView} />}
       {/* Every non-Daily result gets the minimal save/keep-streak sign-in nudge — not just the
           board-less Classic/HoopIQ/Prime, but also the FactorHunt/Blueprint/Challenge results that

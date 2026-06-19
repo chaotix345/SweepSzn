@@ -15,6 +15,7 @@ export interface Metrics {
   submitSplit: Record<string, number>;         // mode → submit count over the window (play→submit numerator)
   nudgeSplit: { shown: Record<string, number>; tap: Record<string, number> }; // mode → sign-in-nudge shown/tap count
   sourceSplit: { firstPlay: Record<string, number>; visit: Record<string, number> }; // utm source → count
+  referralSplit: Record<string, number>;       // referral code → referred-first-play count
   boardByDay: number[];                        // ZCARD lb:<day> (ascending)
   boards: { daily: number; weekly: number; alltime: number };
   winBuckets: { label: string; count: number }[]; // today's leaderboard win distribution
@@ -42,6 +43,27 @@ const WIN_BUCKETS = [
 ];
 export const bucketWins = (wins: number[]): { label: string; count: number }[] =>
   WIN_BUCKETS.map(b => ({ label: b.label, count: wins.filter(w => w >= b.min && w <= b.max).length }));
+
+// Flag laggards: keys whose conversion rate (num/den) sits far below the median of their peers.
+// Tiny samples (den < minDen) are excluded so a single n=1 can't masquerade as a 0% laggard, and
+// fewer than two eligible entries → nothing to compare → no flags. Turns the source/nudge splits
+// into an at-a-glance "this channel/mode is leaking" signal on /admin.
+export function flagLaggards(
+  entries: { key: string; num: number; den: number }[],
+  opts: { minDen?: number; ratio?: number } = {},
+): Set<string> {
+  const minDen = opts.minDen ?? 5;
+  const ratio = opts.ratio ?? 0.5;
+  const eligible = entries.filter(e => e.den >= minDen);
+  if (eligible.length < 2) return new Set();
+  const rates = eligible.map(e => e.num / e.den).sort((a, b) => a - b);
+  const mid = Math.floor(rates.length / 2);
+  const median = rates.length % 2 ? rates[mid] : (rates[mid - 1] + rates[mid]) / 2;
+  const threshold = ratio * median;
+  const out = new Set<string>();
+  for (const e of eligible) if (e.num / e.den < threshold) out.add(e.key);
+  return out;
+}
 
 const SPARK = "▁▂▃▄▅▆▇█";
 export const sparkline = (vals: number[]): string => {
@@ -71,12 +93,13 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
       dauByDay: days.map(() => 0), d1: 0, d7: null, modeSplit: {}, submitSplit: {},
       nudgeSplit: { shown: {}, tap: {} },
       sourceSplit: { firstPlay: {}, visit: {} },
+      referralSplit: {},
       boardByDay: days.map(() => 0), boards: { daily: 0, weekly: 0, alltime: 0 },
       winBuckets: bucketWins([]), totals: {},
     };
   }
 
-  const [counts, modeHashes, submodeHashes, nudgeShownHashes, nudgeTapHashes, srcFpHashes, srcVisitHashes, activeSets, boardCards, todayZ, totalsHash, weekCard, allCard] = await Promise.all([
+  const [counts, modeHashes, submodeHashes, nudgeShownHashes, nudgeTapHashes, srcFpHashes, srcVisitHashes, refHashes, activeSets, boardCards, todayZ, totalsHash, weekCard, allCard] = await Promise.all([
     Promise.all(STAGES.map(s => redis.mget<(string | number | null)[]>(...days.map(d => `ev:${s}:${d}`)))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:mode:${d}`))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:submode:${d}`))),
@@ -84,6 +107,7 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:nudge:claim_nudge_tap:${d}`))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:src:first_play:${d}`))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:src:visit:${d}`))),
+    Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:ref:first_play:${d}`))),
     Promise.all(days.map(d => redis.smembers(`ev:active:${d}`))),
     Promise.all(days.map(d => redis.zcard(`lb:${d}`))),
     redis.zrange<(string | number)[]>(`lb:${today}`, 0, -1, { withScores: true }),
@@ -126,13 +150,14 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
   for (const h of submodeHashes) if (h) for (const [k, v] of Object.entries(h)) submitSplit[k] = (submitSplit[k] ?? 0) + num(v);
   const nudgeSplit = { shown: foldHashes(nudgeShownHashes), tap: foldHashes(nudgeTapHashes) };
   const sourceSplit = { firstPlay: foldHashes(srcFpHashes), visit: foldHashes(srcVisitHashes) };
+  const referralSplit = foldHashes(refHashes);
 
   const wins: number[] = [];
   for (let i = 1; i < todayZ.length; i += 2) wins.push(decodeWins(num(todayZ[i])));
 
   const boardByDay = (boardCards as number[]).map(num);
   return {
-    days, funnel, engagement, rates, dauByDay, d1, d7, modeSplit, submitSplit, nudgeSplit, sourceSplit, boardByDay,
+    days, funnel, engagement, rates, dauByDay, d1, d7, modeSplit, submitSplit, nudgeSplit, sourceSplit, referralSplit, boardByDay,
     boards: { daily: boardByDay[boardByDay.length - 1] ?? 0, weekly: num(weekCard), alltime: num(allCard) },
     winBuckets: bucketWins(wins),
     totals: Object.fromEntries(Object.entries(totalsHash ?? {}).map(([k, v]) => [k, num(v)])),

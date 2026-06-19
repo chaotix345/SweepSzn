@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { SITE_NAME } from "./site";
+import { SITE_NAME, X_HANDLE } from "./site";
 
 // Per-page share identity for the static marketing routes. These four previously inherited the generic
 // root OG card + the generic openGraph/twitter title+description (each page set only `metadata.title`,
@@ -26,9 +26,6 @@ export type MarketingMeta = {
 export type MarketingRoute = "about" | "how-it-works" | "leaderboards" | "dex";
 
 export const MARKETING_ROUTES: readonly MarketingRoute[] = ["about", "how-it-works", "leaderboards", "dex"];
-
-// Mirrors the root layout's twitter handle so per-page twitter cards keep attribution.
-const X_HANDLE = "@SweepSeason";
 
 export const MARKETING_META: Record<MarketingRoute, MarketingMeta> = {
   about: {

@@ -412,6 +412,24 @@ describe("ShareButton — attribution on the override & blueprint paths", () => 
   });
 });
 
+describe("ShareButton — every share doubles as a referral link", () => {
+  afterEach(() => localStorage.removeItem("szn:ref:code"));
+
+  it("appends the sharer's referral code to the share URL when one is cached", () => {
+    localStorage.setItem("szn:ref:code", "rabc123def45");
+    const { container } = render(<ShareButton result={makeResult()} path="/r/x" names={["A", "B"]} />);
+    const x = container.querySelector('a[aria-label="Post to X"]')?.getAttribute("href") ?? "";
+    expect(decodeURIComponent(x)).toContain("ref=rabc123def45");
+  });
+
+  it("leaves the share URL unchanged when no referral code is cached", () => {
+    localStorage.removeItem("szn:ref:code");
+    const { container } = render(<ShareButton result={makeResult()} path="/r/x" names={["A", "B"]} />);
+    const x = container.querySelector('a[aria-label="Post to X"]')?.getAttribute("href") ?? "";
+    expect(decodeURIComponent(x)).not.toContain("ref=");
+  });
+});
+
 describe("ResultCard — shareable card image (screenshots are the product)", () => {
   it("renders a 'Save card image' button so the OG card can be attached, not just linked", () => {
     const { container } = renderCard();

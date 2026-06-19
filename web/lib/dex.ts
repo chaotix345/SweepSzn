@@ -13,7 +13,8 @@ export interface DexPlayer {
 
 export type BadgeKey =
   | "first" | "scorer" | "glass" | "swat" | "general"
-  | "eraTourist" | "fullCircle" | "allFranchise" | "sixties" | "sTier" | "tripleThreat" | "underdog";
+  | "eraTourist" | "fullCircle" | "allFranchise" | "sixties" | "sTier" | "tripleThreat" | "underdog"
+  | "recruiter" | "invited";
 
 export interface BadgeDef { key: BadgeKey; name: string; hint: string }
 
@@ -32,12 +33,18 @@ export const BADGES: BadgeDef[] = [
   { key: "sTier",        name: "Perfection",      hint: "Earn an S grade in any mode" },
   { key: "tripleThreat", name: "Triple Threat",   hint: "Field a player eligible at 3 positions" },
   { key: "underdog",     name: "Unsung Hero",     hint: "Field a player with no major accolades" },
+  { key: "recruiter",    name: "Talent Scout",    hint: "Bring a friend to SweepSzn" },
+  { key: "invited",      name: "Drafted In",      hint: "Arrive on a friend's invite" },
 ];
 
 const DRAFTABLE_DECADES = 7; // 1960s–2020s
 
 // Pure: which badges this collection (+ the user's result grades) has earned.
-export function computeBadges(players: DexPlayer[], results: { grade: string }[]): BadgeKey[] {
+export function computeBadges(
+  players: DexPlayer[],
+  results: { grade: string }[],
+  flags?: { isReferrer?: boolean; isReferee?: boolean },
+): BadgeKey[] {
   const decades = new Set(players.map((p) => p.decade));
   const teams = new Set(players.map((p) => p.team));
   const has = (f: (p: DexPlayer) => boolean) => players.some(f);
@@ -54,5 +61,9 @@ export function computeBadges(players: DexPlayer[], results: { grade: string }[]
   if (results.some((r) => r.grade === "S")) earned.push("sTier");
   if (has((p) => p.eligible.length >= 3)) earned.push("tripleThreat");
   if (has((p) => p.fame === 0 && p.pts != null)) earned.push("underdog"); // real record, just no accolades (not a data gap)
+  // referral badges aren't derivable from the collection — they ride external flags (membership in the
+  // referral sets), the same shape as sTier reading the grade. Descriptive + post-commit (§12-safe).
+  if (flags?.isReferrer) earned.push("recruiter");
+  if (flags?.isReferee) earned.push("invited");
   return earned;
 }
