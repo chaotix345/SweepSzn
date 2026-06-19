@@ -1,3 +1,4 @@
+import "server-only";
 import { sha256hex } from "./auth";
 
 // A referral code is an opaque PUBLIC proxy for a user — derived from the uid but never the uid

@@ -26,6 +26,7 @@ describe("InviteFriend", () => {
 
     render(<InviteFriend />);
     const btn = await screen.findByRole("button", { name: /invite a friend/i });
+    expect(btn.textContent).not.toMatch(/drafted so far/i); // credits:0 → no count suffix
     fireEvent.click(btn);
 
     await waitFor(() => expect(writeText).toHaveBeenCalled());

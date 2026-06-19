@@ -12,7 +12,7 @@ enableRedisEnv();
 vi.useFakeTimers({ now: new Date("2026-06-15T12:00:00Z"), toFake: ["Date"] });
 
 const { POST } = await import("@/app/api/ev/route");
-const { EV_TTL } = await import("@/lib/evServer");
+const { EV_TTL, EV_REF_CAP } = await import("@/lib/evServer");
 
 // dayUTC() returns YYYY-MM-DD for today UTC — we replicate its logic here so assertions match.
 function dayUTC(): string {
@@ -310,11 +310,27 @@ describe("POST /api/ev — referral attribution", () => {
     await post({ ev: "first_play", uid: "referee-replay1", ref: "rdddeee00012" });
     await post({ ev: "first_play", uid: "referee-replay1", ref: "rdddeee00012" });
     expect(Number(ctx.redis!.strings.get("ref:credits:ref-uid-replay"))).toBe(1);
+    // the per-code dashboard counter must also stay at 1 (it's gated by the same NX latch)
+    expect(Number(ctx.redis!.hashes.get(`ev:ref:first_play:${dayUTC()}`)?.get("rdddeee00012"))).toBe(1);
   });
 
   it("does NOT attribute a referral for a non-first_play stage even with a valid ref", async () => {
     ctx.redis!.strings.set("ref:code:rabc123def45", "referrer-uid-001");
     await post({ ev: "play", uid: "referee-uid-004", mode: "daily", ref: "rabc123def45" });
     expect(ctx.redis!.strings.has("ref:credits:referrer-uid-001")).toBe(false);
+  });
+
+  it("stops writing the ev:ref hash past EV_REF_CAP but still credits the referrer", async () => {
+    const day = dayUTC();
+    const full = new Map<string, string>();
+    for (let i = 0; i < EV_REF_CAP; i++) full.set(`rseedseed${i}`, "1");
+    ctx.redis!.hashes.set(`ev:ref:first_play:${day}`, full);
+    ctx.redis!.strings.set("ref:code:rcccaaa00011", "ref-uid-cap");
+    await post({ ev: "first_play", uid: "referee-cap-1", ref: "rcccaaa00011" });
+    // the hash is at the cap, so the new code is NOT added…
+    expect(ctx.redis!.hashes.get(`ev:ref:first_play:${day}`)?.size).toBe(EV_REF_CAP);
+    expect(ctx.redis!.hashes.get(`ev:ref:first_play:${day}`)?.has("rcccaaa00011")).toBe(false);
+    // …but the credit + badge sets (unbounded) still fire
+    expect(Number(ctx.redis!.strings.get("ref:credits:ref-uid-cap"))).toBe(1);
   });
 });

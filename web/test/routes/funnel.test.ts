@@ -98,4 +98,12 @@ describe("GET /api/funnel", () => {
     expect(rs.rabc123def45).toBe(4);
     expect(rs.rfff000aaa11).toBe(1);
   });
+
+  it("sums referral counts for the same code across days (foldHashes)", async () => {
+    await signIn({ uid: ADMIN, name: "Charlie" });
+    ctx.redis!.hashes.set("ev:ref:first_play:2026-6-17", new Map([["rabc123def45", "2"]]));
+    ctx.redis!.hashes.set("ev:ref:first_play:2026-6-18", new Map([["rabc123def45", "3"]]));
+    const { body } = await readJson(await GET(req("/api/funnel?days=14")));
+    expect((body.referralSplit as Record<string, number>).rabc123def45).toBe(5);
+  });
 });

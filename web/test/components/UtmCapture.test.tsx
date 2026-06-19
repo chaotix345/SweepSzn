@@ -19,4 +19,12 @@ describe("UtmCapture", () => {
     expect(localStorage.getItem("szn:utm:source")).toBe("x_launch");
     expect(localStorage.getItem("szn:ref:in")).toBe("rabc123def45");
   });
+
+  it("first-touch wins: a later mount with a different ?ref=/utm does not overwrite", () => {
+    render(<UtmCapture />); // captures the beforeEach URL (x_launch / rabc123def45)
+    window.history.replaceState(null, "", "/?utm_source=reddit&ref=rfff000aaa11");
+    render(<UtmCapture />); // a second arrival must not clobber the first-touch values
+    expect(localStorage.getItem("szn:utm:source")).toBe("x_launch");
+    expect(localStorage.getItem("szn:ref:in")).toBe("rabc123def45");
+  });
 });
