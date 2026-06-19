@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import { enableRedisEnv, freshFake, signIn, ctx, req, readJson } from "@/test/routeHarness";
+import { isoWeek } from "@/lib/isoweek";
+import { encScore } from "@/lib/score";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -88,5 +90,24 @@ describe("GET /api/funnel", () => {
     expect(ns.shown.classic).toBe(4);
     expect(ns.shown.hoopiq).toBe(1);
     expect(ns.tap.classic).toBe(2);
+  });
+
+  it("reads the win distribution from the WEEKLY board (the daily board resets at the UTC midnight)", async () => {
+    await signIn({ uid: ADMIN, name: "Charlie" });
+    const wk = `lb:week:${isoWeek("2026-6-18")}`;
+    ctx.redis!.zsets.set(wk, new Map([
+      ["u1", encScore(80, 5)],   // 78-82
+      ["u2", encScore(65, 2)],   // 60-69
+      ["u3", encScore(50, -10)], // <60
+    ]));
+    // The daily board holds DIFFERENT (all sub-60) entries — proving winBuckets does not read it.
+    ctx.redis!.zsets.set("lb:2026-6-18", new Map([["d1", encScore(10, -50)], ["d2", encScore(20, -30)]]));
+
+    const { body } = await readJson(await GET(req("/api/funnel?days=14")));
+    const by = Object.fromEntries((body.winBuckets as { label: string; count: number }[]).map(b => [b.label, b.count]));
+    expect(by["78-82"]).toBe(1); // u1 — only present on the weekly board
+    expect(by["70-77"]).toBe(0);
+    expect(by["60-69"]).toBe(1); // u2
+    expect(by["<60"]).toBe(1);   // u3 (NOT the two daily entries)
   });
 });

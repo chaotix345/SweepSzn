@@ -158,7 +158,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <h2 className="text-lg font-semibold">Leaderboard</h2>
         <p className="text-sm text-zinc-300">Daily <b>{m.boards.daily}</b> · Weekly <b>{m.boards.weekly}</b> · All-time <b>{m.boards.alltime}</b></p>
         <p className="font-mono text-xl leading-none text-sky-400" title="Daily board size per day">{sparkline(m.boardByDay)}</p>
-        <h3 className="pt-2 text-sm font-semibold text-zinc-400">Today&apos;s win distribution</h3>
+        <h3 className="pt-2 text-sm font-semibold text-zinc-400">This week&apos;s win distribution</h3>
         {m.winBuckets.map(b => <Bar key={b.label} label={b.label} value={b.count} max={winMax} />)}
       </section>
 

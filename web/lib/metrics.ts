@@ -17,7 +17,7 @@ export interface Metrics {
   sourceSplit: { firstPlay: Record<string, number>; visit: Record<string, number> }; // utm source → count
   boardByDay: number[];                        // ZCARD lb:<day> (ascending)
   boards: { daily: number; weekly: number; alltime: number };
-  winBuckets: { label: string; count: number }[]; // today's leaderboard win distribution
+  winBuckets: { label: string; count: number }[]; // this week's leaderboard win distribution
   totals: Record<string, number>;              // all-time ev:totals
 }
 
@@ -76,7 +76,7 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
     };
   }
 
-  const [counts, modeHashes, submodeHashes, nudgeShownHashes, nudgeTapHashes, srcFpHashes, srcVisitHashes, activeSets, boardCards, todayZ, totalsHash, weekCard, allCard] = await Promise.all([
+  const [counts, modeHashes, submodeHashes, nudgeShownHashes, nudgeTapHashes, srcFpHashes, srcVisitHashes, activeSets, boardCards, weekZ, totalsHash, weekCard, allCard] = await Promise.all([
     Promise.all(STAGES.map(s => redis.mget<(string | number | null)[]>(...days.map(d => `ev:${s}:${d}`)))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:mode:${d}`))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:submode:${d}`))),
@@ -86,7 +86,7 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:src:visit:${d}`))),
     Promise.all(days.map(d => redis.smembers(`ev:active:${d}`))),
     Promise.all(days.map(d => redis.zcard(`lb:${d}`))),
-    redis.zrange<(string | number)[]>(`lb:${today}`, 0, -1, { withScores: true }),
+    redis.zrange<(string | number)[]>(`lb:week:${isoWeek(today)}`, 0, -1, { withScores: true }),
     redis.hgetall<Record<string, string | number>>("ev:totals"),
     redis.zcard(`lb:week:${isoWeek(today)}`),
     redis.zcard("lb:alltime"),
@@ -128,7 +128,7 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
   const sourceSplit = { firstPlay: foldHashes(srcFpHashes), visit: foldHashes(srcVisitHashes) };
 
   const wins: number[] = [];
-  for (let i = 1; i < todayZ.length; i += 2) wins.push(decodeWins(num(todayZ[i])));
+  for (let i = 1; i < weekZ.length; i += 2) wins.push(decodeWins(num(weekZ[i])));
 
   const boardByDay = (boardCards as number[]).map(num);
   return {
