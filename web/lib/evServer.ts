@@ -40,7 +40,7 @@ const MODE_STAGES = new Set<string>(["play", "claim_nudge_shown", "claim_nudge_t
 const NUDGE_MODE_STAGES = new Set<EvStage>(["claim_nudge_shown", "claim_nudge_tap"]);
 
 const CLIENT_STAGE_SET = new Set<string>(CLIENT_STAGES);
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
+export const UID_RE = /^[a-z0-9-]{8,64}$/i;
 // Lowercase-only acquisition label, ≤40 chars (mirrors lib/utm.ts SRC_RE). The /api/ev beacon is
 // unauthenticated, so this is the hard gate against Redis hash-field injection before a source is
 // written, and it folds "X_Launch"/"x_launch" into one bucket (the client lowercases too).
