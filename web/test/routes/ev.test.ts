@@ -279,3 +279,42 @@ describe("POST /api/ev", () => {
     expect(ctx.redis!.sets.has(`ev:active:${day}`)).toBe(false);
   });
 });
+
+describe("POST /api/ev — referral attribution", () => {
+  it("credits the referrer (decoded from the opaque code) on a referred first_play", async () => {
+    ctx.redis!.strings.set("ref:code:rabc123def45", "referrer-uid-001");
+    await post({ ev: "first_play", uid: "referee-uid-002", ref: "rabc123def45" });
+    const day = dayUTC();
+    expect(Number(ctx.redis!.strings.get("ref:credits:referrer-uid-001"))).toBe(1);
+    expect(ctx.redis!.sets.get("ref:referrers")?.has("referrer-uid-001")).toBe(true);
+    expect(ctx.redis!.sets.get("ref:referred")?.has("referee-uid-002")).toBe(true);
+    expect(Number(ctx.redis!.hashes.get(`ev:ref:first_play:${day}`)?.get("rabc123def45"))).toBe(1);
+    expect(ctx.redis!.strings.get("ref:fp:referee-uid-002")).toBe("rabc123def45");
+  });
+
+  it("ignores an unknown referral code (no reverse map → no credit)", async () => {
+    await post({ ev: "first_play", uid: "referee-uid-003", ref: "rfff000aaa11" });
+    expect(ctx.redis!.strings.has("ref:credits:referrer-uid-001")).toBe(false);
+    expect(ctx.redis!.sets.has("ref:referrers")).toBe(false);
+  });
+
+  it("refuses self-referral (the code maps to the same uid as the beacon)", async () => {
+    ctx.redis!.strings.set("ref:code:rbbbccc00011", "selfie-uid-001");
+    await post({ ev: "first_play", uid: "selfie-uid-001", ref: "rbbbccc00011" });
+    expect(ctx.redis!.strings.has("ref:credits:selfie-uid-001")).toBe(false);
+    expect(ctx.redis!.sets.has("ref:referrers")).toBe(false);
+  });
+
+  it("credits a given referee at most once (anti-replay via the ref:fp NX latch)", async () => {
+    ctx.redis!.strings.set("ref:code:rdddeee00012", "ref-uid-replay");
+    await post({ ev: "first_play", uid: "referee-replay1", ref: "rdddeee00012" });
+    await post({ ev: "first_play", uid: "referee-replay1", ref: "rdddeee00012" });
+    expect(Number(ctx.redis!.strings.get("ref:credits:ref-uid-replay"))).toBe(1);
+  });
+
+  it("does NOT attribute a referral for a non-first_play stage even with a valid ref", async () => {
+    ctx.redis!.strings.set("ref:code:rabc123def45", "referrer-uid-001");
+    await post({ ev: "play", uid: "referee-uid-004", mode: "daily", ref: "rabc123def45" });
+    expect(ctx.redis!.strings.has("ref:credits:referrer-uid-001")).toBe(false);
+  });
+});

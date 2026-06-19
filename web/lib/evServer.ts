@@ -20,6 +20,7 @@ export type EvStage = ClientStage | "complete" | "signin" | "submit";
 export const EV_TTL = 60 * 60 * 24 * 45; // ~45 days, enough for a 14-day window + retention look-back
 export const EV_ACTIVE_CAP = 50_000;     // max distinct uids tracked per day (far above realistic DAU)
 export const EV_SRC_CAP = 500;           // max distinct utm sources tracked per stage/day (far above legit cardinality)
+export const EV_REF_CAP = 2_000;         // max distinct referral codes tracked per day (per-referrer fields are numerous)
 
 // Stages whose uid counts toward the day's distinct-active set (DAU / D1 / D7). Deliberately an
 // engaged-action allow-list: `visit` and `share_view` are non-engaging (a bouncer / a share recipient
@@ -32,6 +33,9 @@ const ACTIVE_STAGES = new Set<EvStage>(["play", "share", "signin", "submit"]);
 // numerator (`first_play`) are enough to compute per-channel conversion on launch day; no other stage
 // carries a source. Mirrors the ev:mode:<day> hash pattern.
 const SOURCE_STAGES = new Set<EvStage>(["visit", "first_play"]);
+// Only a first_play can be a referral conversion — it credits the referrer decoded from the opaque
+// code's reverse map. (A referee converts at most once; see the ref:fp NX latch in bump.)
+const REF_STAGES = new Set<EvStage>(["first_play"]);
 
 // Stages that carry a `mode`: `play` (→ ev:mode) and the two sign-in-nudge stages (→ ev:nudge:<stage>,
 // a separate hash so the nudge's shown→tap funnel is measurable per mode without conflating it with
@@ -45,9 +49,12 @@ export const UID_RE = /^[a-z0-9-]{8,64}$/i;
 // unauthenticated, so this is the hard gate against Redis hash-field injection before a source is
 // written, and it folds "X_Launch"/"x_launch" into one bucket (the client lowercases too).
 const SRC_RE = /^[a-z0-9_.-]{1,40}$/;
+// Opaque referral code (mirrors lib/referralCode.ts REF_RE). The /api/ev beacon is unauthenticated,
+// so this is the hard gate before a code is used as a Redis key / hash-field.
+const REF_RE = /^r[0-9a-f]{11}$/;
 const MODES = new Set(["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon"]);
 
-export interface BeaconBody { ev: ClientStage; uid?: string; mode?: string; source?: string }
+export interface BeaconBody { ev: ClientStage; uid?: string; mode?: string; source?: string; ref?: string }
 
 // Validate an untrusted beacon payload. Returns null for anything not a valid client-sendable beacon
 // (server-authoritative stages are rejected here so the client can't spoof the trusted funnel).
@@ -62,6 +69,9 @@ export function parseEvBody(body: unknown): BeaconBody | null {
   // validates; bump() decides which stages actually persist it. Folding this into the mode block would
   // drop the source for first_play, the stage we most need attributed.
   if (typeof b.source === "string" && SRC_RE.test(b.source)) out.source = b.source;
+  // ref (referral code) is likewise stage-independent at parse time; bump() persists it only for
+  // first_play (REF_STAGES), the one stage that can be a referral conversion.
+  if (typeof b.ref === "string" && REF_RE.test(b.ref)) out.ref = b.ref;
   return out;
 }
 
@@ -69,7 +79,7 @@ export function parseEvBody(body: unknown): BeaconBody | null {
 export async function bump(
   redis: Redis | null,
   stage: EvStage,
-  opts: { uid?: string; mode?: string; source?: string; day?: string } = {},
+  opts: { uid?: string; mode?: string; source?: string; ref?: string; day?: string } = {},
 ): Promise<void> {
   if (!redis) return;
   const day = opts.day ?? dayUTC();
@@ -105,6 +115,22 @@ export async function bump(
       const srcKey = `ev:src:${stage}:${day}`;
       if ((await redis.hlen(srcKey)) < EV_SRC_CAP) {
         await redis.pipeline().hincrby(srcKey, opts.source, 1).expire(srcKey, EV_TTL).exec();
+      }
+    }
+    // referral attribution: a referred first_play credits the referrer decoded from the opaque code's
+    // reverse map, records the per-code count for /admin, and marks both parties for the cosmetic
+    // badge — once per referee (ref:fp NX latch, anti-replay), never self-referral. The code is the
+    // public proxy; the referrer uid stays server-side (never returned by /api/ev).
+    if (REF_STAGES.has(stage) && opts.uid && opts.ref && REF_RE.test(opts.ref)) {
+      const referrerUid = await redis.get<string>(`ref:code:${opts.ref}`);
+      if (referrerUid && referrerUid !== opts.uid && (await redis.set(`ref:fp:${opts.uid}`, opts.ref, { nx: true }))) {
+        const refKey = `ev:ref:first_play:${day}`;
+        const rp = redis.pipeline()
+          .incr(`ref:credits:${referrerUid}`)
+          .sadd("ref:referrers", referrerUid)
+          .sadd("ref:referred", opts.uid);
+        if ((await redis.hlen(refKey)) < EV_REF_CAP) rp.hincrby(refKey, opts.ref, 1).expire(refKey, EV_TTL);
+        await rp.exec();
       }
     }
     // play/share/signin/submit carry a uid → contribute to the day's distinct-active set.
