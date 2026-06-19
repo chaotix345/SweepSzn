@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import { ButtonLink } from "@/components/ui/Button";
 import ResultPreview from "@/components/ResultPreview";
+import { marketingMetadata } from "@/lib/marketingMeta";
 
 export const metadata: Metadata = {
-  title: "About SweepSzn",
-  description:
-    "SweepSzn is a free browser game: draft a five-player all-time NBA lineup and get a simulated 82-game record from an engine calibrated to real history — one that tells you why your five wins or loses.",
+  ...marketingMetadata("about"),
   alternates: { canonical: "/about" },
 };
 

@@ -12,6 +12,7 @@ import { logError } from "./log";
 export const CLIENT_STAGES = [
   "visit", "first_play", "play", "share", "share_view",
   "explore_open", "whatif_open", "compare_open", "compare_friend",
+  "claim_nudge_shown", "claim_nudge_tap",
 ] as const;
 export type ClientStage = (typeof CLIENT_STAGES)[number];
 export type EvStage = ClientStage | "complete" | "signin" | "submit";
@@ -23,13 +24,20 @@ export const EV_SRC_CAP = 500;           // max distinct utm sources tracked per
 // Stages whose uid counts toward the day's distinct-active set (DAU / D1 / D7). Deliberately an
 // engaged-action allow-list: `visit` and `share_view` are non-engaging (a bouncer / a share recipient
 // shouldn't inflate DAU), and `first_play` + the engagement events ride a uid that `play` already
-// added — so only play/share/signin/submit qualify.
+// added — so only play/share/signin/submit qualify. (The sign-in-nudge stages are likewise excluded:
+// merely seeing a nudge is not an engaged action.)
 const ACTIVE_STAGES = new Set<EvStage>(["play", "share", "signin", "submit"]);
 
 // Stages split by acquisition source (utm). The funnel denominator (`visit`) and the north-star
 // numerator (`first_play`) are enough to compute per-channel conversion on launch day; no other stage
 // carries a source. Mirrors the ev:mode:<day> hash pattern.
 const SOURCE_STAGES = new Set<EvStage>(["visit", "first_play"]);
+
+// Stages that carry a `mode`: `play` (→ ev:mode) and the two sign-in-nudge stages (→ ev:nudge:<stage>,
+// a separate hash so the nudge's shown→tap funnel is measurable per mode without conflating it with
+// raw plays). The mode is enum-bounded (MODES), so unlike utm sources it needs no cardinality cap.
+const MODE_STAGES = new Set<string>(["play", "claim_nudge_shown", "claim_nudge_tap"]);
+const NUDGE_MODE_STAGES = new Set<EvStage>(["claim_nudge_shown", "claim_nudge_tap"]);
 
 const CLIENT_STAGE_SET = new Set<string>(CLIENT_STAGES);
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
@@ -49,10 +57,10 @@ export function parseEvBody(body: unknown): BeaconBody | null {
   if (typeof b.ev !== "string" || !CLIENT_STAGE_SET.has(b.ev)) return null;
   const out: BeaconBody = { ev: b.ev as ClientStage };
   if (typeof b.uid === "string" && UID_RE.test(b.uid)) out.uid = b.uid;
-  if (b.ev === "play" && typeof b.mode === "string" && MODES.has(b.mode)) out.mode = b.mode;
-  // source is independent of stage (unlike mode, which is play-only) — keep it whenever it validates;
-  // bump() decides which stages actually persist it. Folding this into the play block would drop the
-  // source for first_play, the stage we most need attributed.
+  if (MODE_STAGES.has(b.ev) && typeof b.mode === "string" && MODES.has(b.mode)) out.mode = b.mode;
+  // source is independent of stage (unlike mode, which is mode-stage-only) — keep it whenever it
+  // validates; bump() decides which stages actually persist it. Folding this into the mode block would
+  // drop the source for first_play, the stage we most need attributed.
   if (typeof b.source === "string" && SRC_RE.test(b.source)) out.source = b.source;
   return out;
 }
@@ -81,6 +89,12 @@ export async function bump(
     if (stage === "submit" && opts.mode && MODES.has(opts.mode)) {
       const modeKey = `ev:submode:${day}`;
       p.hincrby(modeKey, opts.mode, 1).expire(modeKey, EV_TTL);
+    }
+    // sign-in-nudge by mode: its own ev:nudge:<stage> hash so the nudge's shown→tap funnel is
+    // computable per mode, never conflated with raw plays (ev:mode) or submits (ev:submode).
+    if (NUDGE_MODE_STAGES.has(stage) && opts.mode && MODES.has(opts.mode)) {
+      const nudgeKey = `ev:nudge:${stage}:${day}`;
+      p.hincrby(nudgeKey, opts.mode, 1).expire(nudgeKey, EV_TTL);
     }
     await p.exec();
     // acquisition split: only visit + first_play, only when a (re-validated) source rode the beacon.

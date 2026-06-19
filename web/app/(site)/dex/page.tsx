@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import { DexBoard } from "@/components/DexBoard";
+import { marketingMetadata } from "@/lib/marketingMeta";
 
-export const metadata: Metadata = {
-  title: "Drafted Dex · SweepSzn",
-  description: "Every player you've fielded — your personal all-time collection, with milestones to chase.",
-};
+export const metadata: Metadata = { ...marketingMetadata("dex"), alternates: { canonical: "/dex" } };
 
 export default function DexPage() {
   return (

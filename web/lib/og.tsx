@@ -4,6 +4,7 @@ import { headline, historyAnchor } from "./explain";
 import type { RankCard } from "./rankShare";
 import { pickemVerdict, type PickemView } from "./pickem";
 import { GRADE_HEX } from "./grades";
+import type { MarketingOgCard } from "./marketingMeta";
 
 // Shared building blocks for the dynamic Open Graph cards (next/og + satori).
 // Satori only supports flexbox + a CSS subset, so every multi-child node sets display:flex
@@ -228,6 +229,42 @@ export function brandOgElement(sub: string) {
       <span style={{ display: "flex", marginTop: 20, fontSize: 26, color: "#a1a1aa" }}>
         Engine calibrated to 1,170 real NBA team-seasons — and it tells you why.
       </span>
+    </div>
+  );
+}
+
+// Per-page marketing card (about / how-it-works / leaderboards / dex). Headline + sub + feature pills,
+// so each route gets a distinct, on-brand share card instead of the generic wordmark fallback. Content
+// is descriptive product copy (§12-safe). Config comes from lib/marketingMeta so the card and the
+// page's openGraph/twitter text share one source.
+export function marketingOgElement(c: MarketingOgCard) {
+  return (
+    <div style={shell}>
+      {/* header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "baseline" }}>
+          <Wordmark />
+          <span style={{ marginLeft: 16, fontSize: 22, color: "#a1a1aa", fontWeight: 600 }}>{c.eyebrow}</span>
+        </div>
+        <span style={{ display: "flex", fontSize: 22, color: "#71717a" }}>sweepszn.com</span>
+      </div>
+
+      {/* headline + sub + feature pills */}
+      <div style={{ display: "flex", flexDirection: "column", marginTop: "auto", marginBottom: "auto" }}>
+        <span style={{ display: "flex", fontSize: 66, fontWeight: 900, letterSpacing: -1, lineHeight: 1.05, color: "#fafafa", maxWidth: 1020 }}>{c.title}</span>
+        <span style={{ display: "flex", marginTop: 22, fontSize: 30, lineHeight: 1.3, color: "#a1a1aa", maxWidth: 980 }}>{c.sub}</span>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 28, maxWidth: 1040 }}>
+          {c.chips.map((chip, i) => (
+            <span key={i} style={{ display: "flex", padding: "8px 18px", borderRadius: 999, background: "rgba(255,106,0,0.12)", color: "#ff6a00", fontSize: 22, fontWeight: 700 }}>{chip}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* footer */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ display: "flex", fontSize: 24, color: "#71717a", maxWidth: 820 }}>Engine calibrated to 1,170 real NBA team-seasons.</span>
+        <span style={{ display: "flex", fontSize: 24, fontWeight: 700, color: "#ff6a00" }}>{c.cta}</span>
+      </div>
     </div>
   );
 }

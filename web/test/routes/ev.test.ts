@@ -219,4 +219,63 @@ describe("POST /api/ev", () => {
     const day = dayUTC();
     expect(ctx.redis!.hashes.has(`ev:src:play:${day}`)).toBe(false);
   });
+
+  // --- sign-in nudge stages (claim_nudge_shown / claim_nudge_tap), mode-tagged ---
+
+  it("increments ev:claim_nudge_shown:<day> for a valid claim_nudge_shown beacon", async () => {
+    await post({ ev: "claim_nudge_shown", mode: "classic" });
+    const day = dayUTC();
+    expect(Number(ctx.redis!.strings.get(`ev:claim_nudge_shown:${day}`))).toBe(1);
+  });
+
+  it("increments ev:claim_nudge_tap:<day> for a valid claim_nudge_tap beacon", async () => {
+    await post({ ev: "claim_nudge_tap", mode: "surgeon" });
+    const day = dayUTC();
+    expect(Number(ctx.redis!.strings.get(`ev:claim_nudge_tap:${day}`))).toBe(1);
+  });
+
+  it("increments ev:totals for the nudge stages (persistent, never expired)", async () => {
+    await post({ ev: "claim_nudge_shown", mode: "classic" });
+    await post({ ev: "claim_nudge_tap", mode: "classic" });
+    expect(Number(ctx.redis!.hashes.get("ev:totals")?.get("claim_nudge_shown"))).toBe(1);
+    expect(Number(ctx.redis!.hashes.get("ev:totals")?.get("claim_nudge_tap"))).toBe(1);
+    expect(ctx.redis!.ttls.has("ev:totals")).toBe(false);
+  });
+
+  it("writes the ev:nudge:claim_nudge_shown:<day> hash split by mode", async () => {
+    await post({ ev: "claim_nudge_shown", mode: "hoopiq" });
+    const day = dayUTC();
+    expect(Number(ctx.redis!.hashes.get(`ev:nudge:claim_nudge_shown:${day}`)?.get("hoopiq"))).toBe(1);
+    expect(ctx.redis!.ttls.get(`ev:nudge:claim_nudge_shown:${day}`)).toBe(EV_TTL);
+  });
+
+  it("writes the ev:nudge:claim_nudge_tap:<day> hash split by mode", async () => {
+    await post({ ev: "claim_nudge_tap", mode: "blueprint" });
+    const day = dayUTC();
+    expect(Number(ctx.redis!.hashes.get(`ev:nudge:claim_nudge_tap:${day}`)?.get("blueprint"))).toBe(1);
+  });
+
+  it("does NOT write a nudge mode hash when the mode is absent", async () => {
+    await post({ ev: "claim_nudge_shown" });
+    const day = dayUTC();
+    expect(ctx.redis!.hashes.has(`ev:nudge:claim_nudge_shown:${day}`)).toBe(false);
+  });
+
+  it("does NOT write a nudge mode hash for an invalid mode", async () => {
+    await post({ ev: "claim_nudge_tap", mode: "not-a-mode" });
+    const day = dayUTC();
+    expect(ctx.redis!.hashes.has(`ev:nudge:claim_nudge_tap:${day}`)).toBe(false);
+  });
+
+  it("never conflates nudge stages with the play mode hash (ev:mode stays play-only)", async () => {
+    await post({ ev: "claim_nudge_shown", mode: "classic" });
+    const day = dayUTC();
+    expect(ctx.redis!.hashes.has(`ev:mode:${day}`)).toBe(false);
+  });
+
+  it("does NOT add a uid to the active set for a nudge stage (seeing a nudge is not an engaged action)", async () => {
+    await post({ ev: "claim_nudge_tap", uid: "user-abc00001", mode: "classic" });
+    const day = dayUTC();
+    expect(ctx.redis!.sets.has(`ev:active:${day}`)).toBe(false);
+  });
 });

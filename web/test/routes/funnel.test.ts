@@ -72,4 +72,21 @@ describe("GET /api/funnel", () => {
     expect(ss.firstPlay.reddit).toBe(1);
     expect(ss.visit.x_launch).toBe(10);
   });
+
+  it("exposes the sign-in nudge stages in engagement and splits them by mode", async () => {
+    await signIn({ uid: ADMIN, name: "Charlie" });
+    ctx.redis!.strings.set("ev:claim_nudge_shown:2026-6-18", "5");
+    ctx.redis!.strings.set("ev:claim_nudge_tap:2026-6-18", "2");
+    ctx.redis!.hashes.set("ev:nudge:claim_nudge_shown:2026-6-18", new Map([["classic", "4"], ["hoopiq", "1"]]));
+    ctx.redis!.hashes.set("ev:nudge:claim_nudge_tap:2026-6-18", new Map([["classic", "2"]]));
+
+    const { body } = await readJson(await GET(req("/api/funnel?days=14")));
+    const eng = body.engagement as Record<string, number>;
+    expect(eng.claimNudgeShown).toBe(5);
+    expect(eng.claimNudgeTap).toBe(2);
+    const ns = body.nudgeSplit as { shown: Record<string, number>; tap: Record<string, number> };
+    expect(ns.shown.classic).toBe(4);
+    expect(ns.shown.hoopiq).toBe(1);
+    expect(ns.tap.classic).toBe(2);
+  });
 });

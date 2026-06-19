@@ -6,13 +6,14 @@ import { recentDays } from "./day";
 export interface Metrics {
   days: string[];                              // ascending date-keys
   funnel: { visits: number; firstPlays: number; plays: number; completes: number; shares: number; signins: number; submits: number };
-  engagement: { shareViews: number; exploreOpen: number; whatifOpen: number; compareOpen: number; compareFriend: number };
+  engagement: { shareViews: number; exploreOpen: number; whatifOpen: number; compareOpen: number; compareFriend: number; claimNudgeShown: number; claimNudgeTap: number };
   rates: { firstPlay: number; completion: number; shareRate: number; capture: number }; // 0..1
   dauByDay: number[];                          // distinct active uids per day (ascending)
   d1: number;                                  // next-day return rate, 0..1
   d7: number | null;                           // 7-day return rate, null if window < 8
   modeSplit: Record<string, number>;           // mode → play count over the window
   submitSplit: Record<string, number>;         // mode → submit count over the window (play→submit numerator)
+  nudgeSplit: { shown: Record<string, number>; tap: Record<string, number> }; // mode → sign-in-nudge shown/tap count
   sourceSplit: { firstPlay: Record<string, number>; visit: Record<string, number> }; // utm source → count
   boardByDay: number[];                        // ZCARD lb:<day> (ascending)
   boards: { daily: number; weekly: number; alltime: number };
@@ -53,6 +54,7 @@ export const sparkline = (vals: number[]): string => {
 const STAGES = [
   "visit", "first_play", "play", "complete", "share", "share_view", "signin", "submit",
   "explore_open", "whatif_open", "compare_open", "compare_friend",
+  "claim_nudge_shown", "claim_nudge_tap",
 ] as const;
 
 export async function getMetrics(redis: Redis | null, opts: { days?: number; now?: Date } = {}): Promise<Metrics> {
@@ -64,19 +66,22 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
     return {
       days,
       funnel: { visits: 0, firstPlays: 0, plays: 0, completes: 0, shares: 0, signins: 0, submits: 0 },
-      engagement: { shareViews: 0, exploreOpen: 0, whatifOpen: 0, compareOpen: 0, compareFriend: 0 },
+      engagement: { shareViews: 0, exploreOpen: 0, whatifOpen: 0, compareOpen: 0, compareFriend: 0, claimNudgeShown: 0, claimNudgeTap: 0 },
       rates: { firstPlay: 0, completion: 0, shareRate: 0, capture: 0 },
       dauByDay: days.map(() => 0), d1: 0, d7: null, modeSplit: {}, submitSplit: {},
+      nudgeSplit: { shown: {}, tap: {} },
       sourceSplit: { firstPlay: {}, visit: {} },
       boardByDay: days.map(() => 0), boards: { daily: 0, weekly: 0, alltime: 0 },
       winBuckets: bucketWins([]), totals: {},
     };
   }
 
-  const [counts, modeHashes, submodeHashes, srcFpHashes, srcVisitHashes, activeSets, boardCards, todayZ, totalsHash, weekCard, allCard] = await Promise.all([
+  const [counts, modeHashes, submodeHashes, nudgeShownHashes, nudgeTapHashes, srcFpHashes, srcVisitHashes, activeSets, boardCards, todayZ, totalsHash, weekCard, allCard] = await Promise.all([
     Promise.all(STAGES.map(s => redis.mget<(string | number | null)[]>(...days.map(d => `ev:${s}:${d}`)))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:mode:${d}`))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:submode:${d}`))),
+    Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:nudge:claim_nudge_shown:${d}`))),
+    Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:nudge:claim_nudge_tap:${d}`))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:src:first_play:${d}`))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:src:visit:${d}`))),
     Promise.all(days.map(d => redis.smembers(`ev:active:${d}`))),
@@ -98,6 +103,7 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
   const engagement = {
     shareViews: byStage.share_view, exploreOpen: byStage.explore_open, whatifOpen: byStage.whatif_open,
     compareOpen: byStage.compare_open, compareFriend: byStage.compare_friend,
+    claimNudgeShown: byStage.claim_nudge_shown, claimNudgeTap: byStage.claim_nudge_tap,
   };
   const rates = {
     firstPlay: pct(funnel.firstPlays, funnel.visits),
@@ -118,6 +124,7 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
   for (const h of modeHashes) if (h) for (const [k, v] of Object.entries(h)) modeSplit[k] = (modeSplit[k] ?? 0) + num(v);
   const submitSplit: Record<string, number> = {};
   for (const h of submodeHashes) if (h) for (const [k, v] of Object.entries(h)) submitSplit[k] = (submitSplit[k] ?? 0) + num(v);
+  const nudgeSplit = { shown: foldHashes(nudgeShownHashes), tap: foldHashes(nudgeTapHashes) };
   const sourceSplit = { firstPlay: foldHashes(srcFpHashes), visit: foldHashes(srcVisitHashes) };
 
   const wins: number[] = [];
@@ -125,7 +132,7 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
 
   const boardByDay = (boardCards as number[]).map(num);
   return {
-    days, funnel, engagement, rates, dauByDay, d1, d7, modeSplit, submitSplit, sourceSplit, boardByDay,
+    days, funnel, engagement, rates, dauByDay, d1, d7, modeSplit, submitSplit, nudgeSplit, sourceSplit, boardByDay,
     boards: { daily: boardByDay[boardByDay.length - 1] ?? 0, weekly: num(weekCard), alltime: num(allCard) },
     winBuckets: bucketWins(wins),
     totals: Object.fromEntries(Object.entries(totalsHash ?? {}).map(([k, v]) => [k, num(v)])),

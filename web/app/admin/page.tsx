@@ -11,6 +11,10 @@ if (ADMIN_UIDS.length === 0) console.warn("[admin] ADMIN_UIDS is empty — /admi
 const fmtPct = (x: number) => `${(x * 100).toFixed(1)}%`;
 const fmtRate = (x: number) => fmtPct(Math.min(1, x)); // funnel rates can exceed 100% if a stage's beacon is lossy/spammed
 
+// Modes that show the post-game sign-in nudge (every mode except Daily, which uses the Leaderboard's
+// richer claim-your-rank prompt) — mirrors lib/signinNudge.showsSaveNudge.
+const NUDGE_MODES = ["classic", "hoopiq", "prime", "factorhunt", "blueprint", "surgeon", "challenge"];
+
 function Bar({ label, value, max }: { label: string; value: number; max: number }) {
   const w = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
@@ -66,6 +70,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     { label: "What-If open", value: eng.whatifOpen },
     { label: "Compare open", value: eng.compareOpen },
     { label: "Compare friend", value: eng.compareFriend },
+    { label: "Nudge shown", value: eng.claimNudgeShown },
+    { label: "Nudge tap", value: eng.claimNudgeTap },
   ];
   const engMax = Math.max(...engRows.map(r => r.value), 1);
   // acquisition channels seen in the window, ordered by the conversions that matter (first-plays)
@@ -84,7 +90,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Engagement &amp; share loop</h2>
         {engRows.map(r => <Bar key={r.label} label={r.label} value={r.value} max={engMax} />)}
-        <p className="text-xs text-zinc-500">Share views = shared /r/·/pe/ links opened (the loop closing). Compare friend = the viral mechanic.</p>
+        <p className="text-xs text-zinc-500">Share views = shared /r/·/pe/ links opened (the loop closing). Compare friend = the viral mechanic. Nudge = the post-game sign-in moment on non-Daily results.</p>
       </section>
 
       <section className="space-y-1">
@@ -115,6 +121,22 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </section>
 
       <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Sign-in nudge by mode (shown → tap)</h2>
+        {NUDGE_MODES.map(k => {
+          const shown = m.nudgeSplit.shown[k] ?? 0;
+          const taps = m.nudgeSplit.tap[k] ?? 0;
+          return (
+            <div key={k} className="flex items-center gap-2 text-sm">
+              <span className="w-24 shrink-0 text-zinc-400">{k}</span>
+              <span className="tabular-nums text-zinc-300">{taps} / {shown}</span>
+              <span className="text-xs text-zinc-500">{shown > 0 ? fmtPct(taps / shown) : "—"} tap rate</span>
+            </div>
+          );
+        })}
+        <p className="text-xs text-zinc-500">Did the post-game nudge earn the tap? Tap rate = claim_nudge_tap ÷ claim_nudge_shown for that mode (Daily excluded — it uses the Leaderboard prompt).</p>
+      </section>
+
+      <section className="space-y-2">
         <h2 className="text-lg font-semibold">Acquisition by source (utm_source)</h2>
         {sources.length === 0 ? (
           <p className="text-xs text-zinc-500">No tagged traffic yet — append <code>?utm_source=&lt;channel&gt;</code> to launch links (e.g. <code>/play?mode=daily&amp;utm_source=x_launch</code>).</p>
@@ -141,7 +163,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </section>
 
       <section className="text-xs text-zinc-500">
-        All-time events — {["visit", "first_play", "play", "complete", "share", "share_view", "signin", "submit", "explore_open", "whatif_open", "compare_open", "compare_friend"].map(k => `${k}: ${m.totals[k] ?? 0}`).join(" · ")}
+        All-time events — {["visit", "first_play", "play", "complete", "share", "share_view", "signin", "submit", "explore_open", "whatif_open", "compare_open", "compare_friend", "claim_nudge_shown", "claim_nudge_tap"].map(k => `${k}: ${m.totals[k] ?? 0}`).join(" · ")}
       </section>
     </main>
   );
