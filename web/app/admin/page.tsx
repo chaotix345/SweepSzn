@@ -81,6 +81,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // can't read as a laggard). Turns the raw splits into an at-a-glance "this is leaking" signal.
   const laggingSources = flagLaggards(sources.map(s => ({ key: s, num: m.sourceSplit.firstPlay[s] ?? 0, den: m.sourceSplit.visit[s] ?? 0 })));
   const laggingNudges = flagLaggards(NUDGE_MODES.map(k => ({ key: k, num: m.nudgeSplit.tap[k] ?? 0, den: m.nudgeSplit.shown[k] ?? 0 })));
+  // top referrers by referred-first-plays (each code is an opaque per-user proxy, never a uid)
+  const refCodes = Object.entries(m.referralSplit).sort((a, b) => b[1] - a[1]);
+  const refTotal = refCodes.reduce((sum, [, n]) => sum + n, 0);
 
   return (
     <main className="mx-auto max-w-2xl space-y-8 p-6 text-zinc-100">
@@ -160,6 +163,24 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         })}
         {laggingSources.size > 0 && <p className="text-xs text-amber-400">⚠️ {laggingSources.size} channel{laggingSources.size > 1 ? "s" : ""} converting well below the rest: {[...laggingSources].join(", ")}</p>}
         <p className="text-xs text-zinc-500">First-play by acquisition channel — which post/link converted a new player. Conv = first-plays ÷ visits for that source.</p>
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Referrals</h2>
+        {refCodes.length === 0 ? (
+          <p className="text-xs text-zinc-500">No referred first-plays yet — the result-screen &ldquo;Invite a friend&rdquo; CTA shares a link with <code>?ref=&lt;code&gt;</code>.</p>
+        ) : (
+          <>
+            <p className="text-sm text-zinc-300"><b className="tabular-nums">{refTotal}</b> referred first-plays from <b className="tabular-nums">{refCodes.length}</b> code{refCodes.length > 1 ? "s" : ""}</p>
+            {refCodes.slice(0, 10).map(([code, n]) => (
+              <div key={code} className="flex items-center gap-2 text-sm">
+                <span className="w-32 shrink-0 truncate font-mono text-xs text-zinc-400" title={code}>{code}</span>
+                <span className="tabular-nums text-zinc-300">{n} referred</span>
+              </div>
+            ))}
+          </>
+        )}
+        <p className="text-xs text-zinc-500">First-plays attributed to a friend&apos;s invite code. Each code is an opaque per-user proxy (never a uid).</p>
       </section>
 
       <section className="space-y-2">

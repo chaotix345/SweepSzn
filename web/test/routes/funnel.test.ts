@@ -110,4 +110,13 @@ describe("GET /api/funnel", () => {
     expect(by["60-69"]).toBe(1); // u2
     expect(by["<60"]).toBe(1);   // u3 (NOT the two daily entries)
   });
+
+  it("folds referral-code conversion counts into referralSplit", async () => {
+    await signIn({ uid: ADMIN, name: "Charlie" });
+    ctx.redis!.hashes.set("ev:ref:first_play:2026-6-18", new Map([["rabc123def45", "4"], ["rfff000aaa11", "1"]]));
+    const { body } = await readJson(await GET(req("/api/funnel?days=14")));
+    const rs = body.referralSplit as Record<string, number>;
+    expect(rs.rabc123def45).toBe(4);
+    expect(rs.rfff000aaa11).toBe(1);
+  });
 });

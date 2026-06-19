@@ -15,6 +15,7 @@ export interface Metrics {
   submitSplit: Record<string, number>;         // mode → submit count over the window (play→submit numerator)
   nudgeSplit: { shown: Record<string, number>; tap: Record<string, number> }; // mode → sign-in-nudge shown/tap count
   sourceSplit: { firstPlay: Record<string, number>; visit: Record<string, number> }; // utm source → count
+  referralSplit: Record<string, number>;       // referral code → referred-first-play count
   boardByDay: number[];                        // ZCARD lb:<day> (ascending)
   boards: { daily: number; weekly: number; alltime: number };
   winBuckets: { label: string; count: number }[]; // this week's leaderboard win distribution
@@ -92,12 +93,13 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
       dauByDay: days.map(() => 0), d1: 0, d7: null, modeSplit: {}, submitSplit: {},
       nudgeSplit: { shown: {}, tap: {} },
       sourceSplit: { firstPlay: {}, visit: {} },
+      referralSplit: {},
       boardByDay: days.map(() => 0), boards: { daily: 0, weekly: 0, alltime: 0 },
       winBuckets: bucketWins([]), totals: {},
     };
   }
 
-  const [counts, modeHashes, submodeHashes, nudgeShownHashes, nudgeTapHashes, srcFpHashes, srcVisitHashes, activeSets, boardCards, weekZ, totalsHash, weekCard, allCard] = await Promise.all([
+  const [counts, modeHashes, submodeHashes, nudgeShownHashes, nudgeTapHashes, srcFpHashes, srcVisitHashes, refHashes, activeSets, boardCards, weekZ, totalsHash, weekCard, allCard] = await Promise.all([
     Promise.all(STAGES.map(s => redis.mget<(string | number | null)[]>(...days.map(d => `ev:${s}:${d}`)))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:mode:${d}`))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:submode:${d}`))),
@@ -105,6 +107,7 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:nudge:claim_nudge_tap:${d}`))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:src:first_play:${d}`))),
     Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:src:visit:${d}`))),
+    Promise.all(days.map(d => redis.hgetall<Record<string, string | number>>(`ev:ref:first_play:${d}`))),
     Promise.all(days.map(d => redis.smembers(`ev:active:${d}`))),
     Promise.all(days.map(d => redis.zcard(`lb:${d}`))),
     redis.zrange<(string | number)[]>(`lb:week:${isoWeek(today)}`, 0, -1, { withScores: true }),
@@ -147,13 +150,14 @@ export async function getMetrics(redis: Redis | null, opts: { days?: number; now
   for (const h of submodeHashes) if (h) for (const [k, v] of Object.entries(h)) submitSplit[k] = (submitSplit[k] ?? 0) + num(v);
   const nudgeSplit = { shown: foldHashes(nudgeShownHashes), tap: foldHashes(nudgeTapHashes) };
   const sourceSplit = { firstPlay: foldHashes(srcFpHashes), visit: foldHashes(srcVisitHashes) };
+  const referralSplit = foldHashes(refHashes);
 
   const wins: number[] = [];
   for (let i = 1; i < weekZ.length; i += 2) wins.push(decodeWins(num(weekZ[i])));
 
   const boardByDay = (boardCards as number[]).map(num);
   return {
-    days, funnel, engagement, rates, dauByDay, d1, d7, modeSplit, submitSplit, nudgeSplit, sourceSplit, boardByDay,
+    days, funnel, engagement, rates, dauByDay, d1, d7, modeSplit, submitSplit, nudgeSplit, sourceSplit, referralSplit, boardByDay,
     boards: { daily: boardByDay[boardByDay.length - 1] ?? 0, weekly: num(weekCard), alltime: num(allCard) },
     winBuckets: bucketWins(wins),
     totals: Object.fromEntries(Object.entries(totalsHash ?? {}).map(([k, v]) => [k, num(v)])),
