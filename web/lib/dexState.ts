@@ -1,5 +1,5 @@
 import "server-only";
-import { getResults, getDexIds } from "./profileStore";
+import { getResults, getDexIds, getReferralFlags } from "./profileStore";
 import { decodeLineup } from "./share";
 import { getPlayersByIds } from "./data";
 import { playerTraits } from "./traits";
@@ -21,6 +21,7 @@ export async function loadDexState(uid: string): Promise<{ players: DexPlayer[];
     pts: p.pts ?? null, trb: p.trb ?? null, ast: p.ast ?? null, stl: p.stl ?? null, blk: p.blk ?? null,
     fame: p.fame ?? 0, traits: playerTraits(p),
   }));
-  const badges = computeBadges(players, results.map((r) => ({ grade: r.grade })));
+  const flags = await getReferralFlags(uid);
+  const badges = computeBadges(players, results.map((r) => ({ grade: r.grade })), flags);
   return { players, total: results.length, badges };
 }

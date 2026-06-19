@@ -278,6 +278,7 @@ export function createRedisFake() {
       return added;
     },
     smembers: async (k: string) => { log("smembers", k); return [...(sets.get(k) ?? [])].map(de); },
+    sismember: async (k: string, member: unknown) => { log("sismember", k, ser(member)); return sets.get(k)?.has(ser(member)) ? 1 : 0; },
     scard: async (k: string) => { log("scard", k); return sets.get(k)?.size ?? 0; },
 
     ping: async () => { log("ping"); return "PONG"; },

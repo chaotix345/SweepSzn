@@ -192,3 +192,17 @@ export async function addStoredBadges(uid: string, badges: string[]): Promise<vo
   if (!redis || !badges.length) return;
   await redis.sadd(keyBadges(uid), badges[0], ...badges.slice(1));
 }
+
+// --- referral badge membership ---
+
+// Is this account a referrer (brought a friend) and/or a referee (arrived on an invite)? Read from
+// the global SADD sets evServer.bump() writes on a referred first_play, so loadDexState can award the
+// cosmetic recruiter/invited badges. Descriptive only (DESIGN.md §12).
+export async function getReferralFlags(uid: string): Promise<{ isReferrer: boolean; isReferee: boolean }> {
+  if (!redis) return { isReferrer: false, isReferee: false };
+  const [referrer, referred] = await Promise.all([
+    redis.sismember("ref:referrers", uid),
+    redis.sismember("ref:referred", uid),
+  ]);
+  return { isReferrer: referrer === 1, isReferee: referred === 1 };
+}
