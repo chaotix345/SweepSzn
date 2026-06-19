@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { X_HANDLE } from "@/lib/site";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { decodeRankCard, type RankCard } from "@/lib/rankShare";
@@ -22,7 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     description,
     robots: { index: false }, // shareable snapshot, not search content
     openGraph: { title, description, type: "website", url: `/rank/${card}` },
-    twitter: { card: "summary_large_image", title, description, site: "@SweepSeason", creator: "@SweepSeason" },
+    twitter: { card: "summary_large_image", title, description, site: X_HANDLE, creator: X_HANDLE },
   };
 }
 

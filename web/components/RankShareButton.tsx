@@ -4,6 +4,7 @@ import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
 import { getUid } from "@/lib/streak";
 import { encodeRankCard, type RankCard } from "@/lib/rankShare";
+import { X_HANDLE } from "@/lib/site";
 
 // Read the Web Share capability hydration-safely: false on the server + first client render
 // (matches SSR), then the real value — no setState-in-effect, no hydration mismatch.
@@ -28,7 +29,7 @@ export default function RankShareButton({ card }: { card: RankCard }) {
 
   const where = card.scope === "daily" ? "today's Daily board" : card.scope === "week" ? "this week's board" : "the all-time board";
   const metric = card.scope === "daily" ? `${card.wins}-${card.losses}` : `${card.wins.toLocaleString()} wins`;
-  const text = `I'm #${card.rank} of ${card.total.toLocaleString()} on ${where} (${metric}) at SweepSzn. Can you rank higher? via @SweepSeason`;
+  const text = `I'm #${card.rank} of ${card.total.toLocaleString()} on ${where} (${metric}) at SweepSzn. Can you rank higher? via ${X_HANDLE}`;
   const path = `/rank/${encodeRankCard(card)}`;
   const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
   const t = encodeURIComponent(text), u = encodeURIComponent(url);

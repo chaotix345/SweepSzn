@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Anton } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
-import { baseUrl, SITE_NAME } from "@/lib/site";
+import { baseUrl, SITE_NAME, X_HANDLE } from "@/lib/site";
 import SessionProvider from "@/components/SessionProvider";
 import UtmCapture from "@/components/UtmCapture";
 import "./globals.css";
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   title,
   description,
   openGraph: { title, description, siteName: SITE_NAME, type: "website" },
-  twitter: { card: "summary_large_image", title, description, site: "@SweepSeason", creator: "@SweepSeason" },
+  twitter: { card: "summary_large_image", title, description, site: X_HANDLE, creator: X_HANDLE },
   icons: { icon: "/icon.svg", apple: "/apple-icon.png" },
 };
 

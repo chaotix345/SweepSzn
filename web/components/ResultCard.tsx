@@ -6,6 +6,7 @@ import { getUid } from "@/lib/streak";
 import type { LineupResult, Player, PlayerBreakdown, Slot } from "@/lib/types";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { encodeLineup, cardImageUrl } from "@/lib/share";
+import { X_HANDLE } from "@/lib/site";
 import { bpCode, type BlueprintView } from "@/lib/blueprint";
 import { factorViews, lineupRoles, headline, historyAnchor, scoutingAnchor, fmtNet, playerContribRows, type ContribRow } from "@/lib/explain";
 import { WIN_GRADES, weakestSlot } from "@/lib/engine";
@@ -341,7 +342,7 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
       ? `I went ${blueprint.label} on SweepSzn — ${result.wins}-${result.losses} (${result.label}) with ${blueprint.grade} blueprint execution${usedHints ? " (with hints)" : ""}, board score ${blueprint.score % 1 === 0 ? blueprint.score : blueprint.score.toFixed(1)}. Can you out-execute me?`
       : `My ${prime ? "PRIME cross-era five" : "all-time five"} (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""}${anchorBit}. Can you build a better one?`;
   // Credit @SweepSeason on every share — a cold viewer who sees a shared result can find the source.
-  const text = `${baseText} via @SweepSeason`;
+  const text = `${baseText} via ${X_HANDLE}`;
   const url = typeof window !== "undefined" ? new URL(path, window.location.origin).toString() : path;
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
 

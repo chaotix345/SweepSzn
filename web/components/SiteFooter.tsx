@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/Button";
 import { XIcon } from "@/components/ui/icons";
+import { X_HANDLE, X_URL } from "@/lib/site";
 
 // Static credibility stats (mirrors the calibration facts in the homepage SEO copy).
 const STATS: [string, string][] = [
@@ -26,13 +27,13 @@ export default function SiteFooter() {
                 Draft your five →
               </ButtonLink>
               <a
-                href="https://x.com/SweepSeason"
+                href={X_URL}
                 target="_blank"
                 rel="noreferrer"
-                aria-label="Follow SweepSzn on X (@SweepSeason)"
+                aria-label={`Follow SweepSzn on X (${X_HANDLE})`}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-zinc-400 transition hover:text-zinc-100"
               >
-                <XIcon /> @SweepSeason
+                <XIcon /> {X_HANDLE}
               </a>
             </div>
           </div>

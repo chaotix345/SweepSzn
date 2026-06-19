@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import LandingSection from "@/components/LandingSection";
 import Beacon from "@/components/Beacon";
-import { baseUrl } from "@/lib/site";
+import { baseUrl, X_URL } from "@/lib/site";
 
 // Canonical lives here (homepage only) — NOT in the shared root layout, so the noindex
 // /r/[lineup] permalinks don't inherit a canonical pointing back to "/".
@@ -49,7 +49,7 @@ const jsonLd = {
   genre: "Sports simulation",
   keywords:
     "NBA lineup simulator, all-time NBA team builder, best NBA starting five, NBA fantasy draft game, NBA team builder game",
-  sameAs: ["https://x.com/SweepSeason"],
+  sameAs: [X_URL],
 };
 
 // Escape the three characters that could break out of the <script> context (defense-in-depth;
