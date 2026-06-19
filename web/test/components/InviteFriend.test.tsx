@@ -20,7 +20,8 @@ afterEach(() => cleanup());
 describe("InviteFriend", () => {
   it("mints a code, shows the CTA, and copies an invite link carrying ?ref=", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ code: "rabc123def45", credits: 0 }) })));
-    const writeText = vi.fn((_text: string) => Promise.resolve());
+    const copied: string[] = [];
+    const writeText = vi.fn((text: string) => { copied.push(text); return Promise.resolve(); });
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
 
     render(<InviteFriend />);
@@ -28,7 +29,7 @@ describe("InviteFriend", () => {
     fireEvent.click(btn);
 
     await waitFor(() => expect(writeText).toHaveBeenCalled());
-    expect(writeText.mock.calls[0][0]).toContain("/?ref=rabc123def45");
+    expect(copied[0]).toContain("/?ref=rabc123def45");
     expect(localStorage.getItem("szn:ref:code")).toBe("rabc123def45");
   });
 

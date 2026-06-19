@@ -9,14 +9,14 @@ import { getOwnRefCode, setOwnRefCode } from "@/lib/referral";
 // first_play is credited back to this user and unlocks the cosmetic recruiter/invited badges.
 // §12-safe: the code is a public proxy for the user, never the bearer uid.
 export default function InviteFriend() {
-  const [code, setCode] = useState<string | null>(null);
+  // Lazy-init from the cached code so a returning user sees the CTA immediately (this component only
+  // ever mounts client-side, post-result — never in the SSR HTML — so reading localStorage here is safe).
+  const [code, setCode] = useState<string | null>(() => getOwnRefCode());
   const [credits, setCredits] = useState(0);
   const [copied, setCopied] = useState(false);
   const [err, setErr] = useState(false);
 
   useEffect(() => {
-    const cached = getOwnRefCode();
-    if (cached) setCode(cached); // show immediately while the mint refreshes credits in the background
     let alive = true;
     (async () => {
       try {
