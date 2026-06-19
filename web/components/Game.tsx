@@ -595,7 +595,7 @@ export default function Game() {
         afterPlayers={sgResult.afterPlayers} outIdx={sgResult.outIdx} diagnosis={sgResult.diagnosis}
         card={sgResult.card} onReset={() => start("surgeon")} />
       <SgLeaderboard date={seed.replace("surgeon-", "")} preloaded={sgResult.view} />
-      {showsSaveNudge(mode) && <SignInSaveNudge />}
+      {showsSaveNudge(mode) && <SignInSaveNudge mode={mode} />}
     </Shell>
   );
   if (result) return (
@@ -607,7 +607,7 @@ export default function Game() {
           board-less Classic/HoopIQ/Prime, but also the FactorHunt/Blueprint/Challenge results that
           previously left a signed-out share-link arrival with no reason to make an account. Daily is
           excluded: its Leaderboard already prompts sign-in with the richer claim-your-rank flow. */}
-      {showsSaveNudge(mode) && <SignInSaveNudge />}
+      {showsSaveNudge(mode) && <SignInSaveNudge mode={mode} />}
       {mode === "factorhunt" && <FhLeaderboard date={seed.replace("fh-", "")} trace={result.trace} prediction={fhPrediction} readOnly={result.trace.length === 0} />}
       {mode === "blueprint" && blueprint && <BpLeaderboard date={seed.replace("bp-", "")} trace={result.trace} blueprint={blueprint} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
       {mode === "challenge" && challengeId && challengeRole && (

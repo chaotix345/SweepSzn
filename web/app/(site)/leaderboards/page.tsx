@@ -3,11 +3,10 @@ import { ButtonLink } from "@/components/ui/Button";
 import Leaderboard from "@/components/Leaderboard";
 import Link from "next/link";
 import { dayUTC } from "@/lib/day";
+import { marketingMetadata } from "@/lib/marketingMeta";
 
 export const metadata: Metadata = {
-  title: "SweepSzn leaderboards — Daily, Weekly, All-time",
-  description:
-    "Today's Daily leaderboard plus the Weekly and All-time boards. Everyone gets the same team and era spins each day — can you top the table?",
+  ...marketingMetadata("leaderboards"),
   alternates: { canonical: "/leaderboards" },
 };
 

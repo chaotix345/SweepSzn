@@ -2,11 +2,10 @@ import type { Metadata } from "next";
 import { ButtonLink } from "@/components/ui/Button";
 import ResultPreview from "@/components/ResultPreview";
 import { baseUrl } from "@/lib/site";
+import { marketingMetadata } from "@/lib/marketingMeta";
 
 export const metadata: Metadata = {
-  title: "How SweepSzn works — the honest NBA lineup engine, explained",
-  description:
-    "How SweepSzn simulates an 82-game season for any all-time NBA starting five: finite possessions, usage overload, era normalization, defense at full weight, spacing and fit — calibrated to 1,170 real NBA team-seasons.",
+  ...marketingMetadata("how-it-works"),
   alternates: { canonical: "/how-it-works" },
 };
 
