@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { redis, isRedisEnabled } from "@/lib/redis";
 import { getSession } from "@/lib/authServer";
-import { getMetrics, sparkline, type Metrics } from "@/lib/metrics";
+import { getMetrics, sparkline, flagLaggards, type Metrics } from "@/lib/metrics";
 
 export const metadata: Metadata = { title: "SweepSzn · admin", robots: { index: false } };
 
@@ -77,6 +77,10 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // acquisition channels seen in the window, ordered by the conversions that matter (first-plays)
   const sources = Array.from(new Set([...Object.keys(m.sourceSplit.firstPlay), ...Object.keys(m.sourceSplit.visit)]))
     .sort((a, b) => (m.sourceSplit.firstPlay[b] ?? 0) - (m.sourceSplit.firstPlay[a] ?? 0));
+  // Outlier alerts: channels/modes converting far below their peers (min-sample-guarded so a tiny n
+  // can't read as a laggard). Turns the raw splits into an at-a-glance "this is leaking" signal.
+  const laggingSources = flagLaggards(sources.map(s => ({ key: s, num: m.sourceSplit.firstPlay[s] ?? 0, den: m.sourceSplit.visit[s] ?? 0 })));
+  const laggingNudges = flagLaggards(NUDGE_MODES.map(k => ({ key: k, num: m.nudgeSplit.tap[k] ?? 0, den: m.nudgeSplit.shown[k] ?? 0 })));
 
   return (
     <main className="mx-auto max-w-2xl space-y-8 p-6 text-zinc-100">
@@ -130,9 +134,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <span className="w-24 shrink-0 text-zinc-400">{k}</span>
               <span className="tabular-nums text-zinc-300">{taps} / {shown}</span>
               <span className="text-xs text-zinc-500">{shown > 0 ? fmtPct(taps / shown) : "—"} tap rate</span>
+              {laggingNudges.has(k) && <span title="tap rate well below the other modes" className="text-amber-400">⚠️</span>}
             </div>
           );
         })}
+        {laggingNudges.size > 0 && <p className="text-xs text-amber-400">⚠️ {laggingNudges.size} mode{laggingNudges.size > 1 ? "s" : ""} with a tap rate well below the rest: {[...laggingNudges].join(", ")}</p>}
         <p className="text-xs text-zinc-500">Did the post-game nudge earn the tap? Tap rate = claim_nudge_tap ÷ claim_nudge_shown for that mode (Daily excluded — it uses the Leaderboard prompt).</p>
       </section>
 
@@ -148,9 +154,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <span className="w-28 shrink-0 truncate text-zinc-400" title={s}>{s}</span>
               <span className="tabular-nums text-zinc-300">{fp} first-plays / {v} visits</span>
               <span className="text-xs text-zinc-500">{v > 0 ? fmtPct(fp / v) : "—"} conv</span>
+              {laggingSources.has(s) && <span title="converting well below the other channels" className="text-amber-400">⚠️</span>}
             </div>
           );
         })}
+        {laggingSources.size > 0 && <p className="text-xs text-amber-400">⚠️ {laggingSources.size} channel{laggingSources.size > 1 ? "s" : ""} converting well below the rest: {[...laggingSources].join(", ")}</p>}
         <p className="text-xs text-zinc-500">First-play by acquisition channel — which post/link converted a new player. Conv = first-plays ÷ visits for that source.</p>
       </section>
 

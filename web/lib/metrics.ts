@@ -43,6 +43,27 @@ const WIN_BUCKETS = [
 export const bucketWins = (wins: number[]): { label: string; count: number }[] =>
   WIN_BUCKETS.map(b => ({ label: b.label, count: wins.filter(w => w >= b.min && w <= b.max).length }));
 
+// Flag laggards: keys whose conversion rate (num/den) sits far below the median of their peers.
+// Tiny samples (den < minDen) are excluded so a single n=1 can't masquerade as a 0% laggard, and
+// fewer than two eligible entries → nothing to compare → no flags. Turns the source/nudge splits
+// into an at-a-glance "this channel/mode is leaking" signal on /admin.
+export function flagLaggards(
+  entries: { key: string; num: number; den: number }[],
+  opts: { minDen?: number; ratio?: number } = {},
+): Set<string> {
+  const minDen = opts.minDen ?? 5;
+  const ratio = opts.ratio ?? 0.5;
+  const eligible = entries.filter(e => e.den >= minDen);
+  if (eligible.length < 2) return new Set();
+  const rates = eligible.map(e => e.num / e.den).sort((a, b) => a - b);
+  const mid = Math.floor(rates.length / 2);
+  const median = rates.length % 2 ? rates[mid] : (rates[mid - 1] + rates[mid]) / 2;
+  const threshold = ratio * median;
+  const out = new Set<string>();
+  for (const e of eligible) if (e.num / e.den < threshold) out.add(e.key);
+  return out;
+}
+
 const SPARK = "▁▂▃▄▅▆▇█";
 export const sparkline = (vals: number[]): string => {
   if (!vals.length) return "";
