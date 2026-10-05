@@ -86,13 +86,14 @@ export async function getChallengeOwnerView(id: string, uid: string): Promise<Ch
   return { status: "ok", view };
 }
 
-// The stored draft seed for an existing challenge, or null if the challenge has no creator yet
-// (or predates seed storage). The submit route uses null to decide whether the first submitter may
-// supply the seed (converting a finished game) vs. falling back to the legacy h2h-<id>.
+// The stored draft seed for an existing challenge, or null if the challenge has no creator yet.
+// The submit route uses null to decide whether the first submitter may supply the seed (converting
+// a finished game) vs. falling back to h2h-<id>. A legacy creator row (predates seed storage) drafted
+// on h2h-<id> — return that, never null, or a responder could supply their own seed.
 export async function getChallengeSeed(id: string): Promise<string | null> {
   if (!redis) return null;
   const info = await redis.get<ChallengeInfo>(keyInfo(id));
-  return info?.seed ?? null;
+  return info ? (info.seed ?? challengeSeed(id)) : null;
 }
 
 // Submit a verified attempt. The first submitter claims the creator slot (write-once via set-nx);
