@@ -64,6 +64,21 @@ describe("POST /api/slot-pick (silent crowd logging)", () => {
     expect([...ctx.redis!.hashes.keys()].some((k) => k.startsWith("slot_picks:"))).toBe(false);
   });
 
+  it("the slot-pick hash carries a TTL (an unauthenticated beacon must not mint no-TTL keys)", async () => {
+    await post(ok);
+    expect(ctx.redis!.ttls.get(HKEY)).toBeGreaterThan(0);
+  });
+
+  it("a well-formed but unknown personId writes nothing (it would later render raw in /api/crowd)", async () => {
+    expect((await post({ ...ok, personId: "zzz_not_a_player" })).status).toBe(204);
+    expect(ctx.redis!.hashes.has(HKEY)).toBe(false);
+  });
+
+  it("a well-formed spinKey with an unreal team or decade writes nothing (bounded keyspace)", async () => {
+    for (const spinKey of ["XYZ|2010s", "BOS|1950s", "BOS|abc123", "bos|2010s"]) await post({ ...ok, spinKey });
+    expect([...ctx.redis!.hashes.keys()].some((k) => k.startsWith("slot_picks:"))).toBe(false);
+  });
+
   it("silently drops (204, no write) once the per-IP bucket is exhausted", async () => {
     exhaustRateLimit("rl:slotpick:9.9.9.9", 150);
     const res = await POST(req("/api/slot-pick", { body: ok, ip: "9.9.9.9" }));

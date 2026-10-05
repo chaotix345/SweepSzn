@@ -332,6 +332,9 @@ export function createRedisFake() {
         zrem: (k: string, ...members: string[]) => { ops.push(() => fake.zrem(k, ...members)); return p; },
         sadd: (k: string, ...members: unknown[]) => { ops.push(() => fake.sadd(k, ...members)); return p; },
         exists: (...ks: string[]) => { ops.push(() => fake.exists(...ks)); return p; },
+        hlen: (k: string) => { ops.push(() => fake.hlen(k)); return p; },
+        hexists: (k: string, f: string) => { ops.push(() => fake.hexists(k, f)); return p; },
+        scard: (k: string) => { ops.push(() => fake.scard(k)); return p; },
         // a pipeline is ONE round trip no matter how many ops it carries: the sub-ops above each
         // log (and bump trips); collapse their count back to a single trip on exec.
         exec: async () => {

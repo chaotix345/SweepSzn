@@ -215,6 +215,15 @@ describe("command surface semantics", () => {
     expect(await fake.lrange("l", 0, -1)).toEqual(["y", "x"]); // the DEL was rolled back too
   });
 
+  it("pipeline hlen/hexists/scard read back in order in one trip (cap checks)", async () => {
+    const fake = createRedisFake();
+    await fake.hset("h", { a: 1, b: 2 });
+    await fake.sadd("s", "x");
+    const before = fake.trips;
+    expect(await fake.pipeline().hlen("h").hexists("h", "a").hexists("h", "z").scard("s").exec()).toEqual([2, 1, 0, 1]);
+    expect(fake.trips).toBe(before + 1);
+  });
+
   it("a pipeline counts as ONE round trip regardless of op count (trips budget metric)", async () => {
     const fake = createRedisFake();
     await fake.incr("a");                      // 1 trip
