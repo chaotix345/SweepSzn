@@ -18,8 +18,9 @@ const READERS: Record<string, string[]> = {
   "lib/teamLookup.ts": ["team_lookup.json"],
   "app/api/health/route.ts": ["players.json"], // the deploy canary stats players.json itself
 };
-// ○ static in the build route table — prerendered at build (data read then), so no server trace.
-const STATIC = new Set(["/", "/about", "/how-it-works"]);
+// ○ static / ● SSG with dynamicParams=false in the build route table — prerendered at build (data read
+// then), so no server trace. The /teams pages + OG cards are generateStaticParams over the 30 franchises.
+const STATIC = new Set(["/", "/about", "/how-it-works", "/teams", "/teams/opengraph-image", "/teams/[team]", "/teams/[team]/opengraph-image"]);
 
 const rel = (abs: string) => path.relative(ROOT, abs).split(path.sep).join("/");
 function resolve(from: string, spec: string): string | null {
