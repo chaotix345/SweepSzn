@@ -13,6 +13,10 @@ describe("parseEvBody", () => {
     expect(parseEvBody({ ev: "share", uid: "abcdefgh" })).toStrictEqual({ ev: "share", uid: "abcdefgh" });
   });
 
+  it("drops a Google-namespace uid (signed-in identities never ride the anon beacon)", () => {
+    expect(parseEvBody({ ev: "first_play", uid: "g" + "a".repeat(31) })).toStrictEqual({ ev: "first_play" });
+  });
+
   it("non-beacon stage rejected", () => {
     expect(parseEvBody({ ev: "complete" })).toBe(null);
   });

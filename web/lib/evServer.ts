@@ -48,6 +48,8 @@ const NUDGE_MODE_STAGES = new Set<EvStage>(["claim_nudge_shown", "claim_nudge_ta
 
 const CLIENT_STAGE_SET = new Set<string>(CLIENT_STAGES);
 export const UID_RE = /^[a-z0-9-]{8,64}$/i;
+// Mirrors lib/auth isAnonUid's g-namespace reject (inlined: client libs import this module, auth pulls node crypto).
+const AUTHED_UID_RE = /^g[0-9a-f]{31}$/i;
 // Lowercase-only acquisition label, ≤40 chars (mirrors lib/utm.ts SRC_RE). The /api/ev beacon is
 // unauthenticated, so this is the hard gate against Redis hash-field injection before a source is
 // written, and it folds "X_Launch"/"x_launch" into one bucket (the client lowercases too).
@@ -66,7 +68,7 @@ export function parseEvBody(body: unknown): BeaconBody | null {
   const b = body as Record<string, unknown>;
   if (typeof b.ev !== "string" || !CLIENT_STAGE_SET.has(b.ev)) return null;
   const out: BeaconBody = { ev: b.ev as ClientStage };
-  if (typeof b.uid === "string" && UID_RE.test(b.uid)) out.uid = b.uid;
+  if (typeof b.uid === "string" && UID_RE.test(b.uid) && !AUTHED_UID_RE.test(b.uid)) out.uid = b.uid;
   if (MODE_STAGES.has(b.ev) && typeof b.mode === "string" && MODES.has(b.mode)) out.mode = b.mode;
   // source is independent of stage (unlike mode, which is mode-stage-only) — keep it whenever it
   // validates; bump() decides which stages actually persist it. Folding this into the mode block would
