@@ -316,6 +316,15 @@ export default function ResultCard({
 const subscribeNoop = () => () => {};
 const getCanNative = () => typeof navigator !== "undefined" && "share" in navigator;
 const getServerCanNative = () => false;
+// The share URL is the bare path on the server and absolute + the sharer's own ?ref= on the client.
+// Read through useSyncExternalStore (server snapshot = path) so hydration re-renders with the client
+// value — React 19 never patches a mismatched href, so the SSR'd X/Bluesky links would keep the server's.
+const getClientShareUrl = (path: string) => {
+  const u = new URL(path, window.location.origin);
+  const own = getOwnRefCode();
+  if (own) u.searchParams.set("ref", own);
+  return u.toString();
+};
 
 // Exported so modes with their own result layout (Surgeon) reuse the exact share affordance
 // (native share / popover / copy / per-platform links). Pass `text` to override the auto-generated
@@ -346,13 +355,7 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
   const text = `${baseText} via ${X_HANDLE}`;
   // Every share doubles as a referral: append the sharer's own code (if minted) so a cold viewer's
   // first_play is credited back to them. Canonical/OG are bare-path, so the query has no SEO impact.
-  const url = (() => {
-    if (typeof window === "undefined") return path;
-    const u = new URL(path, window.location.origin);
-    const own = getOwnRefCode();
-    if (own) u.searchParams.set("ref", own);
-    return u.toString();
-  })();
+  const url = useSyncExternalStore(subscribeNoop, () => getClientShareUrl(path), () => path);
   const t = encodeURIComponent(text), u = encodeURIComponent(url);
 
   // close the popover on outside-click or Escape (keyboard + mouse dismissal)
