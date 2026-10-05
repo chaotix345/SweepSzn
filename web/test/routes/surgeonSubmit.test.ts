@@ -364,6 +364,15 @@ describe("POST /api/surgeon/submit — daily case cap", () => {
     const { status: s2 } = await readJson(await post(anonBody({ uid })));
     expect(s2).toBe(200);
   });
+
+  it("bumps the subs counter and its TTL in ONE round trip (no orphan no-TTL counter on a failed 2nd trip)", async () => {
+    const { bumpSurgeonSubs } = await import("@/lib/surgeonBoard");
+    const { TTL } = await import("@/lib/redis");
+    const before = ctx.redis!.trips;
+    expect(await bumpSurgeonSubs(DATE, "captest00003")).toBe(1);
+    expect(ctx.redis!.trips - before).toBe(1);
+    expect(ctx.redis!.ttls.get(`lb:surgeon:${DATE}:subs:captest00003`)).toBe(TTL);
+  });
 });
 
 // ---------- claim cleanup ----------
