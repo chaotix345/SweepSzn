@@ -24,6 +24,8 @@ process.env.CRON_SECRET = "test-cron-secret";
 vi.useFakeTimers({ now: new Date("2026-06-15T21:00:00Z"), toFake: ["Date"] });
 
 const { GET, NUDGE_CAP } = await import("@/app/api/cron/streak-saver/route");
+const { sendRawPushToUid } = await import("@/lib/pushStore");
+const { TTL } = await import("@/lib/redis");
 
 const YESTERDAY = "2026-6-14";
 const TODAY = "2026-6-15";
@@ -135,5 +137,26 @@ describe("GET /api/cron/streak-saver — multi-mode union", () => {
     seedSub("y1-aaaaaa01");
     const { body } = await readJson(await run("Bearer test-cron-secret"));
     expect(body).toMatchObject({ candidates: 1, sent: 1 });
+  });
+});
+
+// push:<uid> carries a 31-day TTL set only at subscribe time; without a refresh on use, an active
+// subscriber's devices silently vanished 31 days after opt-in.
+describe("sendRawPushToUid — TTL refresh on a successful send", () => {
+  const payload = { title: "t", body: "b", url: "/play" };
+
+  it("resets the push:<uid> TTL to the full TTL after a delivered send", async () => {
+    seedSub("ttl-user-0001");
+    ctx.redis!.ttls.set("push:ttl-user-0001", 5); // about to expire
+    expect(await sendRawPushToUid("ttl-user-0001", payload)).toBe(true);
+    expect(ctx.redis!.ttls.get("push:ttl-user-0001")).toBe(TTL);
+  });
+
+  it("does NOT refresh the TTL when no device accepted the push", async () => {
+    seedSub("ttl-user-0002");
+    ctx.redis!.ttls.set("push:ttl-user-0002", 5);
+    sendNotification.mockRejectedValueOnce(Object.assign(new Error("boom"), { statusCode: 500 }));
+    await sendRawPushToUid("ttl-user-0002", payload);
+    expect(ctx.redis!.ttls.get("push:ttl-user-0002")).toBe(5);
   });
 });

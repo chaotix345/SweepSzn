@@ -85,8 +85,9 @@ export async function migratePushSubs(fromUid: string, toUid: string): Promise<v
 // Fan an arbitrary {title, body, url} payload out to all of a uid's devices (the sw.js push
 // handler's exact shape). No-op when push or redis is unavailable; capped at PUSH_SUB_CAP; dead
 // endpoints (404/410 Gone) are pruned. Never throws. Returns whether at least one device was
-// targeted (so a cron can count real sends). Used by the challenge notification below and the
-// streak-saver cron.
+// targeted (so a cron can count real sends). A delivered send refreshes the key's TTL, so a subscriber
+// in active use never silently expires 31 days after opt-in. Used by the challenge notification below
+// and the streak-saver cron.
 export async function sendRawPushToUid(uid: string, payload: { title: string; body: string; url: string }): Promise<boolean> {
   if (!redis || !configureVapid()) return false;
   try {
@@ -94,14 +95,17 @@ export async function sendRawPushToUid(uid: string, payload: { title: string; bo
     const entries = Object.entries(subs).slice(0, PUSH_SUB_CAP);
     if (!entries.length) return false;
     const body = JSON.stringify(payload);
+    let delivered = 0;
     await Promise.all(entries.map(async ([f, sub]) => {
       try {
         await webpush.sendNotification(sub, body);
+        delivered++;
       } catch (err) {
         const code = (err as { statusCode?: number }).statusCode;
         if (code === 404 || code === 410) { try { await redis!.hdel(keyPush(uid), f); } catch { /* ignore */ } }
       }
     }));
+    if (delivered) { try { await redis.expire(keyPush(uid), TTL); } catch { /* best-effort */ } }
     return true;
   } catch (err) {
     logError("push.send", err); // never the uid — it's a bearer token
