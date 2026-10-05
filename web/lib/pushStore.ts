@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import webpush from "web-push";
 import { redis, TTL } from "./redis";
 import { logError } from "./log";
-import { notificationText, type PushSub } from "./notify";
+import { notificationText, PUSH_SAVE_LUA, type PushSub } from "./notify";
 import type { Notif } from "./types";
 
 // Web-push subscription store + sender. Self-disabling: push is OFF unless all three VAPID env vars
@@ -48,11 +48,8 @@ function configureVapid(): boolean {
 export async function saveSubscription(uid: string, sub: PushSub): Promise<boolean> {
   if (!redis) return false;
   try {
-    const f = field(sub.endpoint);
-    const already = await redis.hexists(keyPush(uid), f);
-    if (!already && (await redis.hlen(keyPush(uid))) >= PUSH_SUB_CAP) return false;
-    await redis.pipeline().hset(keyPush(uid), { [f]: sub }).expire(keyPush(uid), TTL).exec();
-    return true;
+    // check + write + TTL atomically (PUSH_SAVE_LUA) so concurrent new devices can't overshoot the cap
+    return Number(await redis.eval(PUSH_SAVE_LUA, [keyPush(uid)], [field(sub.endpoint), JSON.stringify(sub), PUSH_SUB_CAP, TTL])) === 1;
   } catch { return false; }
 }
 

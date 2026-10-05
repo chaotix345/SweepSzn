@@ -70,6 +70,16 @@ describe("eval: KEEP_BEST_LUA port", () => {
     expect(f.ttls.has("ah")).toBe(false); // all-time meta: persistent, never expired
   });
 
+  it("eval PUSH_SAVE_LUA refuses a NEW field at the cap but re-stores an existing one", async () => {
+    const { PUSH_SAVE_LUA } = await import("@/lib/notify");
+    const f = createRedisFake();
+    expect(await f.eval(PUSH_SAVE_LUA, ["p"], ["a", "{}", 1, 60])).toBe(1);
+    expect(await f.eval(PUSH_SAVE_LUA, ["p"], ["b", "{}", 1, 60])).toBe(0);
+    expect(await f.eval(PUSH_SAVE_LUA, ["p"], ["a", '{"x":1}', 1, 60])).toBe(1);
+    expect(f.hashes.get("p")?.get("a")).toBe('{"x":1}');
+    expect(f.ttls.get("p")).toBe(60);
+  });
+
   it("all-time ranks by wins", async () => {
     await run("u3", 82, 10);
     const top = (await fake.zrange(az, 0, -1, { rev: true })) as string[];

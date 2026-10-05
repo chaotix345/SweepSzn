@@ -1,5 +1,6 @@
 import { KEEP_BEST_LUA, KEEP_BEST_ROW_LUA, TRIM_BOARD_LUA } from "@/lib/score";
 import { PICKEM_VOTE_LUA } from "@/lib/pickem";
+import { PUSH_SAVE_LUA } from "@/lib/notify";
 
 // In-memory stand-in for @upstash/redis covering the command surface this codebase uses.
 // Mirrors the real client's JSON auto-(de)serialization: strings are stored raw, everything
@@ -140,6 +141,16 @@ export function createRedisFake() {
     const doomed = sorted.slice(0, sorted.length - cap).map(([m]) => m);
     for (const m of doomed) { zsets.get(zK)?.delete(m); hashes.get(hK)?.delete(m); }
     return doomed.length;
+  }
+
+  // PUSH_SAVE_LUA (lib/notify.ts): cap-checked subscription store — new field refused at the cap.
+  function pushSave(keys: string[], args: (string | number)[]): number {
+    const [k] = keys;
+    const f = String(args[0]);
+    if (!hashes.get(k)?.has(f) && (hashes.get(k)?.size ?? 0) >= Number(args[2])) return 0;
+    hash(k).set(f, String(args[1]));
+    rawExpire(k, Number(args[3]));
+    return 1;
   }
 
   // PICKEM_VOTE_LUA (lib/pickem.ts): claim voter slot, bump matching counter, read back both counts.
@@ -320,6 +331,7 @@ export function createRedisFake() {
       if (script === PICKEM_VOTE_LUA) return deepDe(pickemVote(keys, args));
       if (script === KEEP_BEST_ROW_LUA) return keepBestRow(keys, args);
       if (script === TRIM_BOARD_LUA) return trimBoard(keys, args);
+      if (script === PUSH_SAVE_LUA) return pushSave(keys, args);
       throw new Error("redisFake.eval: unknown script — add its semantics here before using it in tests");
     },
 
