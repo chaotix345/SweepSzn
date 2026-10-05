@@ -8,8 +8,11 @@ import React from "react";
 // Auth must read as enabled for the One Tap branch to be reachable at all.
 vi.mock("@/lib/authClient", () => ({ AUTH_ENABLED: true }));
 // Stand-in for the real GSI component so we can detect when it MOUNTS (i.e. when GSI is loaded and the
-// sign-in button is rendered). The whole point of the change: it must not mount on arrival.
-vi.mock("@/components/GoogleOneTap", () => ({ default: () => React.createElement("div", null, "ONE_TAP_MOUNTED") }));
+// sign-in button is rendered). The whole point of the change: it must not mount on arrival. GIS's
+// renderButton draws the real button as an iframe, so the stand-in carries one too.
+vi.mock("@/components/GoogleOneTap", () => ({
+  default: () => React.createElement("div", null, "ONE_TAP_MOUNTED", React.createElement("iframe", { title: "Sign in with Google Button" })),
+}));
 vi.mock("@/lib/streak", () => ({ getHistory: () => [], getUid: () => "anon" }));
 vi.mock("@/lib/resultHistory", () => ({ listResults: () => [] }));
 vi.mock("@/lib/account", () => ({ syncToAccount: vi.fn(async () => {}) }));
@@ -73,5 +76,18 @@ describe("SessionProvider — Google One Tap is deferred to user intent (anon-fi
     await act(async () => { fireEvent.click(screen.getByText("open-signin")); });
     expect(screen.queryByText("ONE_TAP_MOUNTED")).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("the popover's Tab trap includes the Google button (GIS renders it as an iframe)", async () => {
+    await act(async () => { renderProvider(); });
+    await act(async () => { fireEvent.click(screen.getByText("open-signin")); });
+    const close = screen.getByRole("button", { name: "Close" });
+    const google = screen.getByTitle("Sign in with Google Button");
+    close.focus();
+    // forward Tab from Close is NOT swallowed — the browser moves on to the Google button
+    expect(fireEvent.keyDown(close, { key: "Tab" })).toBe(true);
+    // and Shift+Tab from Close (first) wraps to it as the trap's last stop
+    fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(google);
   });
 });

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { track } from "@vercel/analytics";
 import type { Player, Slot, DraftCandidate } from "@/lib/types";
 import { gradeColor } from "@/lib/grades";
@@ -23,6 +23,7 @@ export function WhatIfLab({ players, slots, baseWins, baseLosses, baseGrade }: {
   const [openSlot, setOpenSlot] = useState<number | null>(null);
   const [opts, setOpts] = useState<DraftCandidate[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const optsReq = useRef(0); // latest swap-options request — a slower earlier one must not overwrite it
 
   const cur = sim ?? { wins: baseWins, losses: baseLosses, grade: baseGrade };
   const delta = sim ? sim.wins - baseWins : 0;
@@ -30,11 +31,13 @@ export function WhatIfLab({ players, slots, baseWins, baseLosses, baseGrade }: {
 
   async function showOptions(i: number) {
     if (openSlot === i) { setOpenSlot(null); return; }
+    const req = ++optsReq.current;
     setOpenSlot(i); setOpts(null);
     try {
       const r = await fetch(`/api/swap-options?team=${players[i].team}&decade=${players[i].decade}&slot=${slots[i]}`);
-      setOpts(r.ok ? (await r.json()).candidates : []);
-    } catch { setOpts([]); }
+      const c = r.ok ? (await r.json()).candidates : [];
+      if (req === optsReq.current) setOpts(c);
+    } catch { if (req === optsReq.current) setOpts([]); }
   }
 
   async function pick(i: number, c: DraftCandidate) {

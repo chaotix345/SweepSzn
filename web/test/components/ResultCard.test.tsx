@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within, act } from "@testing-library/react";
 import React from "react";
+import { renderToString } from "react-dom/server";
+import { hydrateRoot } from "react-dom/client";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -544,5 +546,29 @@ describe("ResultCard — shared-permalink CTA hierarchy (cold-viewer conversion)
     // the other half of the one-orange-per-row rule: Build Another must NOT be orange
     const buildAnother = within(container).getByRole("button", { name: /Build Another/i });
     expect(buildAnother.className).not.toContain("bg-orange-500");
+  });
+});
+
+describe("ShareButton — the client share URL wins after hydration (SSR'd /r/, /pe/, /sg/ permalinks)", () => {
+  afterEach(() => { localStorage.removeItem("szn:ref:code"); document.body.innerHTML = ""; });
+
+  it("a hydrated X/Bluesky link carries the absolute URL + the sharer's ref, not the server's bare path", async () => {
+    const el = <ShareButton result={makeResult()} path="/r/x" names={["A", "B"]} />;
+    // the server render: no window (a real Node SSR pass)
+    vi.stubGlobal("window", undefined);
+    let html: string;
+    try { html = renderToString(el); } finally { vi.unstubAllGlobals(); }
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    localStorage.setItem("szn:ref:code", "rabc123def45");
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    await act(async () => { root = hydrateRoot(container, el); });
+    const abs = encodeURIComponent(`${window.location.origin}/r/x?ref=rabc123def45`);
+    const x = container.querySelector('a[aria-label="Post to X"]')?.getAttribute("href") ?? "";
+    const bsky = container.querySelector('a[aria-label="Post to Bluesky"]')?.getAttribute("href") ?? "";
+    expect(x).toContain(`url=${abs}`);
+    expect(bsky).toContain(abs);
+    await act(async () => { root?.unmount(); });
   });
 });
