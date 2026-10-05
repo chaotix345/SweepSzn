@@ -4,7 +4,7 @@ import { enableRedisEnv, freshFake, ctx } from "@/test/routeHarness";
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 
 enableRedisEnv();
-const { getChallengeSeed } = await import("@/lib/challengeStore");
+const { getChallengeSeed, getChallengePublic } = await import("@/lib/challengeStore");
 
 const ID = "abc12345";
 const info = (over: Record<string, unknown> = {}) => JSON.stringify({
@@ -28,5 +28,25 @@ describe("getChallengeSeed", () => {
     // null would let a RESPONDER supply body.seed and be verified against a different draft
     ctx.redis!.strings.set(`chal:${ID}:info`, info());
     expect(await getChallengeSeed(ID)).toBe(`h2h-${ID}`);
+  });
+});
+
+describe("getChallengePublic (/c/[id] page + OG)", () => {
+  it("returns the redacted bar for a stored challenge", async () => {
+    ctx.redis!.strings.set(`chal:${ID}:info`, info({ seed: "daily-2026-6-10" }));
+    expect(await getChallengePublic(ID)).toMatchObject({ id: ID, creatorName: "Alice", wins: 55, seed: "daily-2026-6-10" });
+  });
+
+  it("a Redis error resolves null (the page's 'not available' branch, OG brand card) instead of throwing", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    ctx.redis!.get = async () => { throw new Error("upstash down"); };
+    await expect(getChallengePublic(ID)).resolves.toBeNull();
+  });
+
+  it("a malformed id resolves null without touching Redis", async () => {
+    for (const bad of ["ab", "ABCDEFGH", "abc12345:info", "x".repeat(17), "abc-1234"]) {
+      expect(await getChallengePublic(bad)).toBeNull();
+    }
+    expect(ctx.redis!.calls).toEqual([]);
   });
 });

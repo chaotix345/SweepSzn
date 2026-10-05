@@ -48,18 +48,25 @@ export async function getChallengeBoard(id: string): Promise<ChallengeBoard> {
 
 // Redacted read for the public landing page / responder bootstrap — exposes the bar (record +
 // grade), the draft seed (so the responder replays the SAME spins), and whether the creator used
-// hints, but never any lineup or uid.
+// hints, but never any lineup or uid. /c/[id] (page + OG) calls this with the raw URL segment, so
+// the id is validated here (the challenge-id format the API routes enforce) and a Redis error
+// degrades to null — the page's "not available" branch / the OG brand card — instead of a 500.
 export async function getChallengePublic(id: string): Promise<ChallengePublic | null> {
-  if (!redis) return null;
-  const info = await redis.get<ChallengeInfo>(keyInfo(id));
-  if (!info) return null;
-  const attempts = await redis.zcard(keyZ(id));
-  return {
-    id, creatorName: info.name, wins: info.wins, losses: info.losses, net: info.net, grade: info.grade,
-    responders: Math.max(0, attempts - 1), // the creator occupies one board slot; count only friends
-    seed: info.seed ?? challengeSeed(id),  // legacy challenges (no stored seed) used h2h-<id>
-    hinted: !!info.hinted,
-  };
+  if (!redis || !/^[a-z0-9]{6,16}$/.test(id)) return null;
+  try {
+    const info = await redis.get<ChallengeInfo>(keyInfo(id));
+    if (!info) return null;
+    const attempts = await redis.zcard(keyZ(id));
+    return {
+      id, creatorName: info.name, wins: info.wins, losses: info.losses, net: info.net, grade: info.grade,
+      responders: Math.max(0, attempts - 1), // the creator occupies one board slot; count only friends
+      seed: info.seed ?? challengeSeed(id),  // legacy challenges (no stored seed) used h2h-<id>
+      hinted: !!info.hinted,
+    };
+  } catch (e) {
+    logError("challenge.public", e);
+    return null;
+  }
 }
 
 // The creator's own dashboard: their five plus every responder's five + verdict. Gated to the creator
