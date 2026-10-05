@@ -201,6 +201,20 @@ describe("command surface semantics", () => {
     expect(fake.trips).toBe(before + 1);
   });
 
+  it("multi() applies del+lpush as one unit in one trip, and a failed transaction applies nothing", async () => {
+    const fake = createRedisFake();
+    await fake.lpush("l", "a", "b");
+    const before = fake.trips;
+    expect(await fake.multi().del("l").lpush("l", "x", "y").exec()).toEqual([1, 2]);
+    expect(fake.trips).toBe(before + 1);
+    expect(await fake.lrange("l", 0, -1)).toEqual(["y", "x"]);
+    const realLpush = fake.lpush;
+    fake.lpush = async () => { throw new Error("boom"); };
+    await expect(fake.multi().del("l").lpush("l", "z").exec()).rejects.toThrow("boom");
+    fake.lpush = realLpush;
+    expect(await fake.lrange("l", 0, -1)).toEqual(["y", "x"]); // the DEL was rolled back too
+  });
+
   it("a pipeline counts as ONE round trip regardless of op count (trips budget metric)", async () => {
     const fake = createRedisFake();
     await fake.incr("a");                      // 1 trip

@@ -46,6 +46,19 @@ export function createRedisFake() {
   const hasKey = (k: string) =>
     strings.has(k) || !!hashes.get(k)?.size || !!zsets.get(k)?.size || !!lists.get(k)?.length || !!sets.get(k)?.size;
 
+  // Whole-state copy/restore (in place — tests hold the map references) for multi()'s all-or-nothing.
+  const snapshot = () => ({
+    strings: new Map(strings), ttls: new Map(ttls),
+    hashes: new Map([...hashes].map(([k, v]) => [k, new Map(v)])),
+    zsets: new Map([...zsets].map(([k, v]) => [k, new Map(v)])),
+    lists: new Map([...lists].map(([k, v]) => [k, [...v]])),
+    sets: new Map([...sets].map(([k, v]) => [k, new Set(v)])),
+  });
+  const restore = (s: ReturnType<typeof snapshot>) => {
+    const put = <V,>(dst: Map<string, V>, src: Map<string, V>) => { dst.clear(); for (const [k, v] of src) dst.set(k, v); };
+    put(strings, s.strings); put(ttls, s.ttls); put(hashes, s.hashes); put(zsets, s.zsets); put(lists, s.lists); put(sets, s.sets);
+  };
+
   // Ascending by score, ties ascending by member (real sorted-set ordering).
   const zsorted = (k: string): [string, number][] =>
     [...(zsets.get(k) ?? new Map<string, number>())].sort((x, y) => x[1] - y[1] || (x[0] < y[0] ? -1 : 1));
@@ -301,9 +314,14 @@ export function createRedisFake() {
       throw new Error("redisFake.eval: unknown script — add its semantics here before using it in tests");
     },
 
-    pipeline: () => {
+    // MULTI/EXEC (redis.multi(), the /multi-exec endpoint): a pipeline applied as ONE unit — no other
+    // command interleaves, and a failed request applies nothing (modelled by snapshot-restore).
+    multi: () => fake.pipeline(true),
+
+    pipeline: (atomic = false) => {
       const ops: Array<() => Promise<unknown>> = [];
       const p = {
+        del: (...ks: string[]) => { ops.push(() => fake.del(...ks)); return p; },
         incr: (k: string) => { ops.push(() => fake.incr(k)); return p; },
         expire: (k: string, sec: number, opt?: string) => { ops.push(() => fake.expire(k, sec, opt)); return p; },
         lpush: (k: string, ...vs: unknown[]) => { ops.push(() => fake.lpush(k, ...vs)); return p; },
@@ -319,7 +337,14 @@ export function createRedisFake() {
         exec: async () => {
           const before = trips;
           const out: unknown[] = [];
-          for (const op of ops) out.push(await op());
+          if (atomic) {
+            // every fake op body is synchronous, so invoking them all in one map() runs them in a single
+            // tick (nothing interleaves); any failure rolls the whole transaction back
+            const snap = snapshot();
+            try { out.push(...(await Promise.all(ops.map((op) => op())))); } catch (err) { restore(snap); trips = before + 1; throw err; }
+          } else {
+            for (const op of ops) out.push(await op());
+          }
           trips = before + 1;
           return out;
         },
