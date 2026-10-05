@@ -12,6 +12,11 @@ import type { MarketingOgCard } from "./marketingMeta";
 
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_ALT = "SweepSzn — build an all-time NBA starting five";
+// ImageResponse defaults to `max-age=0, must-revalidate`, so every unfurl re-rendered (cold start +
+// players.json parse + satori). URL-determined share cards (/r /pe /sg /dex/s /rank, brand fallback
+// included) depend only on the URL + deployed data → long CDN TTL; /c reads live Redis → short.
+export const OG_CACHE = { "cache-control": "public, s-maxage=86400, stale-while-revalidate=604800" };
+export const OG_CACHE_LIVE = { "cache-control": "public, s-maxage=60, stale-while-revalidate=300" };
 
 
 // satori's default font is latin-only; strip diacritics so names like Dončić/Jokić don't tofu.

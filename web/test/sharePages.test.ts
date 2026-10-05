@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReactElement } from "react";
 import { encodeLineup } from "@/lib/share";
 import { encodePickemCard } from "@/lib/pickem";
+import { encodeSurgeonCard } from "@/lib/surgeon";
+import { encodeDexShare } from "@/lib/share";
+import { encodeRankCard } from "@/lib/rankShare";
+import { enableRedisEnv, freshFake, ctx } from "@/test/routeHarness";
 
 // Share permalinks (/r, /pe, …) + their dynamic OG cards. Pages/OG handlers are plain async
 // functions; lib/og's element builders are spied so the OG tests can assert what gets rendered
@@ -10,6 +14,8 @@ vi.mock("@/lib/og", async (orig) => {
   const actual = await orig<typeof import("@/lib/og")>();
   return { ...actual, resultOgElement: vi.fn(actual.resultOgElement), brandOgElement: vi.fn(actual.brandOgElement) };
 });
+vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
+enableRedisEnv();
 const og = await import("@/lib/og");
 const ResultCard = (await import("@/components/ResultCard")).default;
 
@@ -34,7 +40,7 @@ function findProps(node: unknown, type: unknown): Record<string, unknown> | null
 
 const MJS = ["michael_jordan_chi_1980s_1988", "michael_jordan_chi_1990s_1991", "michael_jordan_was_2000s_2003"];
 
-beforeEach(() => { vi.mocked(og.resultOgElement).mockClear(); vi.mocked(og.brandOgElement).mockClear(); });
+beforeEach(() => { freshFake(); vi.mocked(og.resultOgElement).mockClear(); vi.mocked(og.brandOgElement).mockClear(); });
 
 describe("/r/[lineup] OG — one person per five", () => {
   it("three eras of one player fall back to the brand card", async () => {
@@ -74,5 +80,36 @@ describe("/pe/[card] — Pick'Em share keeps the Blueprint / Prime stamps", () =
     expect(bpArgs[5]).toMatchObject({ label: expect.any(String), grade: expect.any(String) });
     await Image(params({ card: primeCard }));
     expect(vi.mocked(og.resultOgElement).mock.calls[1][4]).toBe(true);
+  });
+});
+
+// Every unfurl used to re-render (ImageResponse defaults to max-age=0, must-revalidate): cold start +
+// players.json parse + satori. URL-determined cards are CDN-cacheable — success AND brand fallback.
+describe("dynamic OG cards are CDN-cacheable", () => {
+  const sMaxAge = (res: Response) => Number(/s-maxage=(\d+)/.exec(res.headers.get("cache-control") ?? "")?.[1] ?? 0);
+  type OgImage = (a: { params: Promise<Record<string, string>> }) => Promise<Response>;
+  const cases: [string, () => Promise<{ default: unknown }>, Record<string, string>, Record<string, string>][] = [
+    ["/r", () => import("@/app/r/[lineup]/opengraph-image"), { lineup: encodeLineup(FIVE) }, { lineup: "nope" }],
+    ["/pe", () => import("@/app/pe/[card]/opengraph-image"), { card: encodePickemCard(encodeLineup(FIVE), VIEW) }, { card: "nope" }],
+    ["/sg", () => import("@/app/sg/[card]/opengraph-image"), { card: encodeSurgeonCard(FIVE.slice(0, 4).concat("shaquille_o_neal_lal_2000s_2001"), 4, FIVE[4]) }, { card: "nope" }],
+    ["/dex/s", () => import("@/app/dex/s/[card]/opengraph-image"), { card: encodeDexShare(FIVE, 40, 3) }, { card: "nope" }],
+    ["/rank", () => import("@/app/rank/[card]/opengraph-image"), { card: encodeRankCard({ scope: "daily", rank: 3, total: 50, name: "Sam", wins: 60, losses: 22, net: 8.1 }) }, { card: "nope" }],
+  ];
+  for (const [name, load, good, bad] of cases) {
+    it(`${name}: success + brand fallback carry a long s-maxage`, async () => {
+      const Image = (await load()).default as OgImage;
+      expect(sMaxAge(await Image(params(good)))).toBeGreaterThanOrEqual(3600);
+      expect(sMaxAge(await Image(params(bad)))).toBeGreaterThanOrEqual(3600);
+    });
+  }
+
+  it("/c (Redis-backed, changes as friends respond): short s-maxage only", async () => {
+    const Image = (await import("@/app/c/[id]/opengraph-image")).default;
+    ctx.redis!.strings.set("chal:abc12345:info", JSON.stringify({ uid: "u-creator-1", name: "Alice", wins: 55, losses: 27, net: 7.5, grade: "B+", lineup: FIVE.join(","), seed: "h2h-abc12345" }));
+    for (const id of ["abc12345", "nochallenge1"]) {
+      const n = sMaxAge(await Image(params({ id })));
+      expect(n).toBeGreaterThan(0);
+      expect(n).toBeLessThanOrEqual(300);
+    }
   });
 });
