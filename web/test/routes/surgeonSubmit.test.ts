@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHash } from "node:crypto";
 import {
   enableRedisEnv,
   freshFake,
@@ -331,6 +332,31 @@ describe("POST /api/surgeon/submit — swap lock idempotency", () => {
       expect(status).toBe(200);
       expect(body.swap).toEqual({ outId: SWA.id, inId: SWC.id });
       expect([...ctx.redis!.strings.keys()].filter((k) => k.includes(`:swap:${uid}`)).length).toBe(1);
+    } finally {
+      [POOLS[0], POOLS[1], POOLS[4]] = saved;
+      for (const p of [SWA, SWB, SWC]) byIdMap.delete(p.id);
+    }
+  });
+
+  it("a legacy (slot-ordered hash) lock from before the sorted-key deploy still binds the replay", async () => {
+    const SWA = { ...mkP("swingaa2015", "PG"), eligible: ["PG", "SG"] } as Player;
+    const SWB = { ...mkP("swingbb2015", "SG"), eligible: ["PG", "SG"] } as Player;
+    const SWC = { ...mkP("swingcc2015", "SG"), eligible: ["PG", "SG"] } as Player;
+    const saved = [POOLS[0], POOLS[1], POOLS[4]];
+    for (const p of [SWA, SWB, SWC]) byIdMap.set(p.id, p);
+    POOLS[0] = [SWA.id]; POOLS[1] = [SWB.id]; POOLS[4] = [P_C.id, SWC.id];
+    try {
+      const trace: DraftStep[] = [{ slot: "PG", pickedId: SWA.id, respins: [] }, { slot: "SG", pickedId: SWB.id, respins: [] }, ...VALID_TRACE.slice(2)];
+      const lineup = trace.map((s) => s.pickedId).join(",");
+      const uid = "legacyusr01";
+      const legacy = `lb:surgeon:${DATE}:swap:${uid}:${createHash("sha256").update(lineup).digest("hex").slice(0, 16)}`;
+      ctx.redis!.strings.set(legacy, `${SWA.id}>${SWC.id}`);
+      const { status, body } = await readJson(await post(anonBody({ uid, trace, outId: SWB.id, inId: SWC.id })));
+      expect(status).toBe(200);
+      expect(body.swap).toEqual({ outId: SWA.id, inId: SWC.id });
+      // graded as a replay: no fresh sorted-key lock, no cap bump
+      expect([...ctx.redis!.strings.keys()].filter((k) => k.includes(`:swap:${uid}`))).toEqual([legacy]);
+      expect(ctx.redis!.strings.has(`lb:surgeon:${DATE}:subs:${uid}`)).toBe(false);
     } finally {
       [POOLS[0], POOLS[1], POOLS[4]] = saved;
       for (const p of [SWA, SWB, SWC]) byIdMap.delete(p.id);

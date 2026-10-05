@@ -43,12 +43,19 @@ export async function submitFhScore(date: string, row: FhRow, sortScore: number)
 // Returns the prediction to grade: the requested one when this lineup is first seen, the locked
 // one (null when the lock recorded a skip) otherwise. Keyed on the SORTED id set: the same five
 // re-slotted verify to the same result/answer, so slot order must not mint a fresh lock.
-const keyPred = (d: string, uid: string, lineup: string) =>
-  `lb:fh:${d}:pred:${uid}:${createHash("sha256").update(lineup.split(",").sort().join(",")).digest("hex").slice(0, 16)}`;
+const keyPred = (d: string, uid: string, ids: string) =>
+  `lb:fh:${d}:pred:${uid}:${createHash("sha256").update(ids).digest("hex").slice(0, 16)}`;
 
 export async function lockFhPrediction(date: string, uid: string, lineup: string, requested: string | null): Promise<string | null> {
   if (!redis) return requested;
-  const key = keyPred(date, uid, lineup);
+  const sorted = lineup.split(",").sort().join(",");
+  // Deploy-boundary compat (removable a day after the sorted-key deploy — keys are dated): locks
+  // written earlier that day hashed the slot-ordered lineup; honor one so a replay can't re-lock.
+  if (sorted !== lineup) {
+    const legacy = await redis.get<string>(keyPred(date, uid, lineup));
+    if (legacy != null) return legacy || null;
+  }
+  const key = keyPred(date, uid, sorted);
   const claimed = await redis.set(key, requested ?? "", { nx: true, ex: TTL });
   if (claimed) return requested;
   const locked = await redis.get<string>(key);

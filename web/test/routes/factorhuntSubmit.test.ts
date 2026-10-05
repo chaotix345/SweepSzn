@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHash } from "node:crypto";
 import {
   enableRedisEnv,
   freshFake,
@@ -396,6 +397,33 @@ describe("POST /api/factorhunt/submit — re-slotted lineup", () => {
       [POOLS[0], POOLS[1]] = saved;
       byIdMap.delete(SWA.id); byIdMap.delete(SWB.id);
     }
+  });
+});
+
+// ---------- deploy-boundary compat: a pre-sorted-key lock (slot-ordered hash) still binds ----------
+describe("POST /api/factorhunt/submit — legacy (slot-ordered) lock", () => {
+  const legacyKey = (uid: string, lineup: string) =>
+    `lb:fh:${DATE}:pred:${uid}:${createHash("sha256").update(lineup).digest("hex").slice(0, 16)}`;
+  const LINEUP = VALID_TRACE.map((s) => s.pickedId).join(",");
+
+  it("a replay graded against a legacy wrong lock can't claim the ×1.05", async () => {
+    const uid = "legacyusr01";
+    ctx.redis!.strings.set(legacyKey(uid, LINEUP), DECOY_LABEL);
+    const { status, body } = await readJson(await post({ date: DATE, uid, name: "Tester", trace: VALID_TRACE, prediction: ANSWER_LABEL }));
+    expect(status).toBe(200);
+    const you = body.you as Record<string, unknown> | undefined;
+    expect(you?.predicted).toBe(DECOY_LABEL);
+    expect(you?.correct).toBe(false);
+    expect([...ctx.redis!.strings.keys()].filter((k) => k.includes(`:pred:${uid}:`))).toEqual([legacyKey(uid, LINEUP)]);
+  });
+
+  it("a legacy locked skip grades as a skip", async () => {
+    const uid = "legacyusr02";
+    ctx.redis!.strings.set(legacyKey(uid, LINEUP), "");
+    const { body } = await readJson(await post({ date: DATE, uid, name: "Tester", trace: VALID_TRACE, prediction: ANSWER_LABEL }));
+    const you = body.you as Record<string, unknown> | undefined;
+    expect(you?.predicted).toBeNull();
+    expect(you?.correct).toBe(false);
   });
 });
 

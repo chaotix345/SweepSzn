@@ -51,14 +51,22 @@ export async function bumpSurgeonSubs(date: string, uid: string): Promise<number
 // read-modify-write race; a NEW lineup (legit re-draft) locks fresh. Returns the swap to grade:
 // the requested one when this lineup is first seen, the locked one otherwise. Keyed on the SORTED
 // id set (swaps name players, not slots) so re-slotting the same five can't mint a fresh lock.
-const keySwap = (d: string, uid: string, lineup: string) =>
-  `lb:surgeon:${d}:swap:${uid}:${createHash("sha256").update(lineup.split(",").sort().join(",")).digest("hex").slice(0, 16)}`;
+const swapKey = (d: string, uid: string, ids: string) =>
+  `lb:surgeon:${d}:swap:${uid}:${createHash("sha256").update(ids).digest("hex").slice(0, 16)}`;
+const keySwap = (d: string, uid: string, lineup: string) => swapKey(d, uid, lineup.split(",").sort().join(","));
 
 export async function lockSurgeonSwap(
   date: string, uid: string, lineup: string, requested: { outId: string; inId: string },
 ): Promise<{ outId: string; inId: string; claimed: boolean }> {
   if (!redis) return { ...requested, claimed: false };
   const key = keySwap(date, uid, lineup);
+  // Deploy-boundary compat (removable a day after the sorted-key deploy — keys are dated): locks
+  // written earlier that day hashed the slot-ordered lineup; honor one so a replay can't re-lock.
+  const legacyKey = swapKey(date, uid, lineup);
+  if (legacyKey !== key) {
+    const [lo, li] = ((await redis.get<string>(legacyKey)) ?? "").split(">");
+    if (lo && li) return { outId: lo, inId: li, claimed: false };
+  }
   const val = `${requested.outId}>${requested.inId}`;
   const claimed = await redis.set(key, val, { nx: true, ex: TTL });
   if (claimed) return { ...requested, claimed: true };
