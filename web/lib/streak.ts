@@ -34,10 +34,12 @@ export function recordDailyDone(date: string): void {
 }
 
 // consecutive UTC days completed, ending today (or yesterday, so a streak survives until day's end)
-export function getStreak(): number {
-  const set = new Set(history());
+export function getStreak(): number { return streakFrom(history(), Date.now()); }
+
+// Pure core of getStreak over an explicit date list + clock (shared with lib/stats so they can't drift).
+export function streakFrom(dates: string[], now: number): number {
+  const set = new Set(dates);
   if (!set.size) return 0;
-  const now = Date.now();
   const anchor = set.has(utcKey(now)) ? now : set.has(utcKey(now - dayMs)) ? now - dayMs : 0;
   if (!anchor) return 0;
   let streak = 0;
