@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getPlayersByIds, getDraftablePool, getCoefficients } from "@/lib/data";
 import { projectRoster, projectionAllowed } from "@/lib/projection";
 import { rateLimit, ipOf } from "@/lib/redis";
+import { isFitLockedSeed } from "@/lib/challengeStore";
 import type { Slot } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -20,6 +21,8 @@ export async function POST(req: Request) {
   // Gate first: a partial-roster projection is a fit-class signal, so it is withheld on competitive
   // / blind seeds (Daily, Factor Hunt, Surgeon, HoopIQ, Challenge, prime-daily) — DESIGN.md §12.
   if (!projectionAllowed(seed)) return NextResponse.json({ gated: true });
+  // a classic game converted into a challenge exposes its seed to responders (mirrors /api/spin)
+  if (seed.startsWith("classic") && await isFitLockedSeed(seed)) return NextResponse.json({ gated: true });
 
   // lineup is slot-ordered (PG, SG, SF, PF, C); each entry is a player id or null for an open slot.
   const raw: unknown[] = Array.isArray(body?.lineup) ? body.lineup : [];

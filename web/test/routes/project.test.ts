@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { enableRedisEnv, freshFake, req, readJson, exhaustRateLimit } from "@/test/routeHarness";
+import { enableRedisEnv, freshFake, ctx, req, readJson, exhaustRateLimit } from "@/test/routeHarness";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -34,6 +34,14 @@ describe("POST /api/project — gating", () => {
       const { body } = await readJson(await post({ seed, lineup: [FIVE[0], null, null, null, null] }));
       expect(body.gated).toBe(true);
     }
+  });
+
+  it("returns gated for a classic seed converted into a challenge (fit-locked, exposed to responders)", async () => {
+    ctx.redis!.strings.set("chal:fitlock:classic-locked-seed-001", "1");
+    const { status, body } = await readJson(await post({ seed: "classic-locked-seed-001", lineup: [FIVE[0], FIVE[1], null, null, null] }));
+    expect(status).toBe(200);
+    expect(body.gated).toBe(true);
+    expect(body.floor).toBeUndefined();
   });
 });
 
