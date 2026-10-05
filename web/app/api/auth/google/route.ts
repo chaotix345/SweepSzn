@@ -7,6 +7,7 @@ import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
 import { upsertProfileOnSignIn } from "@/lib/profileStore";
 import { migratePushSubs } from "@/lib/pushStore";
+import { cleanName } from "@/lib/clean";
 
 export const runtime = "nodejs";
 
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
 
   const user = {
     uid: authedUid(payload.sub),
-    name: typeof payload.name === "string" ? payload.name.slice(0, 24) : "Player",
+    name: cleanName(payload.name) || "Player", // same trust boundary as typed names (bidi/zero-width stripped, capped)
     picture: typeof payload.picture === "string" ? payload.picture : undefined,
     // bind the caller's own anon uid into the session so claim-cleanup can only ever remove THEIR row
     anon: isAnonUid(anonUid) ? anonUid : undefined,

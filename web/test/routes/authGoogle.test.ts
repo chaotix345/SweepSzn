@@ -196,3 +196,19 @@ describe("POST /api/auth/google — happy path (local test JWKS)", () => {
     expect(session?.anon).toBeUndefined();
   });
 });
+
+// L11: the Google display name is user-controlled too — it must go through the same cleanName()
+// trust boundary as every typed name (no bidi overrides / zero-width chars on boards or OG cards).
+describe("POST /api/auth/google — display name sanitization", () => {
+  it("strips bidi-override characters from the Google name", async () => {
+    const { status, body, session } = await signInWith({ name: "a‮b" });
+    expect(status).toBe(200);
+    expect(session?.name).toBe("ab");
+    expect((body.user as { name: string }).name).toBe("ab");
+  });
+
+  it("falls back to Player when the Google name is empty after cleaning", async () => {
+    const { session } = await signInWith({ name: "​‮" });
+    expect(session?.name).toBe("Player");
+  });
+});
