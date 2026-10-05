@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { enableRedisEnv, freshFake, ctx } from "@/test/routeHarness";
 import { encodeLineup } from "@/lib/share";
+import { encodeSurgeonCard } from "@/lib/surgeon";
 import { getPlayersByIds } from "@/lib/data";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
@@ -50,6 +51,11 @@ describe("profileStore — dex set (unbounded collection)", () => {
     expect(await store.getDexIds("u-dex3")).toEqual([]);
     await store.syncResults("u-dex3", [{ encoded: `${DIDS[0]},zzz_fake`, mode: "classic", wins: 1, losses: 81, grade: "F", ts: 2 }], realIds);
     expect(await store.getDexIds("u-dex3")).toEqual([DIDS[0]]);
+  });
+  it("a Surgeon card records the drafted five plus the swapped-in player", async () => {
+    const IN = "kevin_garnett_min_2000s_2004";
+    await store.syncResults("u-dex4", [{ encoded: encodeSurgeonCard(DIDS, 4, IN), mode: "surgeon", wins: 60, losses: 22, grade: "A", ts: 1 }], realIds);
+    expect(new Set(await store.getDexIds("u-dex4"))).toEqual(new Set([...DIDS, IN]));
   });
 });
 

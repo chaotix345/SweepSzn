@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { enableRedisEnv, freshFake, ctx, req, readJson, exhaustRateLimit, signIn } from "@/test/routeHarness";
 import { encodeLineup } from "@/lib/share";
+import { encodeSurgeonCard } from "@/lib/surgeon";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -44,6 +45,16 @@ describe("GET /api/dex", () => {
     const { body } = await readJson(await GET(req("/api/dex")));
     expect((body.players as unknown[]).length).toBe(5); // same five, one set of cards
     expect(body.total).toBe(2);
+  });
+
+  it("a Surgeon card result counts the drafted five plus the swapped-in player", async () => {
+    await signIn({ uid: "user-dexsurgeon", name: "S" });
+    const IN = "wilt_chamberlain_sfw_1960s_1963";
+    ctx.redis!.lists.set("results:user-dexsurgeon", [
+      JSON.stringify({ encoded: encodeSurgeonCard(FIVE, 4, IN), mode: "surgeon", wins: 60, losses: 22, grade: "A", ts: 1 }),
+    ]);
+    const { body } = await readJson(await GET(req("/api/dex")));
+    expect((body.players as { id: string }[]).map((p) => p.id).sort()).toEqual([...FIVE, IN].sort());
   });
 
   it("includes players from the unbounded dex set even when results are empty (past the cap)", async () => {

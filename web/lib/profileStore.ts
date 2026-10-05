@@ -2,6 +2,7 @@ import "server-only";
 import { redis } from "./redis";
 import { dayUTC } from "./day";
 import { decodeLineup } from "./share";
+import { decodeSurgeonCard } from "./surgeon";
 
 // Per-account persistence for signed-in players: the cross-device home for streak, result history,
 // and the editable display handle. Anonymous players keep using localStorage (lib/streak.ts,
@@ -42,6 +43,14 @@ export interface ProfileResult {
   grade: string;
   ts: number;
   challengeId?: string;
+}
+
+// Every player id a stored result fielded. Surgeon entries carry a card (`ids.outIdx.inId`), not a
+// lineup segment: the drafted five plus the swapped-in player all took the floor.
+export function fieldedIds(r: Pick<ProfileResult, "mode" | "encoded">): string[] {
+  if (r.mode !== "surgeon") return decodeLineup(r.encoded);
+  const card = decodeSurgeonCard(r.encoded);
+  return card ? [...card.beforeIds, card.inId] : [];
 }
 
 export interface StoredProfile { name: string; picture: string; createdAt: number }
@@ -190,7 +199,7 @@ export async function syncResults(uid: string, entries: ProfileResult[], realIds
     // Accumulate every fielded player into the unbounded dex set, so the collection survives past the
     // results cap. SADD is idempotent, so re-syncing the same games never double-counts. Only REAL player
     // ids — `encoded` is client-supplied, so a forged lineup must not inject arbitrary members.
-    const dexArr = [...new Set(realIds(fresh.flatMap((e) => decodeLineup(e.encoded))))];
+    const dexArr = [...new Set(realIds(fresh.flatMap(fieldedIds)))];
     if (dexArr.length) await redis.sadd(keyDex(uid), dexArr[0], ...dexArr.slice(1));
     return fresh.length;
   } finally {
