@@ -193,6 +193,14 @@ describe("command surface semantics", () => {
     expect(await fake.scard("s")).toBe(0);
   });
 
+  it("pipeline exists returns a per-key 0/1 in order (streak-saver subscriber filter)", async () => {
+    const fake = createRedisFake();
+    await fake.hset("push:a", { f: 1 });
+    const before = fake.trips;
+    expect(await fake.pipeline().exists("push:a").exists("push:b").exec()).toEqual([1, 0]);
+    expect(fake.trips).toBe(before + 1);
+  });
+
   it("a pipeline counts as ONE round trip regardless of op count (trips budget metric)", async () => {
     const fake = createRedisFake();
     await fake.incr("a");                      // 1 trip

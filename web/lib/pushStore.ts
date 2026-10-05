@@ -56,6 +56,22 @@ export async function saveSubscription(uid: string, sub: PushSub): Promise<boole
   } catch { return false; }
 }
 
+// The subset of uids with at least one push subscription (order kept) — pipelined EXISTS, chunked so
+// one request stays bounded — so a fan-out (the streak-saver cron) skips the non-subscribed majority up
+// front. Unlike the rest of this module it THROWS on a transport error: the cron reports it.
+export async function filterSubscribed(uids: string[]): Promise<string[]> {
+  if (!redis || !uids.length) return [];
+  const out: string[] = [];
+  for (let i = 0; i < uids.length; i += 1000) {
+    const chunk = uids.slice(i, i + 1000);
+    const p = redis.pipeline();
+    for (const uid of chunk) p.exists(keyPush(uid));
+    const res = (await p.exec()) as number[];
+    chunk.forEach((uid, j) => { if (Number(res[j]) > 0) out.push(uid); });
+  }
+  return out;
+}
+
 // Remove one subscription (client toggle-off / browser revoke). Best-effort.
 export async function removeSubscription(uid: string, endpoint: string): Promise<void> {
   if (!redis) return;
