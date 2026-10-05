@@ -76,7 +76,7 @@ export default async function TeamPage({ params }: Props) {
       {five ? (
         <section aria-labelledby="five-heading" className="mt-10">
           <h2 id="five-heading" className="sr-only">The starting five</h2>
-          <ol className="grid grid-cols-1 gap-3 sm:grid-cols-5">
+          <ol className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {five.slots.map(({ slot, player: p }) => (
               <li key={p.id} className="flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
                 <span
