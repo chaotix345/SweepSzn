@@ -8,7 +8,7 @@ import { encodePickemCard } from "@/lib/pickem";
 // without running satori.
 vi.mock("@/lib/og", async (orig) => {
   const actual = await orig<typeof import("@/lib/og")>();
-  return { ...actual, resultOgElement: vi.fn(actual.resultOgElement) };
+  return { ...actual, resultOgElement: vi.fn(actual.resultOgElement), brandOgElement: vi.fn(actual.brandOgElement) };
 });
 const og = await import("@/lib/og");
 const ResultCard = (await import("@/components/ResultCard")).default;
@@ -32,7 +32,18 @@ function findProps(node: unknown, type: unknown): Record<string, unknown> | null
   return findProps(el.props?.children, type);
 }
 
-beforeEach(() => { vi.mocked(og.resultOgElement).mockClear(); });
+const MJS = ["michael_jordan_chi_1980s_1988", "michael_jordan_chi_1990s_1991", "michael_jordan_was_2000s_2003"];
+
+beforeEach(() => { vi.mocked(og.resultOgElement).mockClear(); vi.mocked(og.brandOgElement).mockClear(); });
+
+describe("/r/[lineup] OG — one person per five", () => {
+  it("three eras of one player fall back to the brand card", async () => {
+    const Image = (await import("@/app/r/[lineup]/opengraph-image")).default;
+    await Image(params({ lineup: encodeLineup([...MJS, FIVE[2], FIVE[3]]) }));
+    expect(og.resultOgElement).not.toHaveBeenCalled();
+    expect(og.brandOgElement).toHaveBeenCalled();
+  });
+});
 
 describe("/pe/[card] — Pick'Em share keeps the Blueprint / Prime stamps", () => {
   const pe = () => import("@/app/pe/[card]/page");

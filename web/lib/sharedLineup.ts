@@ -24,7 +24,8 @@ export function resolveSharedLineup(segment: string): SharedLineup | null {
   // pass the length check and render a nonsensical fabricated record) — mirrors verifyTrace's guard
   if (ids.length !== 5 || new Set(ids).size !== 5) return null;
   const players = getPlayersByIds(ids);
-  if (players.length !== 5) return null;
+  // one PERSON per five: distinct ids can still be era variants of one player (3 MJs) — verifyTrace's rule
+  if (players.length !== 5 || new Set(players.map((p) => p.person_id ?? p.id)).size !== 5) return null;
   const result = evaluateLineup(players, getCoefficients());
   // a b<code>~ prefix re-derives the blueprint execution grade from the same result (deterministic).
   // blueprint and prime are mutually exclusive modes — a crafted bs~p~ URL renders as blueprint only.
