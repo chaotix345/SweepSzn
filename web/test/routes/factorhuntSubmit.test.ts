@@ -372,6 +372,33 @@ describe("POST /api/factorhunt/submit — new lineup locks fresh", () => {
   });
 });
 
+// ---------- re-slotted lineup shares the lock (same five people, different slots) ----------
+describe("POST /api/factorhunt/submit — re-slotted lineup", () => {
+  it("the same five re-slotted can't escape a wrong lock to claim the ×1.05", async () => {
+    // two PG/SG swingmen dealt in rounds 0 and 1, so the same five can be placed two ways
+    const SWA = { ...mkP("swingaa2015", "PG", 2, 0), eligible: ["PG", "SG"] } as Player;
+    const SWB = { ...mkP("swingbb2015", "SG", 2, 0), eligible: ["PG", "SG"] } as Player;
+    const saved = [POOLS[0], POOLS[1]];
+    byIdMap.set(SWA.id, SWA); byIdMap.set(SWB.id, SWB);
+    POOLS[0] = [SWA.id]; POOLS[1] = [SWB.id];
+    try {
+      const rest = VALID_TRACE.slice(2);
+      const traceA: DraftStep[] = [{ slot: "PG", pickedId: SWA.id, respins: [] }, { slot: "SG", pickedId: SWB.id, respins: [] }, ...rest];
+      const traceB: DraftStep[] = [{ slot: "SG", pickedId: SWA.id, respins: [] }, { slot: "PG", pickedId: SWB.id, respins: [] }, ...rest];
+      const uid = "reslotusr01";
+      await post({ date: DATE, uid, name: "Tester", trace: traceA, prediction: DECOY_LABEL });
+      const { status, body } = await readJson(await post({ date: DATE, uid, name: "Tester", trace: traceB, prediction: ANSWER_LABEL }));
+      expect(status).toBe(200);
+      const you = body.you as Record<string, unknown> | undefined;
+      expect(you?.predicted).toBe(DECOY_LABEL);
+      expect(you?.correct).toBe(false);
+    } finally {
+      [POOLS[0], POOLS[1]] = saved;
+      byIdMap.delete(SWA.id); byIdMap.delete(SWB.id);
+    }
+  });
+});
+
 // ---------- 503 branch (disabled board) ----------
 describe("POST /api/factorhunt/submit — disabled board", () => {
   it.todo(

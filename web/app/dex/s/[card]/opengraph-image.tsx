@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { dexOgElement, brandOgElement, OG_SIZE, OG_ALT } from "@/lib/og";
+import { dexOgElement, brandOgElement, OG_SIZE, OG_ALT, OG_CACHE } from "@/lib/og";
 import { decodeDexShare } from "@/lib/share";
 import { getPlayersByIds } from "@/lib/data";
 
@@ -13,7 +13,7 @@ export const contentType = "image/png";
 export default async function Image({ params }: { params: Promise<{ card: string }> }) {
   const { card } = await params;
   const d = decodeDexShare(card);
-  if (!d) return new ImageResponse(brandOgElement("Drafted Dex"), { ...OG_SIZE });
+  if (!d) return new ImageResponse(brandOgElement("Drafted Dex"), { ...OG_SIZE, headers: OG_CACHE });
   const players = getPlayersByIds(d.ids).map((p) => ({ name: p.name, team: p.team }));
-  return new ImageResponse(dexOgElement(players, d.count, d.badges), { ...OG_SIZE });
+  return new ImageResponse(dexOgElement(players, d.count, d.badges), { ...OG_SIZE, headers: OG_CACHE });
 }

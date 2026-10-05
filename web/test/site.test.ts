@@ -21,3 +21,29 @@ describe("site brand constants", () => {
     expect(SITE_NAME).toBe("SweepSzn");
   });
 });
+
+// Any route that declares itself canonical is indexable content and must be in the sitemap
+// (/dex shipped with a canonical + marketing metadata but was never listed).
+describe("sitemap", () => {
+  it("lists every page that declares an alternates.canonical", async () => {
+    const { readdirSync, readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const sitemap = (await import("@/app/sitemap")).default;
+    const { baseUrl } = await import("@/lib/site");
+    const listed = new Set(sitemap().map((e) => e.url.slice(baseUrl.length) || "/"));
+    const canon: string[] = [];
+    const walk = (dir: string) => {
+      for (const d of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, d.name);
+        if (d.isDirectory()) walk(p);
+        else if (/^(page|layout)\.tsx$/.test(d.name)) {
+          const m = /canonical:\s*"([^"]+)"/.exec(readFileSync(p, "utf-8"));
+          if (m) canon.push(m[1]);
+        }
+      }
+    };
+    walk(join(process.cwd(), "app"));
+    expect(canon).toContain("/dex");
+    for (const c of canon) expect(listed, c).toContain(c);
+  });
+});

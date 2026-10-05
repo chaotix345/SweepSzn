@@ -14,11 +14,20 @@ import { enqueueNotif } from "@/lib/notifyStore";
 import { sendPushToUid } from "@/lib/pushStore";
 import type { ChallengeMiniPlayer, ChallengeSubmitResponse } from "@/lib/types";
 import { engineDeps } from "@/lib/verifyDeps";
+import { dayUTC } from "@/lib/day";
 
 export const runtime = "nodejs";
 
 const UID_RE = /^[a-z0-9-]{8,64}$/i;
 const ID_RE = /^[a-z0-9]{6,16}$/;
+// A daily- seed must name a real, already-released UTC day (canonical non-padded YYYY-M-D): a future
+// Daily's spins are unseen, so converting one would let a creator pre-draft next week's Daily.
+const isReleasedDaily = (s: string): boolean => {
+  const m = /^daily-(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (!m) return false;
+  const t = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+  return `daily-${dayUTC(new Date(t))}` === s && t <= Date.now();
+};
 // A legitimate game seed the first submitter may convert into a challenge (carrying the original
 // draft so a friend faces the SAME spins). Charset-bounded; the trace replay is the real gate.
 // Only an ORIGINAL game seed may be converted. The legacy "Challenge a Friend" case (h2h-<id>) is
@@ -27,7 +36,7 @@ const ID_RE = /^[a-z0-9]{6,16}$/;
 // FOREIGN h2h-<otherid> pool (poisoning the draft). Excluding it closes that hole with no loss.
 const isGameSeed = (s: unknown): s is string =>
   typeof s === "string" && /^[a-z0-9-]{1,40}$/.test(s) &&
-  (s.startsWith("daily-") || s.startsWith("classic-") || s.startsWith("hoopiq-"));
+  (s.startsWith("daily-") ? isReleasedDaily(s) : s.startsWith("classic-") || s.startsWith("hoopiq-"));
 
 export async function POST(req: Request) {
   if (!isChallengeEnabled()) return NextResponse.json({ error: "challenges not configured" }, { status: 503 });

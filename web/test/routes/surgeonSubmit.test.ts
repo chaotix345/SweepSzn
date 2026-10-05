@@ -312,6 +312,30 @@ describe("POST /api/surgeon/submit — swap lock idempotency", () => {
 
     expect(countAfterSecond).toBe(countAfterFirst + 1);
   });
+
+  it("the same five re-slotted grades the LOCKED swap (no fresh lock to walk the combos)", async () => {
+    // two PG/SG swingmen dealt in rounds 0 and 1 (the same five placed two ways) + a PG/SG candidate
+    const SWA = { ...mkP("swingaa2015", "PG"), eligible: ["PG", "SG"] } as Player;
+    const SWB = { ...mkP("swingbb2015", "SG"), eligible: ["PG", "SG"] } as Player;
+    const SWC = { ...mkP("swingcc2015", "SG"), eligible: ["PG", "SG"] } as Player;
+    const saved = [POOLS[0], POOLS[1], POOLS[4]];
+    for (const p of [SWA, SWB, SWC]) byIdMap.set(p.id, p);
+    POOLS[0] = [SWA.id]; POOLS[1] = [SWB.id]; POOLS[4] = [P_C.id, SWC.id];
+    try {
+      const rest = VALID_TRACE.slice(2);
+      const traceA: DraftStep[] = [{ slot: "PG", pickedId: SWA.id, respins: [] }, { slot: "SG", pickedId: SWB.id, respins: [] }, ...rest];
+      const traceB: DraftStep[] = [{ slot: "SG", pickedId: SWA.id, respins: [] }, { slot: "PG", pickedId: SWB.id, respins: [] }, ...rest];
+      const uid = "reslotusr01";
+      expect((await post(anonBody({ uid, trace: traceA, outId: SWA.id, inId: SWC.id }))).status).toBe(200);
+      const { status, body } = await readJson(await post(anonBody({ uid, trace: traceB, outId: SWB.id, inId: SWC.id })));
+      expect(status).toBe(200);
+      expect(body.swap).toEqual({ outId: SWA.id, inId: SWC.id });
+      expect([...ctx.redis!.strings.keys()].filter((k) => k.includes(`:swap:${uid}`)).length).toBe(1);
+    } finally {
+      [POOLS[0], POOLS[1], POOLS[4]] = saved;
+      for (const p of [SWA, SWB, SWC]) byIdMap.delete(p.id);
+    }
+  });
 });
 
 // ---------- keep-best (worse score does not displace better) ----------

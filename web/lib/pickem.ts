@@ -4,6 +4,8 @@
 // route and the client both import from here. localStorage helpers are client-only but
 // try/catch-guarded (streak.ts pattern), so importing this file server-side is harmless.
 
+import { safeDecode } from "./share";
+
 export const PICKEM_THRESHOLD = 60; // "more than 60 wins" — calibrated high so the crowd is often wrong
 
 export type PickemVote = "y" | "n";
@@ -94,7 +96,7 @@ export function encodePickemCard(lineup: string, v: PickemView): string {
 
 export function decodePickemCard(seg: string): { lineup: string; view: PickemView } | null {
   // Next already URL-decodes the route param; guard a still-encoded segment anyway.
-  const parts = decodeURIComponent(seg).split(".");
+  const parts = safeDecode(seg).split(".");
   if (parts.length !== 4) return null;
   const y = Number(parts[0]), n = Number(parts[1]);
   if (!Number.isInteger(y) || !Number.isInteger(n) || y < 0 || n < 0 || y > MAX_VOTES || n > MAX_VOTES) return null;

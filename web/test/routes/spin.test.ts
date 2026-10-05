@@ -5,8 +5,15 @@ vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upst
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
 vi.mock("next/server", async (orig) => (await import("@/test/routeHarness")).nextServerMockModule(await orig()));
 
+// passthrough spy so the exclude-cap test can see what the route hands to spin()
+vi.mock("@/lib/data", async (orig) => {
+  const actual = await orig<typeof import("@/lib/data")>();
+  return { ...actual, spin: vi.fn(actual.spin) };
+});
+
 enableRedisEnv();
 const { POST } = await import("@/app/api/spin/route");
+const { spin } = await import("@/lib/data");
 
 const post = (body: unknown, ip = "1.2.3.4") => POST(req("/api/spin", { body, ip }));
 
@@ -118,5 +125,15 @@ describe("POST /api/spin — szn rank ordinal", () => {
     const cands = body.candidates as Array<{ rank?: number }>;
     expect(cands.length).toBeGreaterThan(1);
     expect(cands.map((c) => c.rank)).toEqual(cands.map((_, i) => i));
+  });
+});
+
+describe("POST /api/spin — exclude cap", () => {
+  it("a real game excludes at most 4 prior picks — a crafted longer list is capped at 4", async () => {
+    const exclude = Array.from({ length: 8 }, (_, i) => `crafted_id_${i}`);
+    const { status } = await readJson(await post({ seed: "classic-cap", fit: true, exclude }));
+    expect(status).toBe(200);
+    const opts = vi.mocked(spin).mock.calls.at(-1)![2]!;
+    expect(opts.exclude).toEqual(exclude.slice(0, 4));
   });
 });

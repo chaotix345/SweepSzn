@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { X_HANDLE } from "@/lib/site";
+import { X_HANDLE, SITE_NAME } from "@/lib/site";
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { decodeDexShare } from "@/lib/share";
@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const description = `${data.count} all-time players collected across ${data.badges} milestone badges on SweepSzn. Build your own five and start your Dex.`;
   return {
     title, description, robots: { index: false },
-    openGraph: { title, description, type: "website", url: `/dex/s/${card}` },
+    openGraph: { title, description, siteName: SITE_NAME, type: "website", url: `/dex/s/${card}` },
     twitter: { card: "summary_large_image", title, description, site: X_HANDLE, creator: X_HANDLE },
   };
 }

@@ -112,13 +112,20 @@ export function getFranchisePool(team: string): Player[] {
 // Top-K draftable players by peak_score — the candidate universe the projection ticker's "ceiling"
 // (best-possible completion) is chosen from. Public global pool only (never a seed's future spins),
 // so it leaks nothing. Prime draws from the all-time peak-variant pools; everything else from the
-// regular current-franchise / canonical-decade universe.
+// regular current-franchise / canonical-decade universe. Pure over immutable per-process data, so
+// memoized — it was a ~5.3k filter+sort on every /api/project call. Callers must not mutate it.
+const _pools = new Map<string, Player[]>();
 export function getDraftablePool(prime: boolean, topK = 250): Player[] {
+  const key = `${prime}|${topK}`;
+  const hit = _pools.get(key);
+  if (hit) return hit;
   const { players } = load();
   const pool = prime
     ? [...loadPrime().byTeam.values()].flat()
     : players.filter((p) => CURRENT.has(p.team) && DECADES.has(p.decade));
-  return [...pool].sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0)).slice(0, topK);
+  const out = [...pool].sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0)).slice(0, topK);
+  _pools.set(key, out);
+  return out;
 }
 
 function toCandidate(p: Player, fit?: CandidateFit, usage?: number, rank?: number): DraftCandidate {
@@ -145,7 +152,9 @@ const FILLERS: Player[] = [0, 1, 2, 3, 4].map(filler);
 // "Reveal before confirm": for each candidate, their value OVER a replacement player given the
 // roster drafted so far (VORP-style net-rating swing), plus the specific need they fill. Roster-aware
 // — a rim protector scores higher precisely when the lineup lacks one. Tiers are relative to the spin.
-function computeFits(drafted: Player[], cands: Player[], c: Coefficients): Map<string, CandidateFit> {
+function computeFits(allDrafted: Player[], cands: Player[], c: Coefficients): Map<string, CandidateFit> {
+  // a real roster has at most 4 picks before the last spin — never score a lineup past five players
+  const drafted = allDrafted.slice(0, 4);
   const round1 = (x: number) => Math.round(x * 10) / 10;
   const feats = drafted.map((p) => playerFeatures(p, c));
   const need = {
@@ -317,14 +326,4 @@ export function primeSpin(seed: string, round: number, opts: SpinOptions = {}, w
   const fits = showFit ? computeFits(drafted, pool, coeff) : null;
   // usage rides every prime spin too — the live budget bar shows in Prime (it is stats-visible)
   return { team, decade: "PRIME", candidates: pool.map((p, i) => toCandidate(p, fits?.get(p.id), playerFeatures(p, coeff).usage, i)) };
-}
-
-export function primeStats() {
-  const { teams, byTeam } = loadPrime();
-  return { teams: teams.length, pools: teams.map((t) => ({ team: t, people: byTeam.get(t)!.length })) };
-}
-
-export function poolStats() {
-  const { players, draftKeys, decadesByTeam } = load();
-  return { players: players.length, franchiseDecades: draftKeys.length, franchises: decadesByTeam.size };
 }

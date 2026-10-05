@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import os from "node:os";
 import { enableRedisEnv, freshFake, ctx, readJson } from "@/test/routeHarness";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
@@ -36,5 +37,22 @@ describe("GET /api/health", () => {
     const json = JSON.stringify(body);
     expect(json).not.toContain("VAPID");
     expect(json).not.toContain("AUTH_SECRET");
+  });
+});
+
+describe("GET /api/health — data files", () => {
+  it("reports data:true when public/data/players.json ships with the function", async () => {
+    const { body } = await readJson(await GET());
+    expect(body.data).toBe(true);
+  });
+
+  it("reports data:false when the data files are missing (\"deploys but loads zero players\")", async () => {
+    vi.spyOn(process, "cwd").mockReturnValue(os.tmpdir());
+    try {
+      const { body } = await readJson(await GET());
+      expect(body.data).toBe(false);
+    } finally {
+      vi.mocked(process.cwd).mockRestore();
+    }
   });
 });

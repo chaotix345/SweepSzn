@@ -141,3 +141,10 @@ describe("surgeon /sg/ card round trip", () => {
   it("card: missing part rejected", () => expect(decodeSurgeonCard(`${ids.join(",")}.2`)).toBeNull());
   it("card: duplicate before-ids rejected", () => expect(decodeSurgeonCard("aa_1,aa_1,cc_3,dd_4,ee_5.1.ff_6")).toBeNull());
 });
+
+describe("decodeSurgeonCard — malformed percent-escape", () => {
+  it("returns null for '%zz' instead of throwing", () => {
+    expect(() => decodeSurgeonCard("%zz")).not.toThrow();
+    expect(decodeSurgeonCard("%zz")).toBeNull();
+  });
+});
