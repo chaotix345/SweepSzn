@@ -107,11 +107,16 @@ describe("dynamic OG cards are CDN-cacheable", () => {
   it("/c (Redis-backed, changes as friends respond): short s-maxage only", async () => {
     const Image = (await import("@/app/c/[id]/opengraph-image")).default;
     ctx.redis!.strings.set("chal:abc12345:info", JSON.stringify({ uid: "u-creator-1", name: "Alice", wins: 55, losses: 27, net: 7.5, grade: "B+", lineup: FIVE.join(","), seed: "h2h-abc12345" }));
-    for (const id of ["abc12345", "nochallenge1"]) {
-      const n = sMaxAge(await Image(params({ id })));
-      expect(n).toBeGreaterThan(0);
-      expect(n).toBeLessThanOrEqual(300);
-    }
+    const n = sMaxAge(await Image(params({ id: "abc12345" })));
+    expect(n).toBeGreaterThan(0);
+    expect(n).toBeLessThanOrEqual(300);
+  });
+
+  it("/c brand fallback (miss or Redis blip) is never CDN-cached", async () => {
+    const Image = (await import("@/app/c/[id]/opengraph-image")).default;
+    const res = await Image(params({ id: "nochallenge1" }));
+    expect(res.headers.get("cache-control")).not.toMatch(/s-maxage/);
+    expect(res.headers.get("cache-control")).toMatch(/no-store/);
   });
 });
 
