@@ -50,7 +50,8 @@ export async function verifySession(token: string): Promise<SessionUser | null> 
       uid: payload.sub,
       name: typeof payload.name === "string" ? payload.name : "",
       picture: typeof payload.picture === "string" ? payload.picture : undefined,
-      anon: typeof payload.anon === "string" ? payload.anon : undefined,
+      // re-gated here too: cookies minted before the sign-in-time isAnonUid check could carry a g-uid
+      anon: isAnonUid(payload.anon) ? payload.anon : undefined,
     };
   } catch { return null; }
 }

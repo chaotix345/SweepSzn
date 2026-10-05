@@ -45,6 +45,13 @@ describe("auth", () => {
       expect(s?.anon === "anon-abcd1234").toBe(true);
     });
 
+    it("drops a Google-namespace uid carried as anon (pre-M1 cookies skipped the sign-in check)", async () => {
+      const tok = await signSession({ uid: authedUid("1087"), name: "Charlie", anon: authedUid("victim") });
+      const s = await verifySession(tok);
+      expect(s?.uid).toBe(authedUid("1087"));
+      expect(s?.anon).toBeUndefined();
+    });
+
     it("tampered session rejected", async () => {
       const u1 = authedUid("1087");
       const tok = await signSession({ uid: u1, name: "Charlie", picture: "https://x/y.png", anon: "anon-abcd1234" });

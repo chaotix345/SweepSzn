@@ -391,6 +391,16 @@ describe("POST /api/daily/submit — claim cleanup", () => {
     // uid should still be on the board (submitScoreAuthed may update its score; either way it's present)
     expect(ctx.redis!.zsets.get(dailyZ)?.has(uid)).toBe(true);
   });
+
+  it("a pre-deploy cookie carrying a Google uid as anon can't delete that player's row", async () => {
+    const victim = "gfffffffffffffffffffffffffffffff";
+    const dailyZ = `lb:${TODAY}`;
+    ctx.redis!.zsets.set(dailyZ, new Map([[victim, 50000]]));
+    // signSession directly (no sign-in-time isAnonUid check) = a cookie minted before that check shipped
+    await signIn({ uid: "g1111111111111111111111111111111", name: "Mallory", anon: victim });
+    expect((await submit({ date: TODAY, trace: LEGIT_TRACE })).status).toBe(200);
+    expect(ctx.redis!.zsets.get(dailyZ)?.has(victim)).toBe(true);
+  });
 });
 
 // ---- after() / ev:submit counter ----
