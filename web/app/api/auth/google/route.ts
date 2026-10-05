@@ -1,15 +1,15 @@
 import { NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { isAuthEnabled, authedUid, signSession, verifyNonce, sha256hex, NONCE_COOKIE } from "@/lib/auth";
+import { isAuthEnabled, authedUid, isAnonUid, signSession, verifyNonce, sha256hex, NONCE_COOKIE } from "@/lib/auth";
 import { setSessionCookie } from "@/lib/authServer";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
 import { upsertProfileOnSignIn } from "@/lib/profileStore";
 import { migratePushSubs } from "@/lib/pushStore";
+import { cleanName } from "@/lib/clean";
 
 export const runtime = "nodejs";
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 
 // Module-level singleton so warm invocations reuse the JWKS cache.
 const JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
@@ -53,18 +53,22 @@ export async function POST(req: Request) {
 
   const user = {
     uid: authedUid(payload.sub),
-    name: typeof payload.name === "string" ? payload.name.slice(0, 24) : "Player",
+    name: cleanName(payload.name) || "Player", // same trust boundary as typed names (bidi/zero-width stripped, capped)
     picture: typeof payload.picture === "string" ? payload.picture : undefined,
     // bind the caller's own anon uid into the session so claim-cleanup can only ever remove THEIR row
-    anon: typeof anonUid === "string" && UID_RE.test(anonUid) ? anonUid : undefined,
+    anon: isAnonUid(anonUid) ? anonUid : undefined,
   };
+  // The stored account handle is canonical (a custom /api/profile/name handle must survive a re-sign-in),
+  // so seed/read the profile BEFORE minting the session. Best-effort: a Redis error keeps the Google name
+  // rather than failing sign-in. Re-cleaned because pre-cleanName sign-ins stored raw Google names.
+  const stored = await upsertProfileOnSignIn(user.uid, user.name, user.picture ?? "", Date.now()).catch(() => null);
+  user.name = cleanName(stored) || user.name;
   await setSessionCookie(await signSession(user));
   c.delete(NONCE_COOKIE);
   after(() => bump(redis, "signin", { uid: user.uid }));
-  // Persist the account's display handle and carry this device's anonymous push subscriptions onto
-  // the account. Best-effort and deferred so neither can slow or fail the sign-in response.
+  // Carry this device's anonymous push subscriptions onto the account. Best-effort and deferred so it
+  // can't slow or fail the sign-in response.
   after(async () => {
-    await upsertProfileOnSignIn(user.uid, user.name, user.picture ?? "", Date.now());
     if (user.anon && user.anon !== user.uid) await migratePushSubs(user.anon, user.uid);
   });
   return NextResponse.json({ user: { uid: user.uid, name: user.name, picture: user.picture } });

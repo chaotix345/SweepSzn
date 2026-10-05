@@ -35,6 +35,13 @@ describe("GET /api/crowd (post-lock reveal)", () => {
     expect(crowd.choices[0].name).toMatch(/Jordan/);
   });
 
+  it("never surfaces an unknown personId already stored (pre-validation junk) in the reveal", async () => {
+    seedSlot("slot_picks:classic:CHI|1990s:SG", { buy_crypto_now: 30, michael_jordan: 10, __total__: 40 });
+    const { body } = await readJson(await get("mode=classic&spinKey=CHI|1990s&slot=SG"));
+    const crowd = body.crowd as { choices: { personId: string }[] };
+    expect(crowd.choices.map((c) => c.personId)).toEqual(["michael_jordan"]);
+  });
+
   it("400 on bad params, 429 when rate-limited", async () => {
     expect((await readJson(await get("mode=nope&spinKey=CHI|1990s&slot=SG"))).status).toBe(400);
     exhaustRateLimit("rl:crowd:1.2.3.4", 120);

@@ -10,7 +10,7 @@ import {
   authEnv,
   flushAfter,
 } from "@/test/routeHarness";
-import type { DraftStep, Player } from "@/lib/types";
+import type { DraftStep, LineupResult, Player } from "@/lib/types";
 import { DEFAULT_COEFFICIENTS } from "@/lib/engine";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
@@ -309,6 +309,39 @@ describe("POST /api/daily/submit — authed path", () => {
     const streakZ = `streak:${uid}`;
     expect(ctx.redis!.zsets.get(streakZ)?.has(TODAY)).toBe(true);
   });
+
+  // Probe repro: the keep-best Lua moved the zsets atomically, but the meta HSETs ran in a LATER
+  // pipeline — so a worse concurrent run whose pipeline landed last left its row (50 wins, its lineup)
+  // under the better 70-win score, on the daily AND weekly/all-time boards.
+  it("two concurrent authed submits: every meta row matches the zset winner, even if a write lands late", async () => {
+    const { submitScoreAuthed } = await import("@/lib/leaderboard");
+    const { isoWeek } = await import("@/lib/isoweek");
+    const uid = "g" + "r".repeat(31);
+    const res = (w: number) => ({ wins: w, losses: 82 - w, netRtg: 0 }) as unknown as LineupResult;
+    const real = ctx.redis!.pipeline;
+    let n = 0;
+    ctx.redis!.pipeline = ((...a: Parameters<typeof real>) => {
+      const p = real(...a);
+      if (++n === 1) { const exec = p.exec; p.exec = async () => { await new Promise((r) => setTimeout(r, 20)); return exec(); }; }
+      return p;
+    }) as typeof real;
+    try {
+      await Promise.all([
+        submitScoreAuthed(TODAY, { uid, name: "tabA", wins: 50, losses: 32, net: 0, lineup: "A" }, res(50)),
+        submitScoreAuthed(TODAY, { uid, name: "tabB", wins: 70, losses: 12, net: 0, lineup: "B" }, res(70)),
+      ]);
+    } finally {
+      ctx.redis!.pipeline = real;
+    }
+    const week = isoWeek(TODAY);
+    expect(Math.floor(ctx.redis!.zsets.get(`lb:${TODAY}`)!.get(uid)! / 1000)).toBe(70);
+    expect(JSON.parse(ctx.redis!.hashes.get(`lb:${TODAY}:meta`)!.get(uid)!)).toMatchObject({ name: "tabB", wins: 70, lineup: "B" });
+    // weekly/all-time keep the exact ZINCRBY delta semantics: 50 credited, then +20
+    expect(ctx.redis!.zsets.get(`lb:week:${week}`)!.get(uid)).toBe(70);
+    expect(ctx.redis!.zsets.get("lb:alltime")!.get(uid)).toBe(70);
+    expect(JSON.parse(ctx.redis!.hashes.get(`lb:week:${week}:meta`)!.get(uid)!)).toEqual({ uid, name: "tabB", wins: 70 });
+    expect(JSON.parse(ctx.redis!.hashes.get("lb:alltime:meta")!.get(uid)!)).toEqual({ uid, name: "tabB", wins: 70 });
+  });
 });
 
 // ---- Claim cleanup ----
@@ -358,6 +391,16 @@ describe("POST /api/daily/submit — claim cleanup", () => {
     // uid should still be on the board (submitScoreAuthed may update its score; either way it's present)
     expect(ctx.redis!.zsets.get(dailyZ)?.has(uid)).toBe(true);
   });
+
+  it("a pre-deploy cookie carrying a Google uid as anon can't delete that player's row", async () => {
+    const victim = "gfffffffffffffffffffffffffffffff";
+    const dailyZ = `lb:${TODAY}`;
+    ctx.redis!.zsets.set(dailyZ, new Map([[victim, 50000]]));
+    // signSession directly (no sign-in-time isAnonUid check) = a cookie minted before that check shipped
+    await signIn({ uid: "g1111111111111111111111111111111", name: "Mallory", anon: victim });
+    expect((await submit({ date: TODAY, trace: LEGIT_TRACE })).status).toBe(200);
+    expect(ctx.redis!.zsets.get(dailyZ)?.has(victim)).toBe(true);
+  });
 });
 
 // ---- after() / ev:submit counter ----
@@ -378,5 +421,32 @@ describe("POST /api/daily/submit — after() side effects", () => {
     expect(Number(val)).toBeGreaterThanOrEqual(1);
     // submit is mode-tagged → admin can compute play→submit conversion per mode
     expect(Number(ctx.redis!.hashes.get(`ev:submode:${day}`)?.get("daily"))).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// H3: authedUid's "g" + 31 hex also satisfies the anon uid regex — a cookie-less caller must not
+// be able to post AS a signed-in player by putting their account uid in the body.
+describe("POST /api/daily/submit — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less submit claiming a signed-in uid and writes nothing", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    const { status, body } = await readJson(await submit({ date: TODAY, trace: LEGIT_TRACE, uid: victim }));
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/bad uid/i);
+    expect(ctx.redis!.zsets.get(`lb:${TODAY}`)?.has(victim) ?? false).toBe(false);
+  });
+});
+
+// H2: the submit response IS a board view — it must not carry anyone's uid (incl. the submitter's).
+describe("POST /api/daily/submit — no uids on the wire", () => {
+  it("returns the fresh board with no uids and the submitter's row marked me", async () => {
+    await submit({ date: TODAY, trace: LEGIT_TRACE, uid: "anon-first-12345678", name: "First" });
+    const { status, body } = await readJson(await submit({ date: TODAY, trace: LEGIT_TRACE, uid: "anon-second-1234567", name: "Second" }));
+    expect(status).toBe(200);
+    const wire = JSON.stringify(body);
+    expect(wire).not.toContain("anon-first-12345678");
+    expect(wire).not.toContain("anon-second-1234567");
+    expect((body.top as Array<{ name: string; me?: boolean }>).filter((r) => r.me).map((r) => r.name)).toEqual(["Second"]);
+    expect(body.you).toMatchObject({ name: "Second", me: true });
   });
 });

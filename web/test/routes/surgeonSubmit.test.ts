@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHash } from "node:crypto";
 import {
   enableRedisEnv,
   freshFake,
@@ -312,6 +313,55 @@ describe("POST /api/surgeon/submit — swap lock idempotency", () => {
 
     expect(countAfterSecond).toBe(countAfterFirst + 1);
   });
+
+  it("the same five re-slotted grades the LOCKED swap (no fresh lock to walk the combos)", async () => {
+    // two PG/SG swingmen dealt in rounds 0 and 1 (the same five placed two ways) + a PG/SG candidate
+    const SWA = { ...mkP("swingaa2015", "PG"), eligible: ["PG", "SG"] } as Player;
+    const SWB = { ...mkP("swingbb2015", "SG"), eligible: ["PG", "SG"] } as Player;
+    const SWC = { ...mkP("swingcc2015", "SG"), eligible: ["PG", "SG"] } as Player;
+    const saved = [POOLS[0], POOLS[1], POOLS[4]];
+    for (const p of [SWA, SWB, SWC]) byIdMap.set(p.id, p);
+    POOLS[0] = [SWA.id]; POOLS[1] = [SWB.id]; POOLS[4] = [P_C.id, SWC.id];
+    try {
+      const rest = VALID_TRACE.slice(2);
+      const traceA: DraftStep[] = [{ slot: "PG", pickedId: SWA.id, respins: [] }, { slot: "SG", pickedId: SWB.id, respins: [] }, ...rest];
+      const traceB: DraftStep[] = [{ slot: "SG", pickedId: SWA.id, respins: [] }, { slot: "PG", pickedId: SWB.id, respins: [] }, ...rest];
+      const uid = "reslotusr01";
+      expect((await post(anonBody({ uid, trace: traceA, outId: SWA.id, inId: SWC.id }))).status).toBe(200);
+      const { status, body } = await readJson(await post(anonBody({ uid, trace: traceB, outId: SWB.id, inId: SWC.id })));
+      expect(status).toBe(200);
+      expect(body.swap).toEqual({ outId: SWA.id, inId: SWC.id });
+      expect([...ctx.redis!.strings.keys()].filter((k) => k.includes(`:swap:${uid}`)).length).toBe(1);
+    } finally {
+      [POOLS[0], POOLS[1], POOLS[4]] = saved;
+      for (const p of [SWA, SWB, SWC]) byIdMap.delete(p.id);
+    }
+  });
+
+  it("a legacy (slot-ordered hash) lock from before the sorted-key deploy still binds the replay", async () => {
+    const SWA = { ...mkP("swingaa2015", "PG"), eligible: ["PG", "SG"] } as Player;
+    const SWB = { ...mkP("swingbb2015", "SG"), eligible: ["PG", "SG"] } as Player;
+    const SWC = { ...mkP("swingcc2015", "SG"), eligible: ["PG", "SG"] } as Player;
+    const saved = [POOLS[0], POOLS[1], POOLS[4]];
+    for (const p of [SWA, SWB, SWC]) byIdMap.set(p.id, p);
+    POOLS[0] = [SWA.id]; POOLS[1] = [SWB.id]; POOLS[4] = [P_C.id, SWC.id];
+    try {
+      const trace: DraftStep[] = [{ slot: "PG", pickedId: SWA.id, respins: [] }, { slot: "SG", pickedId: SWB.id, respins: [] }, ...VALID_TRACE.slice(2)];
+      const lineup = trace.map((s) => s.pickedId).join(",");
+      const uid = "legacyusr01";
+      const legacy = `lb:surgeon:${DATE}:swap:${uid}:${createHash("sha256").update(lineup).digest("hex").slice(0, 16)}`;
+      ctx.redis!.strings.set(legacy, `${SWA.id}>${SWC.id}`);
+      const { status, body } = await readJson(await post(anonBody({ uid, trace, outId: SWB.id, inId: SWC.id })));
+      expect(status).toBe(200);
+      expect(body.swap).toEqual({ outId: SWA.id, inId: SWC.id });
+      // graded as a replay: no fresh sorted-key lock, no cap bump
+      expect([...ctx.redis!.strings.keys()].filter((k) => k.includes(`:swap:${uid}`))).toEqual([legacy]);
+      expect(ctx.redis!.strings.has(`lb:surgeon:${DATE}:subs:${uid}`)).toBe(false);
+    } finally {
+      [POOLS[0], POOLS[1], POOLS[4]] = saved;
+      for (const p of [SWA, SWB, SWC]) byIdMap.delete(p.id);
+    }
+  });
 });
 
 // ---------- keep-best (worse score does not displace better) ----------
@@ -364,6 +414,15 @@ describe("POST /api/surgeon/submit — daily case cap", () => {
     const { status: s2 } = await readJson(await post(anonBody({ uid })));
     expect(s2).toBe(200);
   });
+
+  it("bumps the subs counter and its TTL in ONE round trip (no orphan no-TTL counter on a failed 2nd trip)", async () => {
+    const { bumpSurgeonSubs } = await import("@/lib/surgeonBoard");
+    const { TTL } = await import("@/lib/redis");
+    const before = ctx.redis!.trips;
+    expect(await bumpSurgeonSubs(DATE, "captest00003")).toBe(1);
+    expect(ctx.redis!.trips - before).toBe(1);
+    expect(ctx.redis!.ttls.get(`lb:surgeon:${DATE}:subs:captest00003`)).toBe(TTL);
+  });
 });
 
 // ---------- claim cleanup ----------
@@ -414,5 +473,29 @@ describe("POST /api/surgeon/submit — after() side effects", () => {
     expect(Number(count)).toBeGreaterThanOrEqual(1);
     // submit is mode-tagged → admin can compute play→submit conversion per mode
     expect(Number(ctx.redis!.hashes.get(`ev:submode:${day}`)?.get("surgeon"))).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// H3: a cookie-less caller can't post under a signed-in player's g-uid.
+describe("POST /api/surgeon/submit — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less submit claiming a signed-in uid and writes nothing", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    const { status, body } = await readJson(await post(anonBody({ uid: victim })));
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/bad uid/i);
+    expect(ctx.redis!.zsets.get(`lb:surgeon:${DATE}`)?.has(victim) ?? false).toBe(false);
+  });
+});
+
+// H2: the submit response carries the board view — it must not carry anyone's uid.
+describe("POST /api/surgeon/submit — no uids on the wire", () => {
+  it("returns the fresh board with no uids and the submitter's row marked me", async () => {
+    await post(anonBody({ uid: "anon-first-1234", name: "First" }));
+    const { status, body } = await readJson(await post(anonBody({ uid: "anon-second-123", name: "Second" })));
+    expect(status).toBe(200);
+    const wire = JSON.stringify(body);
+    expect(wire).not.toContain("anon-first-1234");
+    expect(wire).not.toContain("anon-second-123");
   });
 });

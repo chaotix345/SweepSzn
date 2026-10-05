@@ -70,6 +70,17 @@ export interface PushSub {
   keys: { p256dh: string; auth: string };
 }
 
+// Cap-checked store of one subscription in ONE step (separate HEXISTS/HLEN/HSET trips let concurrent
+// new devices all pass the cap check). An already-present field is always re-storable (key rotation).
+// KEYS: 1=push:<uid>. ARGV: 1=field 2=sub JSON 3=cap 4=ttl. Returns 1 when stored, 0 when capped.
+// (Pure string — lives here so the test fake keys eval() on this exact script.)
+export const PUSH_SAVE_LUA = `
+if redis.call('HEXISTS', KEYS[1], ARGV[1]) == 0 and redis.call('HLEN', KEYS[1]) >= tonumber(ARGV[3]) then return 0 end
+redis.call('HSET', KEYS[1], ARGV[1], ARGV[2])
+redis.call('EXPIRE', KEYS[1], tonumber(ARGV[4]))
+return 1
+`;
+
 // The real browser push services. Restricting endpoints to these prevents the server from being
 // coerced into an outbound HTTPS request to an attacker-controlled origin (SSRF) when it sends a push.
 const PUSH_HOSTS = new Set(["fcm.googleapis.com", "web.push.apple.com", "push.apple.com"]);

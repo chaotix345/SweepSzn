@@ -38,6 +38,10 @@ describe("GET /api/result/[lineup] (friend-compare JSON)", () => {
     expect((await readJson(await get("not-a-real-lineup"))).status).toBe(404);
   });
 
+  it("404 (not 500) for /api/result/%25zz — Next hands the handler the decoded '%zz'", async () => {
+    expect((await readJson(await get("%zz"))).status).toBe(404);
+  });
+
   it("429 when the per-IP bucket is exhausted", async () => {
     exhaustRateLimit("rl:result:1.2.3.4", 120);
     expect((await readJson(await get(encodeLineup(FIVE), "1.2.3.4"))).status).toBe(429);

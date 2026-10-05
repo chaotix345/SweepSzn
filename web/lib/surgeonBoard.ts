@@ -39,9 +39,9 @@ export const SURGEON_DAILY_CAP = 10;
 export async function bumpSurgeonSubs(date: string, uid: string): Promise<number> {
   if (!redis) return 0;
   const k = `lb:surgeon:${date}:subs:${uid}`;
-  const n = await redis.incr(k);
-  await redis.expire(k, TTL);
-  return n;
+  // INCR + EXPIRE NX in one pipeline (mirrors rateLimit) — a failed 2nd trip can't orphan a no-TTL counter
+  const [n] = (await redis.pipeline().incr(k).expire(k, TTL, "nx").exec()) as [number, number];
+  return Number(n);
 }
 
 // One immutable swap lock per (uid, lineup) per day — the Factor Hunt prediction-lock pattern.
@@ -49,15 +49,24 @@ export async function bumpSurgeonSubs(date: string, uid: string): Promise<number
 // unlocked replay of the same five could walk all 3×5 swap combos through keep-best until the
 // optimum landed (the spec's brute-force hole). SET NX makes the lock write-once with no
 // read-modify-write race; a NEW lineup (legit re-draft) locks fresh. Returns the swap to grade:
-// the requested one when this lineup is first seen, the locked one otherwise.
-const keySwap = (d: string, uid: string, lineup: string) =>
-  `lb:surgeon:${d}:swap:${uid}:${createHash("sha256").update(lineup).digest("hex").slice(0, 16)}`;
+// the requested one when this lineup is first seen, the locked one otherwise. Keyed on the SORTED
+// id set (swaps name players, not slots) so re-slotting the same five can't mint a fresh lock.
+const swapKey = (d: string, uid: string, ids: string) =>
+  `lb:surgeon:${d}:swap:${uid}:${createHash("sha256").update(ids).digest("hex").slice(0, 16)}`;
+const keySwap = (d: string, uid: string, lineup: string) => swapKey(d, uid, lineup.split(",").sort().join(","));
 
 export async function lockSurgeonSwap(
   date: string, uid: string, lineup: string, requested: { outId: string; inId: string },
 ): Promise<{ outId: string; inId: string; claimed: boolean }> {
   if (!redis) return { ...requested, claimed: false };
   const key = keySwap(date, uid, lineup);
+  // Deploy-boundary compat (removable a day after the sorted-key deploy — keys are dated): locks
+  // written earlier that day hashed the slot-ordered lineup; honor one so a replay can't re-lock.
+  const legacyKey = swapKey(date, uid, lineup);
+  if (legacyKey !== key) {
+    const [lo, li] = ((await redis.get<string>(legacyKey)) ?? "").split(">");
+    if (lo && li) return { outId: lo, inId: li, claimed: false };
+  }
   const val = `${requested.outId}>${requested.inId}`;
   const claimed = await redis.set(key, val, { nx: true, ex: TTL });
   if (claimed) return { ...requested, claimed: true };

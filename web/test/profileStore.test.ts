@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { enableRedisEnv, freshFake, ctx } from "@/test/routeHarness";
 import { encodeLineup } from "@/lib/share";
+import { encodeSurgeonCard } from "@/lib/surgeon";
+import { getPlayersByIds } from "@/lib/data";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 
 enableRedisEnv();
 const store = await import("@/lib/profileStore");
 const push = await import("@/lib/pushStore");
+// the sync route's real-player filter (injected into syncResults)
+const realIds = (ids: string[]) => getPlayersByIds(ids).map((p) => p.id);
 
 beforeEach(() => { freshFake(); });
 
@@ -30,17 +34,79 @@ describe("profileStore — pure helpers", () => {
 });
 
 describe("profileStore — dex set (unbounded collection)", () => {
-  const DIDS = ["michael_jordan_chi_1980s_1988", "larry_bird_bos_1980s_1986", "magic_johnson_lal_1980s_1987", "kareem_lal_1980s_1986", "james_worthy_lal_1980s_1988"];
+  // real players.json ids — only real players enter the dex (a forged lineup can't inject ids)
+  const DIDS = ["michael_jordan_chi_1980s_1988", "lebron_james_cle_2000s_2009", "david_robinson_sas_1990s_1994", "wilt_chamberlain_sfw_1960s_1963", "nikola_joki_den_2020s_2024"];
   it("syncResults records every fielded player in dex:{uid}; getDexIds reads them back", async () => {
-    await store.syncResults("u-dex1", [{ encoded: encodeLineup(DIDS), mode: "classic", wins: 1, losses: 81, grade: "F", ts: 1 }]);
+    await store.syncResults("u-dex1", [{ encoded: encodeLineup(DIDS), mode: "classic", wins: 1, losses: 81, grade: "F", ts: 1 }], realIds);
     expect(new Set(await store.getDexIds("u-dex1"))).toEqual(new Set(DIDS));
   });
   it("is idempotent — re-syncing the same game keeps the set at 5", async () => {
     const e = { encoded: encodeLineup(DIDS), mode: "classic", wins: 1, losses: 81, grade: "F", ts: 1 };
-    await store.syncResults("u-dex2", [e]);
-    await store.syncResults("u-dex2", [{ ...e, ts: 2 }]);
+    await store.syncResults("u-dex2", [e], realIds);
+    await store.syncResults("u-dex2", [{ ...e, ts: 2 }], realIds);
     expect((await store.getDexIds("u-dex2")).length).toBe(5);
   });
+  it("drops ids that aren't real players (a forged encoded lineup can't inject dex members)", async () => {
+    await store.syncResults("u-dex3", [{ encoded: "zzz_fake,yyy_fake", mode: "classic", wins: 1, losses: 81, grade: "F", ts: 1 }], realIds);
+    expect(await store.getDexIds("u-dex3")).toEqual([]);
+    await store.syncResults("u-dex3", [{ encoded: `${DIDS[0]},zzz_fake`, mode: "classic", wins: 1, losses: 81, grade: "F", ts: 2 }], realIds);
+    expect(await store.getDexIds("u-dex3")).toEqual([DIDS[0]]);
+  });
+  it("a Surgeon card records the drafted five plus the swapped-in player", async () => {
+    const IN = "kevin_garnett_min_2000s_2004";
+    await store.syncResults("u-dex4", [{ encoded: encodeSurgeonCard(DIDS, 4, IN), mode: "surgeon", wins: 60, losses: 22, grade: "A", ts: 1 }], realIds);
+    expect(new Set(await store.getDexIds("u-dex4"))).toEqual(new Set([...DIDS, IN]));
+  });
+});
+
+describe("profileStore — syncResults concurrency + atomicity", () => {
+  const mk = (n: number) => ({ encoded: "e" + n, mode: "classic", wins: 50, losses: 32, grade: "B", ts: 1000 + n });
+  const encs = async (uid: string) => (await store.getResults(uid)).map((e) => e.encoded);
+
+  // Probe repro: two un-serialized read-merge-rewrites interleaved into "e11,e3,e2,e1,e10,e3,e2,e1".
+  it("two concurrent syncs neither duplicate nor lose entries, and stay newest-first", async () => {
+    await store.syncResults("u-race", [mk(1), mk(2), mk(3)], realIds);
+    const added = await Promise.all([store.syncResults("u-race", [mk(10)], realIds), store.syncResults("u-race", [mk(11)], realIds)]);
+    expect(added).toEqual([1, 1]);
+    expect(await encs("u-race")).toEqual(["e11", "e10", "e3", "e2", "e1"]);
+    expect(ctx.redis!.strings.has("results:lock:u-race")).toBe(false); // lock released
+  });
+
+  it("a failed rewrite never wipes the stored history (DEL+LPUSH are one transaction) and frees the lock", async () => {
+    await store.syncResults("u-atomic", [mk(1), mk(2)], realIds);
+    const realLpush = ctx.redis!.lpush;
+    ctx.redis!.lpush = async () => { throw new Error("network down"); };
+    try {
+      await expect(store.syncResults("u-atomic", [mk(3)], realIds)).rejects.toThrow();
+    } finally {
+      ctx.redis!.lpush = realLpush;
+    }
+    expect(await encs("u-atomic")).toEqual(["e2", "e1"]);
+    expect(await store.syncResults("u-atomic", [mk(3)], realIds)).toBe(1); // lock was released — no wait, no wedge
+    expect(await encs("u-atomic")).toEqual(["e3", "e2", "e1"]);
+  });
+
+  it("a holder that overran the lock TTL doesn't release the NEXT holder's lock", async () => {
+    const lock = "results:lock:u-stale";
+    const realLrange = ctx.redis!.lrange;
+    // mid-sync: our lock expires and another sync claims it
+    ctx.redis!.lrange = async (...a: Parameters<typeof realLrange>) => {
+      ctx.redis!.strings.set(lock, "next-holder");
+      return realLrange(...a);
+    };
+    try {
+      expect(await store.syncResults("u-stale", [mk(1)], realIds)).toBe(1);
+    } finally {
+      ctx.redis!.lrange = realLrange;
+    }
+    expect(ctx.redis!.strings.get(lock)).toBe("next-holder");
+  });
+
+  it("a lock that stays busy gives up after a bounded handful of SET NX trips", async () => {
+    ctx.redis!.strings.set("results:lock:u-busy", "other");
+    await expect(store.syncResults("u-busy", [mk(1)], realIds)).rejects.toBeInstanceOf(store.ResultsLockBusyError);
+    expect(ctx.redis!.calls.filter((c) => c.startsWith("set results:lock:u-busy")).length).toBeLessThanOrEqual(11);
+  }, 15_000);
 });
 
 describe("profileStore — redis-backed", () => {
@@ -95,24 +161,34 @@ describe("profileStore — redis-backed", () => {
 
   it("syncResults dedupes by mode:encoded and preserves newest-first", async () => {
     const uid = "u2";
-    await store.syncResults(uid, [{ encoded: "a", mode: "daily", wins: 1, losses: 1, grade: "", ts: 1 }]);
+    await store.syncResults(uid, [{ encoded: "a", mode: "daily", wins: 1, losses: 1, grade: "", ts: 1 }], realIds);
     const added = await store.syncResults(uid, [
       { encoded: "a", mode: "daily", wins: 1, losses: 1, grade: "", ts: 1 }, // dupe
       { encoded: "b", mode: "daily", wins: 1, losses: 1, grade: "", ts: 2 }, // fresh
-    ]);
+    ], realIds);
     expect(added).toBe(1);
     const list = await store.getResults(uid);
     expect(list.length).toBe(2);
     expect(list[0].encoded).toBe("b"); // newest fresh entry at the head
   });
 
-  it("upsertProfileOnSignIn updates name on each sign-in but stamps createdAt only once", async () => {
+  it("upsertProfileOnSignIn seeds the name once, refreshes picture, stamps createdAt once", async () => {
     const uid = "u3";
-    await store.upsertProfileOnSignIn(uid, "First", "pic1", 1000);
-    await store.upsertProfileOnSignIn(uid, "Second", "pic2", 2000);
+    expect(await store.upsertProfileOnSignIn(uid, "First", "pic1", 1000)).toBe("First");
+    expect(await store.upsertProfileOnSignIn(uid, "Second", "pic2", 2000)).toBe("First");
     const h = ctx.redis!.hashes.get(`profile:${uid}`)!;
-    expect(h.get("name")).toBe("Second");
+    expect(h.get("name")).toBe("First");
+    expect(h.get("picture")).toBe("pic2");
     expect(Number(h.get("createdAt"))).toBe(1000);
+  });
+
+  // M14: a custom /api/profile/name handle must survive the next sign-in (new device / expiry)
+  it("upsertProfileOnSignIn never reverts a custom handle to the Google name", async () => {
+    const uid = "u4";
+    await store.upsertProfileOnSignIn(uid, "Google", "pic", 1000);
+    await store.setProfileName(uid, "Custom");
+    expect(await store.upsertProfileOnSignIn(uid, "Google", "pic", 2000)).toBe("Custom");
+    expect(await store.getProfileName(uid)).toBe("Custom");
   });
 });
 

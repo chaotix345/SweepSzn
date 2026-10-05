@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
-import { authedUid, signSession, verifySession, signNonce, verifyNonce, isAuthEnabled } from "./auth";
+import { authedUid, signSession, verifySession, signNonce, verifyNonce, isAuthEnabled, isAnonUid } from "./auth";
 
 beforeAll(() => {
   process.env.AUTH_SECRET = "test_secret_0123456789abcdef0123456789abcdef";
@@ -43,6 +43,13 @@ describe("auth", () => {
       const tok = await signSession({ uid: u1, name: "Charlie", picture: "https://x/y.png", anon: "anon-abcd1234" });
       const s = await verifySession(tok);
       expect(s?.anon === "anon-abcd1234").toBe(true);
+    });
+
+    it("drops a Google-namespace uid carried as anon (pre-M1 cookies skipped the sign-in check)", async () => {
+      const tok = await signSession({ uid: authedUid("1087"), name: "Charlie", anon: authedUid("victim") });
+      const s = await verifySession(tok);
+      expect(s?.uid).toBe(authedUid("1087"));
+      expect(s?.anon).toBeUndefined();
     });
 
     it("tampered session rejected", async () => {
@@ -101,5 +108,22 @@ describe("auth", () => {
       delete process.env.AUTH_SECRET;
       expect(isAuthEnabled() === false).toBe(true);
     });
+  });
+});
+
+describe("isAnonUid", () => {
+  // the no-session fallback on every uid-taking route: real anon uids pass, the g-namespace doesn't
+  it("accepts the anon uid shapes lib/streak.ts mints", () => {
+    expect(isAnonUid("3b241101-e2bb-4255-8caf-4136c566a962")).toBe(true); // crypto.randomUUID()
+    expect(isAnonUid("id-1718000000000-k3j4h5g6")).toBe(true);            // no-randomUUID fallback
+    expect(isAnonUid("anon-k3j4h5g6")).toBe(true);                        // no-localStorage fallback
+  });
+
+  it("rejects authedUid's Google namespace (any case) and malformed values", () => {
+    expect(isAnonUid(authedUid("123"))).toBe(false);
+    expect(isAnonUid(authedUid("123").toUpperCase())).toBe(false);
+    expect(isAnonUid("short")).toBe(false);
+    expect(isAnonUid("bad uid!!")).toBe(false);
+    expect(isAnonUid(42)).toBe(false);
   });
 });

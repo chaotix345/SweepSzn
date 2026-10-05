@@ -1,6 +1,5 @@
 import "server-only";
-import { getResults, getDexIds, getReferralFlags } from "./profileStore";
-import { decodeLineup } from "./share";
+import { getResults, getDexIds, getReferralFlags, fieldedIds } from "./profileStore";
 import { getPlayersByIds } from "./data";
 import { playerTraits } from "./traits";
 import { computeBadges, type DexPlayer, type BadgeKey } from "./dex";
@@ -11,7 +10,7 @@ import { computeBadges, type DexPlayer, type BadgeKey } from "./dex";
 export async function loadDexState(uid: string): Promise<{ players: DexPlayer[]; total: number; badges: BadgeKey[] }> {
   const results = await getResults(uid);
   const seen = new Set<string>();
-  for (const r of results) for (const id of decodeLineup(r.encoded)) seen.add(id);
+  for (const r of results) for (const id of fieldedIds(r)) seen.add(id);
   // Union the unbounded dex set so players from games evicted past the 200-result cap aren't lost.
   for (const id of await getDexIds(uid)) seen.add(id);
 

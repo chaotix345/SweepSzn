@@ -6,8 +6,8 @@ import React from "react";
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("next/link", () => ({
-  default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) =>
-    React.createElement("a", { href, className }, children),
+  default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) =>
+    React.createElement("a", { href, ...rest }, children),
 }));
 vi.mock("@/components/SessionProvider", () => ({ useSessionContext: () => ({ user: null }) }));
 vi.mock("@/lib/account", () => ({ fetchProfile: vi.fn(async () => null) }));
@@ -71,6 +71,14 @@ describe("ModeSelect", () => {
     expect(await screen.findByLabelText(/View today's Daily result/i)).toBeTruthy();
     expect(screen.getByText(/View today's result/i)).toBeTruthy();
     expect(screen.queryByText(/start here/i)).toBeNull(); // no longer the cold-start CTA
+  });
+
+  it("links the played-today Daily tile to its /r/ result client-side (a Link, not location.assign)", async () => {
+    mockList.mockReturnValue([{ encoded: "abc123", mode: "daily", wins: 50, losses: 10, grade: "A", ts: Date.now() }]);
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    const tile = await screen.findByLabelText(/View today's Daily result/i);
+    expect(tile.tagName).toBe("A");
+    expect(tile.getAttribute("href")).toBe("/r/abc123");
   });
 
   it("does NOT flip the Daily tile for a Daily played on a previous day", async () => {

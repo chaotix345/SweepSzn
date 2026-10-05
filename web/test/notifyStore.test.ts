@@ -52,8 +52,30 @@ describe("enqueueNotif dedup", () => {
   });
 
   it("sets the dedup nx key with a TTL after the first enqueue", async () => {
-    await enqueueNotif("u1", mkNotif());
-    expect(ctx.redis!.ttls.has("notif:dedup:u1:c1:Bob:beaten")).toBe(true);
+    await enqueueNotif("u1", mkNotif(), "resp-uid-1");
+    const keys = [...ctx.redis!.strings.keys()].filter((k) => k.startsWith("notif:dedup:u1:c1:"));
+    expect(keys.length).toBe(1);
+    expect(ctx.redis!.ttls.has(keys[0])).toBe(true);
+    // keyed on a hash of the responder uid (an anon uid is a bearer token) — never the raw uid or the name
+    expect(keys[0]).not.toContain("resp-uid-1");
+    expect(keys[0]).not.toContain("Bob");
+  });
+
+  it("returns true for a fresh item and false when deduped (the caller only pushes on fresh)", async () => {
+    expect(await enqueueNotif("u1", mkNotif(), "resp-uid-1")).toBe(true);
+    expect(await enqueueNotif("u1", mkNotif({ ts: 2000 }), "resp-uid-1")).toBe(false);
+  });
+
+  it("dedups on the responder uid, not the display name: two distinct 'Anonymous' friends are two items", async () => {
+    await enqueueNotif("u1", mkNotif({ opponent: "Anonymous" }), "resp-uid-1");
+    await enqueueNotif("u1", mkNotif({ opponent: "Anonymous" }), "resp-uid-2");
+    expect(ctx.redis!.lists.get("notif:u1")?.length).toBe(2);
+  });
+
+  it("the same responder uid under a fresh display name is still deduped", async () => {
+    await enqueueNotif("u1", mkNotif({ opponent: "Bob" }), "resp-uid-1");
+    expect(await enqueueNotif("u1", mkNotif({ opponent: "B0b the 2nd" }), "resp-uid-1")).toBe(false);
+    expect(ctx.redis!.lists.get("notif:u1")?.length).toBe(1);
   });
 
   it("caps the inbox at NOTIF_CAP (ltrim keeps the newest)", async () => {

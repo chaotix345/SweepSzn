@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { redis } from "@/lib/redis";
 import { dayUTC } from "@/lib/day";
-import { isPushEnabled, sendRawPushToUid } from "@/lib/pushStore";
+import { isPushEnabled, sendRawPushToUid, filterSubscribed } from "@/lib/pushStore";
 import { logError } from "@/lib/log";
 
 export const runtime = "nodejs";
@@ -18,12 +19,19 @@ export const runtime = "nodejs";
 // Idempotent by construction: SADD into streaknudge:<date> is the atomic once-per-day claim —
 // a re-run (or two overlapping runs) can't double-send to the same uid.
 
-export const NUDGE_CAP = 500; // bounds one run's webpush fan-out; leftovers just miss the nudge
+export const NUDGE_CAP = 500; // bounds one run's webpush fan-out (in SUBSCRIBERS); leftovers just miss the nudge
+const NUDGE_CONCURRENCY = 20; // sends in flight at once — 500 sequential HTTP sends risked the function timeout
+
+// Constant-time bearer check (a plain !== leaks how much of a guess matched); length mismatch -> reject.
+function authorized(header: string | null, secret: string): boolean {
+  const a = Buffer.from(header ?? ""), b = Buffer.from(`Bearer ${secret}`);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return NextResponse.json({ error: "cron not configured" }, { status: 503 });
-  if (req.headers.get("authorization") !== `Bearer ${secret}`)
+  if (!authorized(req.headers.get("authorization"), secret))
     return NextResponse.json({ error: "forbidden" }, { status: 401 });
   if (!redis) return NextResponse.json({ error: "leaderboard not configured" }, { status: 503 });
   if (!isPushEnabled()) return NextResponse.json({ error: "push not configured" }, { status: 503 });
@@ -47,33 +55,37 @@ export async function GET(req: Request) {
     const played = new Set(tMembers);
     const candidates = yMembers.filter((u) => !played.has(u));
 
-    // claim all candidates in one pipeline; sadd=0 means a previous run already nudged that uid
+    // Keep only opted-in uids BEFORE claiming/capping: most candidates have no push:<uid>, and letting
+    // them fill the cap (then claiming them) starved — and permanently barred — the real subscribers.
+    const subscribed = await filterSubscribed(candidates);
+    const targets = subscribed.slice(0, NUDGE_CAP);
+
+    // claim the capped subscribers in one pipeline; sadd=0 means a previous run already nudged that uid
     const claimKey = `streaknudge:${today}`;
     let claimed: string[] = [];
-    if (candidates.length) {
+    if (targets.length) {
       const p = redis.pipeline();
-      for (const uid of candidates) p.sadd(claimKey, uid);
+      for (const uid of targets) p.sadd(claimKey, uid);
       const results = (await p.exec()) as number[];
-      claimed = candidates.filter((_, i) => Number(results[i]) === 1);
+      claimed = targets.filter((_, i) => Number(results[i]) === 1);
       await redis.expire(claimKey, 60 * 60 * 48); // self-cleaning; outlives any re-run window
     }
 
-    const targets = claimed.slice(0, NUDGE_CAP);
     let sent = 0;
-    for (const uid of targets) {
-      // sendRawPushToUid is false for uids with no subscription — most players; that's expected
-      if (await sendRawPushToUid(uid, {
+    for (let i = 0; i < claimed.length; i += NUDGE_CONCURRENCY) {
+      const ok = await Promise.all(claimed.slice(i, i + NUDGE_CONCURRENCY).map((uid) => sendRawPushToUid(uid, {
         title: "🔥 Your streak is on the line",
         body: "You played yesterday but not today — today's boards reset at midnight UTC.",
         url: "/play",
-      })) sent++;
+      })));
+      sent += ok.filter(Boolean).length;
     }
 
     return NextResponse.json({
       date: today,
       candidates: candidates.length,
-      alreadyNudged: candidates.length - claimed.length,
-      capped: Math.max(0, claimed.length - NUDGE_CAP),
+      alreadyNudged: targets.length - claimed.length,
+      capped: Math.max(0, subscribed.length - NUDGE_CAP),
       sent,
     });
   } catch (err) {

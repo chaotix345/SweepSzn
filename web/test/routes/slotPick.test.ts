@@ -4,9 +4,15 @@ import { enableRedisEnv, freshFake, ctx, req, exhaustRateLimit, flushAfter } fro
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
 vi.mock("next/server", async (orig) => (await import("@/test/routeHarness")).nextServerMockModule(await orig()));
+// pass-through spy: lets a test see WHEN the players.json-backed lookup runs
+vi.mock("@/lib/data", async (orig) => {
+  const actual = await orig<typeof import("@/lib/data")>();
+  return { ...actual, getPersonName: vi.fn(actual.getPersonName) };
+});
 
 enableRedisEnv();
 const { POST } = await import("@/app/api/slot-pick/route");
+const { getPersonName } = await import("@/lib/data");
 
 const ok = { mode: "classic", spinKey: "BOS|2010s", slot: "PG", personId: "isaiah_thomas" };
 const HKEY = "slot_picks:classic:BOS|2010s:PG";
@@ -49,6 +55,15 @@ describe("POST /api/slot-pick (silent crowd logging)", () => {
     expect(ctx.redis!.hashes.get(HKEY)?.get("isaiah_thomas")).toBe("1");
   });
 
+  it("the personId check (players.json parse) runs inside after(), not before the 204", async () => {
+    vi.mocked(getPersonName).mockClear();
+    const res = await POST(req("/api/slot-pick", { body: ok }));
+    expect(res.status).toBe(204);
+    expect(getPersonName).not.toHaveBeenCalled();
+    await flushAfter();
+    expect(getPersonName).toHaveBeenCalledWith("isaiah_thomas");
+  });
+
   it("segments counts by mode (Classic crowd != Prime crowd)", async () => {
     await post(ok);
     await post({ ...ok, mode: "prime" });
@@ -61,6 +76,21 @@ describe("POST /api/slot-pick (silent crowd logging)", () => {
     await post(null);
     await POST(req("/api/slot-pick", { rawBody: "not json", method: "POST" }));
     await flushAfter();
+    expect([...ctx.redis!.hashes.keys()].some((k) => k.startsWith("slot_picks:"))).toBe(false);
+  });
+
+  it("the slot-pick hash carries a TTL (an unauthenticated beacon must not mint no-TTL keys)", async () => {
+    await post(ok);
+    expect(ctx.redis!.ttls.get(HKEY)).toBeGreaterThan(0);
+  });
+
+  it("a well-formed but unknown personId writes nothing (it would later render raw in /api/crowd)", async () => {
+    expect((await post({ ...ok, personId: "zzz_not_a_player" })).status).toBe(204);
+    expect(ctx.redis!.hashes.has(HKEY)).toBe(false);
+  });
+
+  it("a well-formed spinKey with an unreal team or decade writes nothing (bounded keyspace)", async () => {
+    for (const spinKey of ["XYZ|2010s", "BOS|1950s", "BOS|abc123", "bos|2010s"]) await post({ ...ok, spinKey });
     expect([...ctx.redis!.hashes.keys()].some((k) => k.startsWith("slot_picks:"))).toBe(false);
   });
 

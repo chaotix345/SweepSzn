@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import webpush from "web-push";
 import { redis, TTL } from "./redis";
 import { logError } from "./log";
-import { notificationText, type PushSub } from "./notify";
+import { notificationText, PUSH_SAVE_LUA, type PushSub } from "./notify";
 import type { Notif } from "./types";
 
 // Web-push subscription store + sender. Self-disabling: push is OFF unless all three VAPID env vars
@@ -48,12 +48,25 @@ function configureVapid(): boolean {
 export async function saveSubscription(uid: string, sub: PushSub): Promise<boolean> {
   if (!redis) return false;
   try {
-    const f = field(sub.endpoint);
-    const already = await redis.hexists(keyPush(uid), f);
-    if (!already && (await redis.hlen(keyPush(uid))) >= PUSH_SUB_CAP) return false;
-    await redis.pipeline().hset(keyPush(uid), { [f]: sub }).expire(keyPush(uid), TTL).exec();
-    return true;
+    // check + write + TTL atomically (PUSH_SAVE_LUA) so concurrent new devices can't overshoot the cap
+    return Number(await redis.eval(PUSH_SAVE_LUA, [keyPush(uid)], [field(sub.endpoint), JSON.stringify(sub), PUSH_SUB_CAP, TTL])) === 1;
   } catch { return false; }
+}
+
+// The subset of uids with at least one push subscription (order kept) — pipelined EXISTS, chunked so
+// one request stays bounded — so a fan-out (the streak-saver cron) skips the non-subscribed majority up
+// front. Unlike the rest of this module it THROWS on a transport error: the cron reports it.
+export async function filterSubscribed(uids: string[]): Promise<string[]> {
+  if (!redis || !uids.length) return [];
+  const out: string[] = [];
+  for (let i = 0; i < uids.length; i += 1000) {
+    const chunk = uids.slice(i, i + 1000);
+    const p = redis.pipeline();
+    for (const uid of chunk) p.exists(keyPush(uid));
+    const res = (await p.exec()) as number[];
+    chunk.forEach((uid, j) => { if (Number(res[j]) > 0) out.push(uid); });
+  }
+  return out;
 }
 
 // Remove one subscription (client toggle-off / browser revoke). Best-effort.
@@ -85,8 +98,9 @@ export async function migratePushSubs(fromUid: string, toUid: string): Promise<v
 // Fan an arbitrary {title, body, url} payload out to all of a uid's devices (the sw.js push
 // handler's exact shape). No-op when push or redis is unavailable; capped at PUSH_SUB_CAP; dead
 // endpoints (404/410 Gone) are pruned. Never throws. Returns whether at least one device was
-// targeted (so a cron can count real sends). Used by the challenge notification below and the
-// streak-saver cron.
+// targeted (so a cron can count real sends). A delivered send refreshes the key's TTL, so a subscriber
+// in active use never silently expires 31 days after opt-in. Used by the challenge notification below
+// and the streak-saver cron.
 export async function sendRawPushToUid(uid: string, payload: { title: string; body: string; url: string }): Promise<boolean> {
   if (!redis || !configureVapid()) return false;
   try {
@@ -94,14 +108,17 @@ export async function sendRawPushToUid(uid: string, payload: { title: string; bo
     const entries = Object.entries(subs).slice(0, PUSH_SUB_CAP);
     if (!entries.length) return false;
     const body = JSON.stringify(payload);
+    let delivered = 0;
     await Promise.all(entries.map(async ([f, sub]) => {
       try {
         await webpush.sendNotification(sub, body);
+        delivered++;
       } catch (err) {
         const code = (err as { statusCode?: number }).statusCode;
         if (code === 404 || code === 410) { try { await redis!.hdel(keyPush(uid), f); } catch { /* ignore */ } }
       }
     }));
+    if (delivered) { try { await redis.expire(keyPush(uid), TTL); } catch { /* best-effort */ } }
     return true;
   } catch (err) {
     logError("push.send", err); // never the uid — it's a bearer token

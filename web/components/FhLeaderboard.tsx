@@ -33,7 +33,11 @@ export default function FhLeaderboard({ date, trace, prediction, readOnly = fals
       const id = user?.uid ?? getUid(); // signed in: highlight + "already posted" key off the account
       setUid(id); setNameState(getName());
       try {
-        const r = await fetch(`/api/factorhunt/leaderboard?date=${encodeURIComponent(date)}&uid=${encodeURIComponent(id)}`, { signal: ctl.signal });
+        // POST: the anon uid rides the body, never a URL (DESIGN.md §12); signed in, the session wins
+        const r = await fetch("/api/factorhunt/leaderboard", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ date, uid: getUid() }), signal: ctl.signal,
+        });
         if (r.status === 503) { setEnabled(false); return; }
         if (r.ok) { const v = await r.json(); setView(v); setSubmitted(!!v?.you); }
       } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline — board hidden */ }
@@ -82,7 +86,7 @@ export default function FhLeaderboard({ date, trace, prediction, readOnly = fals
             </div>
           )}
           {err && <div className="mt-2 text-xs text-red-400">{err}</div>}
-          {view && <Board view={view} uid={uid} />}
+          {view && <Board view={view} />}
         </>
       ) : (
         <div className="mt-2 text-xs text-zinc-600">Board opens soon — your prediction still counts for bragging rights.</div>
@@ -91,9 +95,10 @@ export default function FhLeaderboard({ date, trace, prediction, readOnly = fals
   );
 }
 
-function Board({ view, uid }: { view: FhBoardView; uid: string }) {
+// Rows carry no uid (server-stripped); the caller's own row arrives marked `me`.
+function Board({ view }: { view: FhBoardView }) {
   const rows = view.top;
-  const youOutside = view.you && !rows.some((r) => r.uid === uid);
+  const youOutside = view.you && !rows.some((r) => r.me);
   if (!rows.length) return <div className="mt-3 text-xs text-zinc-500">Be the first to post a score today.</div>;
   return (
     <div className="mt-3">
@@ -101,7 +106,7 @@ function Board({ view, uid }: { view: FhBoardView; uid: string }) {
         <span>Today&apos;s top {Math.min(rows.length, 100)}</span><span>{view.total} played</span>
       </div>
       <div className="max-h-[min(18rem,55dvh)] space-y-1 overflow-y-auto">
-        {rows.map((r) => <Row key={r.uid} r={r} me={r.uid === uid} />)}
+        {rows.map((r) => <Row key={r.rank} r={r} me={r.me} />)}
         {youOutside && view.you && <Row r={view.you} me />}
       </div>
     </div>

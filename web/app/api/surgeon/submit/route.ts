@@ -12,6 +12,7 @@ import {
   bumpSurgeonSubs, SURGEON_DAILY_CAP,
 } from "@/lib/surgeonBoard";
 import { getSession } from "@/lib/authServer";
+import { isAnonUid } from "@/lib/auth";
 import { cleanName } from "@/lib/clean";
 import { SLOTS } from "@/lib/teams";
 import type { Player } from "@/lib/types";
@@ -30,7 +31,6 @@ export const runtime = "nodejs";
 // keep-best), and (5) recomputes the delta itself. Client-sent factors, pools, and deltas are
 // never trusted — they are never even read.
 
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 const ID_RE = /^[a-z0-9_]{1,64}$/;
 
 export async function POST(req: Request) {
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     uid = session.uid;
     name = cleanName(body.name) || session.name || "Player";
   } else {
-    if (typeof body.uid !== "string" || !UID_RE.test(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+    if (!isAnonUid(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
     uid = body.uid;
     name = cleanName(body.name) || "Anonymous";
   }

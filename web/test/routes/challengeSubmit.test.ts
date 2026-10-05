@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   enableRedisEnv,
   freshFake,
@@ -11,6 +11,7 @@ import {
   flushAfter,
 } from "@/test/routeHarness";
 import type { DraftStep } from "@/lib/types";
+import { dayUTC } from "@/lib/day";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -73,7 +74,14 @@ vi.mock("@/lib/engine", () => ({
 }));
 
 // Keep push silent — VAPID keys are absent, so isPushEnabled() returns false and sendPushToUid no-ops.
-// No extra mock needed.
+// The push-gating block below sets VAPID env for its own tests only; web-push is stubbed so its
+// fan-out is observable without network.
+const sendNotification = vi.fn<(sub: unknown, body: string) => Promise<{ statusCode: number }>>(
+  async () => ({ statusCode: 201 }),
+);
+vi.mock("web-push", () => ({
+  default: { setVapidDetails: vi.fn(), sendNotification: (sub: unknown, body: string) => sendNotification(sub, body) },
+}));
 
 enableRedisEnv();
 authEnv();
@@ -472,6 +480,53 @@ describe("POST /api/challenge/submit — after() notification fan-out", () => {
   });
 });
 
+describe("POST /api/challenge/submit — push gating (dedup + per-creator cap)", () => {
+  const creatorUid = "creator-uid-push";
+  const VAPID = { VAPID_PUBLIC_KEY: "test-public-key", VAPID_PRIVATE_KEY: "test-private-key", VAPID_SUBJECT: "mailto:t@example.com" };
+  beforeEach(() => {
+    Object.assign(process.env, VAPID);
+    sendNotification.mockClear();
+    const weakInfo = {
+      uid: creatorUid, name: "Creator", wins: 10, losses: 72, net: -10.0,
+      grade: "F", lineup: "p0pg,p1sg,p2sf,p3pf,p4c", seed: `h2h-${VALID_ID}`, hinted: false,
+    };
+    ctx.redis!.strings.set(`chal:${VALID_ID}:info`, JSON.stringify(weakInfo));
+    ctx.redis!.hashes.set(`push:${creatorUid}`, new Map([["f1", JSON.stringify({ endpoint: "https://fcm.googleapis.com/x", keys: { p256dh: "k", auth: "a" } })]]));
+  });
+  afterEach(() => { for (const k of Object.keys(VAPID)) delete process.env[k]; });
+
+  it("replaying one trace under many fresh uids+names pushes the creator at most CHALLENGE_PUSH_CAP times", async () => {
+    const { CHALLENGE_PUSH_CAP } = await import("@/lib/notifyStore");
+    const n = CHALLENGE_PUSH_CAP + 3;
+    for (let i = 0; i < n; i++) {
+      await post({ id: VALID_ID, uid: `spam-uid-${i}0000`, name: `Spammer ${i}`, trace: LEGIT_TRACE }, `7.7.7.${i}`);
+      await flushAfter();
+    }
+    expect(sendNotification).toHaveBeenCalledTimes(CHALLENGE_PUSH_CAP);
+    // the inbox still records every fresh responder — only the OS push is capped
+    expect(ctx.redis!.lists.get(`notif:${creatorUid}`)?.length).toBe(n);
+  });
+
+  it("a deduped enqueue (same responder uid under a new name) sends no push and adds no inbox item", async () => {
+    await post({ id: VALID_ID, uid: "dup-responder-01", name: "Bob", trace: LEGIT_TRACE });
+    await flushAfter();
+    ctx.redis!.zsets.get(`chal:${VALID_ID}`)!.delete("dup-responder-01"); // force improved=true on the replay
+    await post({ id: VALID_ID, uid: "dup-responder-01", name: "Robert", trace: LEGIT_TRACE });
+    await flushAfter();
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+    expect(ctx.redis!.lists.get(`notif:${creatorUid}`)?.length).toBe(1);
+  });
+
+  it("two distinct nameless ('Anonymous') responders are two inbox items, not one", async () => {
+    await post({ id: VALID_ID, uid: "anon-friend-0001", trace: LEGIT_TRACE });
+    await flushAfter();
+    await post({ id: VALID_ID, uid: "anon-friend-0002", trace: LEGIT_TRACE });
+    await flushAfter();
+    expect(ctx.redis!.lists.get(`notif:${creatorUid}`)?.length).toBe(2);
+    expect(sendNotification).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("POST /api/challenge/submit — rate limit", () => {
   it("429 when bucket is exhausted", async () => {
     exhaustRateLimit("rl:chal:9.9.9.9", 20);
@@ -521,5 +576,33 @@ describe("POST /api/challenge/submit — isGameSeed allowlist", () => {
     expect(status).toBe(200);
     const stored = JSON.parse(ctx.redis!.strings.get(`chal:${VALID_ID}:info`)!);
     expect(stored.seed).toBe("daily-2026-6-10");
+  });
+
+  it("today's daily- seed is accepted from the creator", async () => {
+    const today = `daily-${dayUTC()}`;
+    expect((await post({ id: VALID_ID, uid: anonUid, trace: LEGIT_TRACE, seed: today })).status).toBe(200);
+    expect(JSON.parse(ctx.redis!.strings.get(`chal:${VALID_ID}:info`)!).seed).toBe(today);
+  });
+
+  it("a FUTURE (or malformed) daily- seed is NOT accepted — falls back to h2h-<id>", async () => {
+    const tomorrow = `daily-${dayUTC(new Date(Date.now() + 86_400_000))}`;
+    for (const seed of [tomorrow, "daily-2099-1-1", "daily-2026-2-30", "daily-2026-06-10", "daily-x"]) {
+      freshFake();
+      const { status } = await readJson(await post({ id: VALID_ID, uid: anonUid, trace: LEGIT_TRACE, seed }));
+      expect(status).toBe(200);
+      expect(JSON.parse(ctx.redis!.strings.get(`chal:${VALID_ID}:info`)!).seed, seed).toBe(`h2h-${VALID_ID}`);
+    }
+  });
+});
+
+// H3: a cookie-less caller can't submit (or resolve as creator) under a signed-in player's g-uid.
+describe("POST /api/challenge/submit — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less submit claiming a signed-in uid and writes nothing", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    const { status, body } = await readJson(await post({ id: VALID_ID, uid: victim, trace: LEGIT_TRACE }));
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/bad uid/i);
+    expect(ctx.redis!.strings.has(`chal:${VALID_ID}:info`)).toBe(false);
   });
 });

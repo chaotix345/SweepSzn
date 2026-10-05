@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
-import { X_HANDLE } from "@/lib/site";
+import { X_HANDLE, SITE_NAME } from "@/lib/site";
 import { cache } from "react";
 import { notFound } from "next/navigation";
-import { getPlayersByIds, getCoefficients } from "@/lib/data";
-import { evaluateLineup } from "@/lib/engine";
-import { decodeShare } from "@/lib/share";
-import { decodePickemCard, pickemVerdict } from "@/lib/pickem";
+import { resolveSharedPickem } from "@/lib/sharedLineup";
+import { pickemVerdict } from "@/lib/pickem";
 import { SLOTS, displayName } from "@/lib/teams";
 import ResultCard from "@/components/ResultCard";
 import Beacon from "@/components/Beacon";
@@ -17,33 +15,25 @@ import ShareHeader from "@/components/ShareHeader";
 
 type Props = { params: Promise<{ card: string }> };
 
-const loadCard = cache((card: string) => {
-  const dec = decodePickemCard(card);
-  if (!dec) return null;
-  const { ids, hinted, prime } = decodeShare(dec.lineup);
-  if (ids.length !== 5 || new Set(ids).size !== 5) return null;
-  const players = getPlayersByIds(ids);
-  if (players.length !== 5) return null;
-  return { players, result: evaluateLineup(players, getCoefficients()), hinted, prime, view: dec.view };
-});
+const loadCard = cache(resolveSharedPickem);
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { card } = await params;
   const data = loadCard(card);
   if (!data) return { title: "SweepSzn — all-time NBA lineup", robots: { index: false } };
-  const { result, players, view } = data;
+  const { result, players, view, prime, blueprint } = data;
   const names = players.map((p) => displayName(p.name)).join(", ");
   const v = pickemVerdict(result.wins, view);
   const crowd = v.crowd
     ? `The crowd said ${v.crowd === "y" ? "60+ wins" : "no shot"} (${v.pct}%) — ${v.crowdRight ? "right" : "wrong"}.`
     : "Crowd vs. you.";
-  const title = `${result.wins}-${result.losses} (${result.grade}) — ${names} · SweepSzn Pick'Em`;
+  const title = `${result.wins}-${result.losses} (${result.grade}) — ${names} · SweepSzn${prime ? " Prime" : blueprint ? " Blueprint" : ""} Pick'Em`;
   const description = `${crowd} ${names} went ${result.wins}-${result.losses}. Can you beat the crowd?`;
   return {
     title,
     description,
     robots: { index: false },
-    openGraph: { title, description, type: "website", url: `/pe/${card}` },
+    openGraph: { title, description, siteName: SITE_NAME, type: "website", url: `/pe/${card}` },
     twitter: { card: "summary_large_image", title, description, site: X_HANDLE, creator: X_HANDLE },
   };
 }
@@ -61,7 +51,7 @@ export default async function SharedPickem({ params }: Props) {
       <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <ShareHeader tagline="a friend took on the crowd" cta="Beat the crowd →" />
-        <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared prime={data.prime} pickem={data.view} />
+        <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared prime={data.prime} blueprint={data.blueprint ?? undefined} pickem={data.view} />
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">
         engine calibrated to real NBA team-seasons

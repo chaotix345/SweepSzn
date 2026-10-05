@@ -3,10 +3,9 @@ import { rateLimit, ipOf } from "@/lib/redis";
 import { validateSubscription } from "@/lib/notify";
 import { isPushEnabled, saveSubscription } from "@/lib/pushStore";
 import { getSession } from "@/lib/authServer";
+import { isAnonUid } from "@/lib/auth";
 
 export const runtime = "nodejs";
-
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 
 // Store a web-push subscription for the caller's uid. Self-disabling: 503 when VAPID isn't configured
 // (the client opt-in is also hidden in that case). Identity mirrors the other uid-gated routes.
@@ -21,7 +20,7 @@ export async function POST(req: Request) {
   if (session) {
     uid = session.uid;
   } else {
-    if (typeof body?.uid !== "string" || !UID_RE.test(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+    if (!isAnonUid(body?.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
     uid = body.uid;
   }
   const sub = validateSubscription(body?.subscription);

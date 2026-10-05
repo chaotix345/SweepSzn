@@ -12,11 +12,12 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const seed: string = typeof body?.seed === "string" ? body.seed : "classic";
   const round: number = Number.isFinite(body?.round) ? body.round : 0;
-  // Cap + sanitize the exclude list: a real game excludes at most 4 prior picks. Bounding it keeps
-  // a crafted huge array off the CPU-heavy fit path and off Redis-free string churn.
+  // Cap + sanitize the exclude list: a real game excludes at most 4 prior picks (the client sends its
+  // drafted players, ≤4 before the last spin). Bounding it keeps a crafted huge array off the
+  // CPU-heavy fit path, and a 5th+ id would push computeFits past a five-man lineup.
   const exclude: string[] = (Array.isArray(body?.exclude) ? body.exclude : [])
     .filter((x: unknown): x is string => typeof x === "string" && x.length <= 64)
-    .slice(0, 8);
+    .slice(0, 4);
   // Fit grades are a Classic-only UI assist; only Classic free-play requests them (see lib/data.ts).
   // Refuse fit for a classic seed that's been converted into a challenge — its seed is exposed to
   // responders, so a crafted fit:true spin must not hand them optimal-draft grades over the creator.

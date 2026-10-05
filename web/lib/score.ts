@@ -19,6 +19,11 @@ export function computeDelta(prevScore: number | null, newScore: number, newWins
 // never self-heals. KEYS: 1=daily Z, 2=weekly Z, 3=all-time Z. ARGV: 1=uid 2=newScore 3=newWins
 // 4=dailyTTL 5=weeklyTTL. Returns {changed, delta, weeklyWins, alltimeWins}. (Pure string — lives
 // here, not in the server-only store, so a dev harness can EVAL the exact script against real Redis.)
+// Optional meta rows, written in the SAME step only when the daily best improved (as KEEP_BEST_ROW_LUA
+// does) — a meta HSET in a later pipeline let a concurrent worse run land its row under the better
+// score: KEYS 4=daily meta H 5=weekly meta H 6=all-time meta H; ARGV 6=daily row JSON, 7=agg row JSON
+// up to and including `"wins":` (the script appends the current total + `}`). Daily meta takes the
+// daily TTL, weekly meta the weekly TTL; all-time meta is persistent. Omit them for the 3-key shape.
 export const KEEP_BEST_LUA = `
 local prev = redis.call('ZSCORE', KEYS[1], ARGV[1])
 local newScore = tonumber(ARGV[2])
@@ -41,6 +46,13 @@ else
   aw = a and tonumber(a) or 0
 end
 redis.call('EXPIRE', KEYS[2], tonumber(ARGV[5]))
+if KEYS[4] then
+  redis.call('HSET', KEYS[4], ARGV[1], ARGV[6])
+  redis.call('EXPIRE', KEYS[4], tonumber(ARGV[4]))
+  redis.call('HSET', KEYS[5], ARGV[1], ARGV[7] .. string.format('%d', math.floor(ww)) .. '}')
+  redis.call('HSET', KEYS[6], ARGV[1], ARGV[7] .. string.format('%d', math.floor(aw)) .. '}')
+  redis.call('EXPIRE', KEYS[5], tonumber(ARGV[5]))
+end
 return {1, delta, math.floor(ww), math.floor(aw)}
 `;
 
@@ -76,4 +88,12 @@ for i = 1, #doomed do
   redis.call('HDEL', KEYS[2], doomed[i])
 end
 return #doomed
+`;
+
+// Owner-checked lock release (profileStore's results:lock): DEL only while the lock still holds
+// this holder's token, so a holder that overran the TTL can't delete the NEXT holder's lock.
+// KEYS: 1=lock. ARGV: 1=token. Returns 1 when released, 0 when the lock is gone or someone else's.
+// (Pure string here for the same reason as the board scripts: the test fake keys eval() on it.)
+export const RELEASE_LOCK_LUA = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end
 `;

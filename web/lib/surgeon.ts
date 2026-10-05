@@ -6,6 +6,7 @@
 import type { LineupResult, Player, Slot } from "./types";
 import { playerFeatures } from "./engine";
 import { canonicalFactor } from "./factorHunt";
+import { safeDecode } from "./share";
 
 // Surgeon daily seeds: surgeon-YYYY-M-D (shared per UTC day, like fh-*/bp-*).
 const SURGEON_SEED_RE = /^surgeon-\d{4}-\d{1,2}-\d{1,2}$/;
@@ -145,7 +146,7 @@ export function encodeSurgeonCard(beforeIds: string[], outIdx: number, inId: str
   return [beforeIds.join(","), outIdx, inId].join(".");
 }
 export function decodeSurgeonCard(seg: string): { beforeIds: string[]; outIdx: number; inId: string; afterIds: string[] } | null {
-  const parts = decodeURIComponent(seg).split(".");
+  const parts = safeDecode(seg).split(".");
   if (parts.length !== 3) return null;
   if (!SG_IDS_RE.test(parts[0]) || !SG_ID_RE.test(parts[2])) return null;
   const outIdx = Number(parts[1]);
@@ -163,5 +164,5 @@ export interface SurgeonRow {
   beforeWins: number; afterWins: number; net: number;
   card: string;        // /sg/ segment for the row's permalink
 }
-export interface SurgeonBoardRow extends SurgeonRow { rank: number }
+export interface SurgeonBoardRow extends Omit<SurgeonRow, "uid"> { rank: number; me?: true } // wire row: uid stripped, caller marked `me`
 export interface SurgeonBoardView { date: string; total: number; top: SurgeonBoardRow[]; you?: SurgeonBoardRow }

@@ -80,6 +80,13 @@ describe("POST /api/profile/sync", () => {
     expect(ctx.redis!.lists.get(`results:${UID}`)!.length).toBe(3);
   });
 
+  it("a forged encoded lineup syncs the result but only REAL player ids enter the dex", async () => {
+    await signIn({ uid: UID, name: "X" });
+    const { body } = await readJson(await post({ results: [{ encoded: `${FIVE[0]},zzz_fake,yyy_fake`, mode: "classic", wins: 1, losses: 81, grade: "F", ts: 1 }] }));
+    expect(body.results).toBe(1);
+    expect([...(ctx.redis!.sets.get(`dex:${UID}`) ?? [])]).toEqual([FIVE[0]]);
+  });
+
   it("drops entries with an unknown mode at the trust boundary", async () => {
     await signIn({ uid: UID, name: "X" });
     const { body } = await readJson(await post({ results: [
@@ -117,4 +124,12 @@ describe("POST /api/profile/sync", () => {
     expect(inbox[0].type).toBe("badge_unlock");
     expect(inbox[0].type === "badge_unlock" && inbox[0].badge).toBe("sTier");
   });
+
+  it("answers 409 (not a 500) when another sync holds the results lock past the bounded wait", async () => {
+    await signIn({ uid: UID, name: "X" });
+    ctx.redis!.strings.set(`results:lock:${UID}`, "other-device");
+    const { status, body } = await readJson(await post({ results: [{ encoded: encodeLineup(FIVE), mode: "daily", wins: 50, losses: 32, grade: "B", ts: 100 }] }));
+    expect(status).toBe(409);
+    expect(typeof body.error).toBe("string");
+  }, 15_000);
 });

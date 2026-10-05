@@ -40,6 +40,15 @@ function DiffDots({ level, dot }: { level: 1 | 2 | 3; dot: string }) {
   );
 }
 
+const DAILY_CARD = "group mt-5 block w-full overflow-hidden rounded-2xl border border-orange-500/40 bg-gradient-to-br from-orange-500/10 to-zinc-900 p-6 text-left ring-1 ring-orange-500/10 transition hover:border-orange-500 hover:ring-orange-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 sm:mt-8 sm:p-7";
+
+// Featured Daily card: a client-side Link to today's /r/ result once played, otherwise a button that starts it.
+function DailyCardShell({ href, onPlay, children }: { href: string | null; onPlay: () => void; children: React.ReactNode }) {
+  return href
+    ? <Link href={href} aria-label="View today's Daily result" className={DAILY_CARD}>{children}</Link>
+    : <button onClick={onPlay} aria-label="Play Daily mode — recommended for new players" className={DAILY_CARD}>{children}</button>;
+}
+
 export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => void; onOpenChallenge: (challengeId: string) => void }) {
   const [showIntro, setShowIntro] = useState(false);
   // First visit only: read the flag after mount (avoids SSR/hydration mismatch), show the 10-second
@@ -85,11 +94,7 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
       )}
 
       {/* Featured: Daily — the obvious, low-commitment first play */}
-      <button
-        onClick={() => (dailyToday ? window.location.assign(`/r/${dailyToday.encoded}`) : onPick("daily"))}
-        aria-label={dailyToday ? "View today's Daily result" : "Play Daily mode — recommended for new players"}
-        className="group mt-5 block w-full overflow-hidden rounded-2xl border border-orange-500/40 bg-gradient-to-br from-orange-500/10 to-zinc-900 p-6 text-left ring-1 ring-orange-500/10 transition hover:border-orange-500 hover:ring-orange-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 sm:mt-8 sm:p-7"
-      >
+      <DailyCardShell href={dailyToday ? `/r/${dailyToday.encoded}` : null} onPlay={() => onPick("daily")}>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-orange-300">
           {dailyToday ? "✓ You played today" : "★ Recommended · start here"}
         </span>
@@ -107,7 +112,7 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
         <div className="mt-4 inline-flex items-center gap-1 text-sm font-black text-orange-400 transition-all group-hover:gap-2">
           {dailyToday ? "View today's result →" : "Play Daily →"}
         </div>
-      </button>
+      </DailyCardShell>
 
       {/* Returning-user fast path: jump straight back into your last solo mode */}
       {lastReplayMode && (

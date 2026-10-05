@@ -6,19 +6,28 @@ import { compareResults, challengeSeed } from "@/lib/challenge";
 import { decodeLineup, encodeLineup } from "@/lib/share";
 import { cleanName } from "@/lib/clean";
 import { getSession } from "@/lib/authServer";
+import { isAnonUid } from "@/lib/auth";
 import { SLOTS } from "@/lib/teams";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
 import { buildChallengeNotification } from "@/lib/notify";
-import { enqueueNotif } from "@/lib/notifyStore";
+import { enqueueNotif, allowChallengePush } from "@/lib/notifyStore";
 import { sendPushToUid } from "@/lib/pushStore";
 import type { ChallengeMiniPlayer, ChallengeSubmitResponse } from "@/lib/types";
 import { engineDeps } from "@/lib/verifyDeps";
+import { dayUTC } from "@/lib/day";
 
 export const runtime = "nodejs";
 
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 const ID_RE = /^[a-z0-9]{6,16}$/;
+// A daily- seed must name a real, already-released UTC day (canonical non-padded YYYY-M-D): a future
+// Daily's spins are unseen, so converting one would let a creator pre-draft next week's Daily.
+const isReleasedDaily = (s: string): boolean => {
+  const m = /^daily-(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (!m) return false;
+  const t = Date.UTC(+m[1], +m[2] - 1, +m[3]);
+  return `daily-${dayUTC(new Date(t))}` === s && t <= Date.now();
+};
 // A legitimate game seed the first submitter may convert into a challenge (carrying the original
 // draft so a friend faces the SAME spins). Charset-bounded; the trace replay is the real gate.
 // Only an ORIGINAL game seed may be converted. The legacy "Challenge a Friend" case (h2h-<id>) is
@@ -27,7 +36,7 @@ const ID_RE = /^[a-z0-9]{6,16}$/;
 // FOREIGN h2h-<otherid> pool (poisoning the draft). Excluding it closes that hole with no loss.
 const isGameSeed = (s: unknown): s is string =>
   typeof s === "string" && /^[a-z0-9-]{1,40}$/.test(s) &&
-  (s.startsWith("daily-") || s.startsWith("classic-") || s.startsWith("hoopiq-"));
+  (s.startsWith("daily-") ? isReleasedDaily(s) : s.startsWith("classic-") || s.startsWith("hoopiq-"));
 
 export async function POST(req: Request) {
   if (!isChallengeEnabled()) return NextResponse.json({ error: "challenges not configured" }, { status: 503 });
@@ -46,7 +55,7 @@ export async function POST(req: Request) {
     uid = session.uid;
     name = cleanName(body.name) || session.name || "Player";
   } else {
-    if (typeof body.uid !== "string" || !UID_RE.test(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+    if (!isAnonUid(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
     uid = body.uid;
     name = cleanName(body.name) || "Anonymous";
   }
@@ -94,7 +103,11 @@ export async function POST(req: Request) {
       yourWins: out.creator.wins, yourLosses: out.creator.losses,
       ts: Date.now(),
     });
-    after(async () => { await enqueueNotif(creatorUid, notif); await sendPushToUid(creatorUid, notif); });
+    // push only for a FRESH inbox item (deduped per responder uid) and within the creator's hourly push
+    // cap — one trace replayed under fresh uids/names can't spam the creator's OS notifications
+    after(async () => {
+      if ((await enqueueNotif(creatorUid, notif, uid)) && (await allowChallengePush(creatorUid))) await sendPushToUid(creatorUid, notif);
+    });
   }
 
   const creatorIds = decodeLineup(out.creator.lineup);

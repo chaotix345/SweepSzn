@@ -202,3 +202,10 @@ describe("encodePickemCard / decodePickemCard", () => {
     expect(decodePickemCard("")).toBe(null);
   });
 });
+
+describe("decodePickemCard — malformed percent-escape", () => {
+  it("returns null for '%zz' instead of throwing", () => {
+    expect(() => decodePickemCard("%zz")).not.toThrow();
+    expect(decodePickemCard("%zz")).toBeNull();
+  });
+});

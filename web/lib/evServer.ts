@@ -21,6 +21,12 @@ export const EV_TTL = 60 * 60 * 24 * 45; // ~45 days, enough for a 14-day window
 export const EV_ACTIVE_CAP = 50_000;     // max distinct uids tracked per day (far above realistic DAU)
 export const EV_SRC_CAP = 500;           // max distinct utm sources tracked per stage/day (far above legit cardinality)
 export const EV_REF_CAP = 2_000;         // max distinct referral codes tracked per day (per-referrer fields are numerous)
+// ref:fp:<uid> once-per-referee latch + ref:credits:<uid> counter — matches ref:code's 90d CODE_TTL
+// (credits refresh on each new referral, so only a referrer dormant for 90d loses the count)
+export const REF_FP_TTL = 60 * 60 * 24 * 90;
+// max uids in the global ref:referred / ref:referrers badge sets (cap, no TTL — badge membership must persist)
+export const REF_REFERRED_CAP = 100_000;
+export const REF_REFERRERS_CAP = 100_000;
 
 // Stages whose uid counts toward the day's distinct-active set (DAU / D1 / D7). Deliberately an
 // engaged-action allow-list: `visit` and `share_view` are non-engaging (a bouncer / a share recipient
@@ -45,6 +51,8 @@ const NUDGE_MODE_STAGES = new Set<EvStage>(["claim_nudge_shown", "claim_nudge_ta
 
 const CLIENT_STAGE_SET = new Set<string>(CLIENT_STAGES);
 export const UID_RE = /^[a-z0-9-]{8,64}$/i;
+// Mirrors lib/auth isAnonUid's g-namespace reject (inlined: client libs import this module, auth pulls node crypto).
+const AUTHED_UID_RE = /^g[0-9a-f]{31}$/i;
 // Lowercase-only acquisition label, ≤40 chars (mirrors lib/utm.ts SRC_RE). The /api/ev beacon is
 // unauthenticated, so this is the hard gate against Redis hash-field injection before a source is
 // written, and it folds "X_Launch"/"x_launch" into one bucket (the client lowercases too).
@@ -63,7 +71,7 @@ export function parseEvBody(body: unknown): BeaconBody | null {
   const b = body as Record<string, unknown>;
   if (typeof b.ev !== "string" || !CLIENT_STAGE_SET.has(b.ev)) return null;
   const out: BeaconBody = { ev: b.ev as ClientStage };
-  if (typeof b.uid === "string" && UID_RE.test(b.uid)) out.uid = b.uid;
+  if (typeof b.uid === "string" && UID_RE.test(b.uid) && !AUTHED_UID_RE.test(b.uid)) out.uid = b.uid;
   if (MODE_STAGES.has(b.ev) && typeof b.mode === "string" && MODES.has(b.mode)) out.mode = b.mode;
   // source is independent of stage (unlike mode, which is mode-stage-only) — keep it whenever it
   // validates; bump() decides which stages actually persist it. Folding this into the mode block would
@@ -123,13 +131,16 @@ export async function bump(
     // public proxy; the referrer uid stays server-side (never returned by /api/ev).
     if (REF_STAGES.has(stage) && opts.uid && opts.ref && REF_RE.test(opts.ref)) {
       const referrerUid = await redis.get<string>(`ref:code:${opts.ref}`);
-      if (referrerUid && referrerUid !== opts.uid && (await redis.set(`ref:fp:${opts.uid}`, opts.ref, { nx: true }))) {
+      // the latch + credits carry a TTL and the badge sets are capped: fresh beacon uids (and codes
+      // minted for fresh anon uids) must not mint unbounded keys
+      if (referrerUid && referrerUid !== opts.uid && (await redis.set(`ref:fp:${opts.uid}`, opts.ref, { nx: true, ex: REF_FP_TTL }))) {
         const refKey = `ev:ref:first_play:${day}`;
-        const rp = redis.pipeline()
-          .incr(`ref:credits:${referrerUid}`)
-          .sadd("ref:referrers", referrerUid)
-          .sadd("ref:referred", opts.uid);
-        if ((await redis.hlen(refKey)) < EV_REF_CAP) rp.hincrby(refKey, opts.ref, 1).expire(refKey, EV_TTL);
+        const creditsKey = `ref:credits:${referrerUid}`;
+        const [referred, referrers, refFields] = (await redis.pipeline().scard("ref:referred").scard("ref:referrers").hlen(refKey).exec()) as [number, number, number];
+        const rp = redis.pipeline().incr(creditsKey).expire(creditsKey, REF_FP_TTL);
+        if (Number(referrers) < REF_REFERRERS_CAP) rp.sadd("ref:referrers", referrerUid);
+        if (Number(referred) < REF_REFERRED_CAP) rp.sadd("ref:referred", opts.uid);
+        if (Number(refFields) < EV_REF_CAP) rp.hincrby(refKey, opts.ref, 1).expire(refKey, EV_TTL);
         await rp.exec();
       }
     }

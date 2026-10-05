@@ -34,7 +34,8 @@ export default function NotificationBell() {
     let alive = true;
     const tick = async () => {
       try {
-        const r = await fetch(`/api/notifications?uid=${encodeURIComponent(uid)}`);
+        // POST: the anon uid rides the body, never a (polled, logged) URL — DESIGN.md §12
+        const r = await fetch("/api/notifications", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ uid }) });
         if (!alive) return;
         if (r.status === 503) { setDisabled(true); return; }
         if (!r.ok) return;

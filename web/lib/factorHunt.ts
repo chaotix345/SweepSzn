@@ -92,5 +92,5 @@ export interface FhRow {
   correct: boolean;
   score: number;             // display score: wins × bonus, e.g. 73.5
 }
-export interface FhBoardRow extends FhRow { rank: number }
+export interface FhBoardRow extends Omit<FhRow, "uid"> { rank: number; me?: true } // wire row: uid stripped, caller marked `me`
 export interface FhBoardView { date: string; total: number; top: FhBoardRow[]; you?: FhBoardRow }

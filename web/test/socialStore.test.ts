@@ -23,6 +23,9 @@ describe("parseSlotPick", () => {
   it("rejects a bad person id", () => {
     expect(parseSlotPick({ ...ok, personId: "Bad ID!" })).toBeNull();
   });
+  it("rejects a spin key whose team or decade isn't real", () => {
+    for (const spinKey of ["XYZ|2010s", "BOS|1950s", "BOS|abc123"]) expect(parseSlotPick({ ...ok, spinKey })).toBeNull();
+  });
   it("rejects non-objects", () => {
     expect(parseSlotPick(null)).toBeNull();
     expect(parseSlotPick("x")).toBeNull();

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createHash } from "node:crypto";
 import {
   enableRedisEnv,
   freshFake,
@@ -372,9 +373,88 @@ describe("POST /api/factorhunt/submit — new lineup locks fresh", () => {
   });
 });
 
+// ---------- re-slotted lineup shares the lock (same five people, different slots) ----------
+describe("POST /api/factorhunt/submit — re-slotted lineup", () => {
+  it("the same five re-slotted can't escape a wrong lock to claim the ×1.05", async () => {
+    // two PG/SG swingmen dealt in rounds 0 and 1, so the same five can be placed two ways
+    const SWA = { ...mkP("swingaa2015", "PG", 2, 0), eligible: ["PG", "SG"] } as Player;
+    const SWB = { ...mkP("swingbb2015", "SG", 2, 0), eligible: ["PG", "SG"] } as Player;
+    const saved = [POOLS[0], POOLS[1]];
+    byIdMap.set(SWA.id, SWA); byIdMap.set(SWB.id, SWB);
+    POOLS[0] = [SWA.id]; POOLS[1] = [SWB.id];
+    try {
+      const rest = VALID_TRACE.slice(2);
+      const traceA: DraftStep[] = [{ slot: "PG", pickedId: SWA.id, respins: [] }, { slot: "SG", pickedId: SWB.id, respins: [] }, ...rest];
+      const traceB: DraftStep[] = [{ slot: "SG", pickedId: SWA.id, respins: [] }, { slot: "PG", pickedId: SWB.id, respins: [] }, ...rest];
+      const uid = "reslotusr01";
+      await post({ date: DATE, uid, name: "Tester", trace: traceA, prediction: DECOY_LABEL });
+      const { status, body } = await readJson(await post({ date: DATE, uid, name: "Tester", trace: traceB, prediction: ANSWER_LABEL }));
+      expect(status).toBe(200);
+      const you = body.you as Record<string, unknown> | undefined;
+      expect(you?.predicted).toBe(DECOY_LABEL);
+      expect(you?.correct).toBe(false);
+    } finally {
+      [POOLS[0], POOLS[1]] = saved;
+      byIdMap.delete(SWA.id); byIdMap.delete(SWB.id);
+    }
+  });
+});
+
+// ---------- deploy-boundary compat: a pre-sorted-key lock (slot-ordered hash) still binds ----------
+describe("POST /api/factorhunt/submit — legacy (slot-ordered) lock", () => {
+  const legacyKey = (uid: string, lineup: string) =>
+    `lb:fh:${DATE}:pred:${uid}:${createHash("sha256").update(lineup).digest("hex").slice(0, 16)}`;
+  const LINEUP = VALID_TRACE.map((s) => s.pickedId).join(",");
+
+  it("a replay graded against a legacy wrong lock can't claim the ×1.05", async () => {
+    const uid = "legacyusr01";
+    ctx.redis!.strings.set(legacyKey(uid, LINEUP), DECOY_LABEL);
+    const { status, body } = await readJson(await post({ date: DATE, uid, name: "Tester", trace: VALID_TRACE, prediction: ANSWER_LABEL }));
+    expect(status).toBe(200);
+    const you = body.you as Record<string, unknown> | undefined;
+    expect(you?.predicted).toBe(DECOY_LABEL);
+    expect(you?.correct).toBe(false);
+    expect([...ctx.redis!.strings.keys()].filter((k) => k.includes(`:pred:${uid}:`))).toEqual([legacyKey(uid, LINEUP)]);
+  });
+
+  it("a legacy locked skip grades as a skip", async () => {
+    const uid = "legacyusr02";
+    ctx.redis!.strings.set(legacyKey(uid, LINEUP), "");
+    const { body } = await readJson(await post({ date: DATE, uid, name: "Tester", trace: VALID_TRACE, prediction: ANSWER_LABEL }));
+    const you = body.you as Record<string, unknown> | undefined;
+    expect(you?.predicted).toBeNull();
+    expect(you?.correct).toBe(false);
+  });
+});
+
 // ---------- 503 branch (disabled board) ----------
 describe("POST /api/factorhunt/submit — disabled board", () => {
   it.todo(
     "returns 503 when isFhBoardEnabled() is false (Redis env absent at module import time) — cannot be exercised in this file without a full vi.resetModules() flow because the redis singleton is already bound at module eval",
   );
+});
+
+// H3: a cookie-less caller can't post under a signed-in player's g-uid.
+describe("POST /api/factorhunt/submit — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less submit claiming a signed-in uid and writes nothing", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    const { status, body } = await readJson(await post(anonBody({ uid: victim })));
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/bad uid/i);
+    expect(ctx.redis!.zsets.get(`lb:fh:${DATE}`)?.has(victim) ?? false).toBe(false);
+  });
+});
+
+// H2: the submit response IS a board view — it must not carry anyone's uid (incl. the submitter's).
+describe("POST /api/factorhunt/submit — no uids on the wire", () => {
+  it("returns the fresh board with no uids and the submitter's row marked me", async () => {
+    await post(anonBody({ uid: "anon-first-1234", name: "First" }));
+    const { status, body } = await readJson(await post(anonBody({ uid: "anon-second-123", name: "Second" })));
+    expect(status).toBe(200);
+    const wire = JSON.stringify(body);
+    expect(wire).not.toContain("anon-first-1234");
+    expect(wire).not.toContain("anon-second-123");
+    expect(body.you).toMatchObject({ name: "Second", me: true });
+  });
 });

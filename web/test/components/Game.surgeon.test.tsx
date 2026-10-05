@@ -33,6 +33,11 @@ vi.mock("@/components/RankShareButton", () => ({ default: () => null }));
 vi.mock("@/components/SgLeaderboard", () => ({ default: () => null }));
 vi.mock("@/components/BpLeaderboard", () => ({ default: () => null }));
 vi.mock("@/components/SurgeonResult", () => ({ default: () => React.createElement("div", { "data-testid": "surgeon-result" }, "SurgeonResult") }));
+// signed-out by default (the provider's no-op default); the account-mirror test signs in
+const session = vi.hoisted(() => ({ user: null as { uid: string; name: string } | null }));
+vi.mock("@/components/SessionProvider", () => ({
+  useSessionContext: () => ({ user: session.user, loading: false, refresh: async () => {}, signOut: async () => {}, promptSignIn: () => {}, signInNonce: 0 }),
+}));
 
 // --- import component AFTER mocks ---
 import Game from "@/components/Game";
@@ -218,6 +223,7 @@ describe("Game — Surgeon swap dialog", () => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     fetchCalls = [];
+    session.user = null;
   });
 
   it("completing a draft in Surgeon mode triggers /api/surgeon/pool and opens the swap dialog", async () => {
@@ -430,5 +436,32 @@ describe("Game — Surgeon swap dialog", () => {
     expect(screen.queryByRole("dialog", { name: /Surgeon replacement pool/i })).toBeNull();
     // Surgeon result component is rendered (we mocked it with a data-testid)
     expect(screen.queryByTestId("surgeon-result")).toBeTruthy();
+  });
+
+  async function confirmFirstSwap(): Promise<void> {
+    await act(async () => { fireEvent.click(screen.getAllByRole("radio", { name: /Reggie Miller/i })[0]); });
+    const outGroup = screen.getByRole("radiogroup", { name: /Player to swap out/i });
+    await act(async () => { fireEvent.click(outGroup.querySelector<HTMLElement>("[role=radio]:not([aria-disabled=true])")!); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /Confirm swap/i })); });
+    await act(async () => {});
+    await act(async () => {});
+  }
+
+  it("a signed-in player's Surgeon result is mirrored to the account (cross-device history)", async () => {
+    session.user = { uid: "g_1", name: "Charlie" };
+    renderGame();
+    await reachSurgeonDialog();
+    await confirmFirstSwap();
+    const sync = fetchCalls.find((c) => c.url === "/api/profile/sync");
+    expect(sync).toBeTruthy();
+    expect((sync!.body as { results: { mode: string; encoded: string }[] }).results[0]).toMatchObject({ mode: "surgeon", encoded: "p0,p1,p2,p3,p4.2.shooter1" });
+  });
+
+  it("a signed-out player's Surgeon result stays local (no account push)", async () => {
+    renderGame();
+    await reachSurgeonDialog();
+    await confirmFirstSwap();
+    expect(screen.queryByTestId("surgeon-result")).toBeTruthy();
+    expect(fetchCalls.find((c) => c.url === "/api/profile/sync")).toBeUndefined();
   });
 });

@@ -64,6 +64,18 @@ function todaySeed() {
 }
 const rand = () => Math.floor(Math.random() * 1e9);
 
+// A new game (or leaving one for the picker) owns the URL — drop any restore params so a later
+// refresh won't resurrect an old screen.
+function stripRestoreParams() {
+  try {
+    const u = new URL(window.location.href);
+    if (u.searchParams.has("r") || u.searchParams.has("m") || u.searchParams.has("own") || u.searchParams.has("d") || u.searchParams.has("sg")) {
+      u.searchParams.delete("r"); u.searchParams.delete("m"); u.searchParams.delete("own"); u.searchParams.delete("d"); u.searchParams.delete("sg");
+      window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+    }
+  } catch { /* no history API */ }
+}
+
 // First-run levers tip (R6): hydration-safe "seen" read. Server snapshot is "seen" (true) so the
 // server renders nothing; the client reads the real flag and useSyncExternalStore reconciles without
 // a hydration mismatch (same pattern ResultCard uses for the Web Share capability check).
@@ -109,6 +121,7 @@ export default function Game() {
   const hintsUsedRef = useRef(0);                  // synchronous count, read at simulate time
   const saltRef = useRef(0);
   const tickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const genRef = useRef(0);                            // game generation: bumped when a game is abandoned so its late spin/crowd fetch bails
   const traceRef = useRef<DraftStep[]>([]);            // ordered picks for leaderboard verification
   const roundRespinsRef = useRef<("team" | "era")[]>([]); // re-spins used in the current round
   const [convertedId, setConvertedId] = useState<string | null>(null); // challenge minted from a finished game
@@ -121,7 +134,7 @@ export default function Game() {
   // the server grades whatever the submit declares, see /api/blueprint/submit).
   const { blueprint, setBlueprint, bpPick, setBpPick, bpRef, commitBlueprint, reset: resetBp } = useBlueprint();
   // Surgeon: phase-2 replacement-pool step between "five locked" and the delta reveal.
-  const { sgPool, sgInId, setSgInId, sgOutId, setSgOutId, sgResult, setSgResult, sgName, setSgName, sgBusy, sgRef, beginSurgeon, confirmSurgeon, dismissPool: dismissSgPool, reset: resetSg } = useSurgeon(seed, mode, traceRef, setLoading, setError);
+  const { sgPool, sgInId, setSgInId, sgOutId, setSgOutId, sgResult, setSgResult, sgName, setSgName, sgBusy, sgRef, beginSurgeon, confirmSurgeon, dismissPool: dismissSgPool, reset: resetSg } = useSurgeon(seed, mode, traceRef, setLoading, setError, !!user);
 
   // Spend a hint to reveal fit grades for the current pick. Charges on reveal (not on placement), so
   // there is no way to peek and then dodge the cost. No-op once the per-game budget is spent.
@@ -138,7 +151,7 @@ export default function Game() {
   const roundNum = Math.min(filled + 1, 5);
   const openSlots = useMemo(() => SLOTS.filter((s) => !roster[s]), [roster]);
   const rosterKey = useMemo(() => SLOTS.map((s) => roster[s]?.id ?? "").join("|"), [roster]);
-  const projAllowed = projectionAllowed(seed);
+  const projAllowed = mode !== "challenge" && projectionAllowed(seed); // a converted challenge carries its classic-<n> seed — responders stay blind (§12)
 
   useEffect(() => () => { if (tickRef.current) clearTimeout(tickRef.current); }, []);
 
@@ -200,6 +213,8 @@ export default function Game() {
 
   const runSpin = useCallback(async (opts: SpinOpts, locked: "team" | "era" | null = null) => {
     if (spinning) return;
+    const gen = genRef.current;
+    const stale = () => gen !== genRef.current; // restarted / left for the picker mid-spin — drop everything
     setError(null); setSpinning(true); setCurrent(null); setSelPlayer(null); setSelSlot(null); setLockedReel(locked); setCrowdNote(null);
     if (tickRef.current) clearTimeout(tickRef.current);
     const reduce = typeof window !== "undefined" && (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false);
@@ -228,17 +243,21 @@ export default function Game() {
         // in Daily/HoopIQ/Challenge/Factor Hunt so the network response can't be read to draft optimally
         body: JSON.stringify({ seed, round: filled, exclude: drafted.map((p) => p.id), fit: mode === "classic" || mode === "prime" || mode === "blueprint", ...opts }),
       });
+      if (stale()) return;
       if (!r.ok) throw new Error("spin failed");
       const res: Spin = await r.json();
+      if (stale()) return;
       // result known — restart the churn as a deceleration ramp from the first (fast) step
       if (!reduce) { if (tickRef.current) clearTimeout(tickRef.current); decel = true; step = 0; schedule(); }
       await new Promise((rs) => setTimeout(rs, 1100));
+      if (stale()) return;
       if (tickRef.current) { clearTimeout(tickRef.current); tickRef.current = null; }
       setReel({ team: res.team, era: eraLabel(res.decade) });
       setCurrent(res);
       // a single haptic "click" at the landing — Android only; iOS/desktop silently no-op
       if (!reduce) { try { navigator.vibrate?.(35); } catch { /* no haptics */ } }
     } catch {
+      if (stale()) return; // the rollback below would hit the NEXT game's skips/salt
       setLockedReel(null); setReel({ team: "ATL", era: mode === "prime" ? "PRIME" : "60's" });
       // roll back the re-spin we optimistically charged before this call so a network error doesn't
       // silently burn the skip (and don't leave a phantom re-spin in the verification trace)
@@ -249,8 +268,7 @@ export default function Game() {
       if (locked !== null) { roundRespinsRef.current = roundRespinsRef.current.slice(0, -1); saltRef.current--; }
       setError("Network hiccup — tap SPIN to try again.");
     } finally {
-      if (tickRef.current) clearTimeout(tickRef.current);
-      setSpinning(false);
+      if (!stale()) { if (tickRef.current) clearTimeout(tickRef.current); setSpinning(false); }
     }
   }, [spinning, seed, filled, drafted, mode]);
 
@@ -307,6 +325,15 @@ export default function Game() {
   // Factor Hunt: hook placed after simulate so beginFhPrediction can close over the stable callback.
   const { fhStep, fhPick, setFhPick, fhPrediction, setFhPrediction, fhRef, beginFhPrediction, lockFh, fhFetching, reset: resetFh } = useFactorHunt(seed, simulate, setError);
 
+  // Abandon the current game's in-flight work: bump the generation (runSpin + the crowd note re-check it
+  // after every await), stop the reel churn, and cancel any in-flight simulate.
+  const abandonInFlight = useCallback(() => {
+    genRef.current += 1;
+    if (tickRef.current) { clearTimeout(tickRef.current); tickRef.current = null; }
+    setSpinning(false);
+    abortSimRef.current?.abort(); abortSimRef.current = null;
+  }, []);
+
   // start() placed after all per-mode hook calls so it can close over their stable reset functions
   // without triggering react-hooks/immutability (resetFh, resetPickem, resetBp, resetSg all have []
   // deps — but must be declared before start references them).
@@ -318,7 +345,7 @@ export default function Game() {
     // layout effect has persisted the source), falling back to the stored first-touch source — same
     // ordering-robust pattern as Beacon.tsx.
     markFirstPlay(getUid(), currentUtmSource() ?? getUtmSource() ?? undefined, currentRefCode() ?? getRefCode() ?? undefined);
-    abortSimRef.current?.abort(); abortSimRef.current = null; // cancel any in-flight simulate
+    abandonInFlight(); // cancel the old game's spin / crowd note / simulate
     setMode(m);
     let cid: string | null = null;
     let crole: "create" | "respond" | null = null;
@@ -339,15 +366,14 @@ export default function Game() {
     hintsUsedRef.current = 0; setHintsUsed(0);
     resetPickem(); resetFh(); resetBp(); resetSg();
     setOwnerId(null);
-    // a new game owns the URL — drop any restore params so a later refresh won't resurrect an old screen
-    try {
-      const u = new URL(window.location.href);
-      if (u.searchParams.has("r") || u.searchParams.has("m") || u.searchParams.has("own") || u.searchParams.has("d") || u.searchParams.has("sg")) {
-        u.searchParams.delete("r"); u.searchParams.delete("m"); u.searchParams.delete("own"); u.searchParams.delete("d"); u.searchParams.delete("sg");
-        window.history.replaceState(null, "", u.pathname + u.search + u.hash);
-      }
-    } catch { /* no history API */ }
-  }, [resetPickem, resetFh, resetBp, resetSg]);
+    stripRestoreParams();
+  }, [abandonInFlight, resetPickem, resetFh, resetBp, resetSg]);
+
+  // "← Modes": abandon the game like start() does (in-flight spin/simulate/FH/Surgeon work) and drop
+  // the restore params, or a refresh would resurrect the result the player just walked away from.
+  const goToModes = useCallback(() => {
+    abandonInFlight(); resetFh(); resetSg(); stripRestoreParams(); setMode(null);
+  }, [abandonInFlight, resetFh, resetSg]);
 
   // Bootstrap the view from the URL (hold-your-place restore on refresh). Priority: a joiner deep link
   // (?c=<id>) → respond mode; then a creator dashboard (?own=<id>); then a finished-result restore
@@ -474,9 +500,10 @@ export default function Game() {
       // to keep its mystery. The read sees plays BEFORE this one, so it reflects how others went.
       if (mode !== "hoopiq") {
         const sp = `${current.team}|${current.decade}`;
+        const gen = genRef.current;
         fetch(`/api/crowd?mode=${mode}&spinKey=${encodeURIComponent(sp)}&slot=${slot}`)
           .then((r) => (r.ok ? r.json() : null))
-          .then((d) => { const top = d?.crowd?.choices?.[0]; if (top) setCrowdNote(`${top.pct}% of players took ${top.name} at ${slot} here.`); })
+          .then((d) => { const top = d?.crowd?.choices?.[0]; if (top && gen === genRef.current) setCrowdNote(`${top.pct}% of players took ${top.name} at ${slot} here.`); })
           .catch(() => {});
       }
     }
@@ -592,7 +619,7 @@ export default function Game() {
   const bpView = mode === "blueprint" && blueprint && result ? gradeBlueprint(blueprint, result.result) : undefined;
   // Surgeon reveal: its own before/after layout + delta board, not the single-lineup ResultCard.
   if (mode === "surgeon" && sgResult) return (
-    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart>
+    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} onModeSelect={goToModes} showRestart>
       <SurgeonResult before={sgResult.before} after={sgResult.after} beforePlayers={sgResult.beforePlayers}
         afterPlayers={sgResult.afterPlayers} outIdx={sgResult.outIdx} diagnosis={sgResult.diagnosis}
         card={sgResult.card} onReset={() => start("surgeon")} />
@@ -602,7 +629,7 @@ export default function Game() {
     </Shell>
   );
   if (result) return (
-    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart>
+    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} onModeSelect={goToModes} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} modeKey={mode} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView}
         lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} />
       <InviteFriend />
@@ -634,7 +661,7 @@ export default function Game() {
     </Shell>
   );
   if (loading) return (
-    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart>
+    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} onModeSelect={goToModes} showRestart>
       <ResultSkeleton label={mode === "surgeon" ? "Diagnosing your lineup…" : mode === "factorhunt" ? "Building your question…" : "Running all 82 games…"} />
     </Shell>
   );
@@ -652,7 +679,7 @@ export default function Game() {
   const showUsageBar = discBar || !hideIQ;
 
   return (
-    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart={filled > 0 || !!current}>
+    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} onModeSelect={goToModes} showRestart={filled > 0 || !!current}>
       <div className="grid gap-5 lg:grid-cols-[1fr_minmax(300px,380px)]">
         {/* Desktop: the reels + controls fold into the LEFT column so the sticky court becomes a right
             rail spanning from the top (no dead space top-right). Mobile is single-column, so the DOM
@@ -750,7 +777,11 @@ export default function Game() {
           {current && !canPlaceAny && (
             <div className="mt-3 rounded-lg border border-amber-600/40 bg-amber-500/10 p-3 text-center text-xs text-amber-400">
               No one here fits your open slot ({openSlots.join("/")}).{" "}
-              <button onClick={spin} className="font-bold underline">Spin again</button>
+              {/* a plain spin is deterministic in (seed, round, salt) — it would deal this same dead end —
+                  so offer what can change it: an unused re-spin, else a restart */}
+              {!skips.team ? <button onClick={reSpinTeam} className="font-bold underline">Re-spin the team</button>
+                : mode !== "prime" && !skips.era ? <button onClick={reSpinEra} className="font-bold underline">Re-spin the era</button>
+                : <>Out of re-spins — <button onClick={() => start(mode)} className="font-bold underline">restart</button></>}
             </div>
           )}
         </div>

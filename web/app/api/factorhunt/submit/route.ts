@@ -3,6 +3,7 @@ import { verifyTrace } from "@/lib/dailyVerify";
 import { buildFhChoices, encFhScore, decodeFhDisplay, type FhRow } from "@/lib/factorHunt";
 import { isFhBoardEnabled, submitFhScore, removeFhEntry, lockFhPrediction } from "@/lib/factorHuntBoard";
 import { getSession } from "@/lib/authServer";
+import { isAnonUid } from "@/lib/auth";
 import { cleanName } from "@/lib/clean";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
@@ -15,8 +16,6 @@ export const runtime = "nodejs";
 // core as the Daily), rebuild the prediction choices server-side from the verified lineup, and
 // apply the cosmetic ×1.05 ONLY when the locked prediction matches the recomputed answer. The
 // engine result is never modified — the bonus lives in the board's sort score and display.
-
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 
 const deps = engineDeps();
 
@@ -35,7 +34,7 @@ export async function POST(req: Request) {
     uid = session.uid;
     name = cleanName(body.name) || session.name || "Player";
   } else {
-    if (typeof body.uid !== "string" || !UID_RE.test(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+    if (!isAnonUid(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
     uid = body.uid;
     name = cleanName(body.name) || "Anonymous";
   }

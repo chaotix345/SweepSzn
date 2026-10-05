@@ -146,6 +146,21 @@ describe("POST /api/push/subscribe", () => {
     expect(body.ok).toBe(false);
   });
 
+  it("two concurrent NEW endpoints at CAP-1 can't both slip past the cap (check+write is atomic)", async () => {
+    const { saveSubscription } = await import("@/lib/pushStore");
+    const h = new Map<string, string>();
+    for (let i = 0; i < PUSH_SUB_CAP - 1; i++) {
+      const ep = `https://fcm.googleapis.com/fcm/send/device-${i}`;
+      h.set(hashField(ep), JSON.stringify({ endpoint: ep, keys: { p256dh: "k1", auth: "k2" } }));
+    }
+    ctx.redis!.hashes.set(`push:${UID}`, h);
+    const sub = (n: string) => ({ endpoint: `https://fcm.googleapis.com/fcm/send/race-${n}`, keys: { p256dh: "k1", auth: "k2" } });
+    const stored = await Promise.all([saveSubscription(UID, sub("a")), saveSubscription(UID, sub("b"))]);
+    expect(stored.filter(Boolean).length).toBe(1);
+    expect(ctx.redis!.hashes.get(`push:${UID}`)?.size).toBe(PUSH_SUB_CAP);
+    expect(ctx.redis!.ttls.get(`push:${UID}`)).toBe(TTL);
+  });
+
   it("rate limits at 30 requests per IP", async () => {
     exhaustRateLimit("rl:pushsub:1.2.3.4", 30);
     const { status } = await readJson(await post({ uid: UID, subscription: validSub }, "1.2.3.4"));
@@ -160,5 +175,16 @@ describe("POST /api/push/subscribe", () => {
     const { status, body } = await readJson(await post({ uid: UID, subscription: mozSub }));
     expect(status).toBe(200);
     expect(body.ok).toBe(true);
+  });
+});
+
+// H3: a cookie-less caller can't attach a device to a signed-in player's push fan-out.
+describe("POST /api/push/subscribe — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less subscribe for a signed-in uid and stores nothing", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    const { status } = await readJson(await post({ uid: victim, subscription: validSub }));
+    expect(status).toBe(400);
+    expect(ctx.redis!.hashes.has(`push:${victim}`)).toBe(false);
   });
 });

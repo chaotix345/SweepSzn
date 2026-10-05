@@ -60,3 +60,14 @@ describe("dex share card — encode/decode the 'Share your Dex' payload", () => 
     expect(decodeDexShare("")).toBeNull();
   });
 });
+
+// Next URL-decodes the route param before these run, so "/r/%25zz" arrives as "%zz" — a re-decode
+// must not throw (it 500'd /api/result and every /r, /dex/s OG route).
+describe("share decoders — malformed percent-escapes don't throw", () => {
+  it("decodeShare / decodeDexShare return a non-resolving value for '%zz'", () => {
+    expect(() => decodeShare("%zz")).not.toThrow();
+    expect(decodeShare("%zz").ids).not.toHaveLength(5);
+    expect(() => decodeDexShare("%zz")).not.toThrow();
+    expect(decodeDexShare("%zz")).toBeNull();
+  });
+});

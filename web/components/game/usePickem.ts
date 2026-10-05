@@ -46,7 +46,11 @@ export function usePickem(seed: string, current: Spin | null, mode: Mode | null,
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(`/api/pickem?seed=${encodeURIComponent(seed)}&uid=${encodeURIComponent(getUid())}`);
+        // POST with no `vote` = the crowd read keyed by your uid (in the body, never a URL — DESIGN.md §12)
+        const r = await fetch("/api/pickem", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ seed, uid: getUid() }),
+        });
         if (!r.ok || cancelled) return;
         const d = await r.json();
         if (cancelled) return;

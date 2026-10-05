@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { X_HANDLE } from "@/lib/site";
+import { X_HANDLE, SITE_NAME } from "@/lib/site";
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { resolveSharedLineup, type SharedLineup } from "@/lib/sharedLineup";
@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const description = `Two all-time fives head to head: ${left.result.wins}-${left.result.losses} (${left.result.grade}) vs ${right.result.wins}-${right.result.losses} (${right.result.grade}). Build your own and see how it stacks up.`;
   return {
     title, description, robots: { index: false },
-    openGraph: { title, description, type: "website", url: `/compare/${id1}/${id2}` },
+    openGraph: { title, description, siteName: SITE_NAME, type: "website", url: `/compare/${id1}/${id2}` },
     twitter: { card: "summary_large_image", title, description, site: X_HANDLE, creator: X_HANDLE },
   };
 }

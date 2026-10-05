@@ -1,7 +1,10 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { redis } from "./redis";
 import { dayUTC } from "./day";
 import { decodeLineup } from "./share";
+import { decodeSurgeonCard } from "./surgeon";
+import { RELEASE_LOCK_LUA } from "./score";
 
 // Per-account persistence for signed-in players: the cross-device home for streak, result history,
 // and the editable display handle. Anonymous players keep using localStorage (lib/streak.ts,
@@ -15,6 +18,14 @@ import { decodeLineup } from "./share";
 const keyProfile = (uid: string) => `profile:${uid}`;
 const keyStreak = (uid: string) => `streak:${uid}`;
 const keyResults = (uid: string) => `results:${uid}`;
+// results:lock:{uid}  STRING  short-lived NX lock serializing syncResults' read-merge-rewrite per uid
+const keyResultsLock = (uid: string) => `results:lock:${uid}`;
+const RESULTS_LOCK_SEC = 5;
+const RESULTS_LOCK_TRIES = 10;
+// Thrown when another sync still holds the lock after the bounded wait — the route answers 409.
+export class ResultsLockBusyError extends Error {
+  constructor() { super("syncResults: lock busy"); }
+}
 // dex:{uid}  SET  every player-variant id ever fielded — UNBOUNDED (no 200-cap), so the Drafted Dex
 // never loses a player once seen, even past the results cap. Written alongside each result sync.
 const keyDex = (uid: string) => `dex:${uid}`;
@@ -39,6 +50,14 @@ export interface ProfileResult {
   grade: string;
   ts: number;
   challengeId?: string;
+}
+
+// Every player id a stored result fielded. Surgeon entries carry a card (`ids.outIdx.inId`), not a
+// lineup segment: the drafted five plus the swapped-in player all took the floor.
+export function fieldedIds(r: Pick<ProfileResult, "mode" | "encoded">): string[] {
+  if (r.mode !== "surgeon") return decodeLineup(r.encoded);
+  const card = decodeSurgeonCard(r.encoded);
+  return card ? [...card.beforeIds, card.inId] : [];
 }
 
 export interface StoredProfile { name: string; picture: string; createdAt: number }
@@ -121,12 +140,18 @@ export async function getStreakCount(uid: string, now: number): Promise<number> 
 
 // --- profile (display handle) ---
 
-// On sign-in: keep name/picture current across devices (idempotent), but stamp createdAt only once.
-// hsetnx is atomic — no check-then-set race when two devices sign in at the same moment.
-export async function upsertProfileOnSignIn(uid: string, name: string, picture: string, now: number): Promise<void> {
-  if (!redis) return;
-  await redis.hset(keyProfile(uid), { name, picture });
-  await redis.hsetnx(keyProfile(uid), "createdAt", now);
+// On sign-in: seed the handle only when the account has none (a custom /api/profile/name handle must
+// survive a re-sign-in on a new device), refresh the picture, stamp createdAt once. hsetnx is atomic —
+// no check-then-set race when two devices sign in at the same moment. Returns the account's canonical
+// handle (the stored one when it exists) so the route can mint the session with it.
+export async function upsertProfileOnSignIn(uid: string, name: string, picture: string, now: number): Promise<string | null> {
+  if (!redis) return null;
+  const [seeded] = await Promise.all([
+    redis.hsetnx(keyProfile(uid), "name", name),
+    redis.hset(keyProfile(uid), { picture }),
+    redis.hsetnx(keyProfile(uid), "createdAt", now),
+  ]);
+  return seeded ? name : getProfileName(uid);
 }
 
 export async function setProfileName(uid: string, name: string): Promise<void> {
@@ -151,27 +176,45 @@ export async function getResults(uid: string): Promise<ProfileResult[]> {
 // ts and capped. Returns how many fresh entries were actually added. Because a cross-device backfill can
 // carry games OLDER than ones already stored, we re-sort the whole list by ts (not just prepend) so the
 // cap can never evict a newer entry in favour of an older backfilled one.
-export async function syncResults(uid: string, entries: ProfileResult[]): Promise<number> {
+// Serialized per uid (results:lock NX): two devices syncing at once each read the same list, and the
+// later rewrite duplicated or dropped the other's entries. The DEL+LPUSH rewrite is one MULTI, so a
+// failure mid-rewrite can no longer wipe the stored history. `realIds` keeps only REAL player ids for the
+// dex (the sync route passes the lib/data lookup) — injected, not imported, so the auth/profile routes
+// that share this store don't pull public/data into their functions.
+export async function syncResults(uid: string, entries: ProfileResult[], realIds: (ids: string[]) => string[]): Promise<number> {
   if (!redis || !entries.length) return 0;
-  const existing = (await redis.lrange<ProfileResult>(keyResults(uid), 0, -1)) ?? [];
-  const seen = new Set(existing.map((e) => `${e.mode}:${e.encoded}`));
-  const fresh: ProfileResult[] = [];
-  for (const e of entries) {
-    const k = `${e.mode}:${e.encoded}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    fresh.push(e);
+  const lock = keyResultsLock(uid);
+  const token = randomUUID();
+  // short bounded wait (~1.4s): real contention clears in ms. Past that, fail fast with a typed error
+  // rather than spinning dozens of Upstash trips toward the TTL — the client sync is best-effort.
+  for (let i = 0; (await redis.set(lock, token, { nx: true, ex: RESULTS_LOCK_SEC })) !== "OK"; i++) {
+    if (i >= RESULTS_LOCK_TRIES) throw new ResultsLockBusyError();
+    await new Promise((r) => setTimeout(r, 25 * (i + 1)));
   }
-  if (!fresh.length) return 0;
-  const merged = [...existing, ...fresh].sort((a, b) => b.ts - a.ts).slice(0, RESULTS_CAP);
-  // Rebuild the list newest-first: lpush leaves its LAST arg at the head, so push the reverse.
-  await redis.del(keyResults(uid));
-  await redis.lpush(keyResults(uid), ...[...merged].reverse());
-  // Accumulate every fielded player into the unbounded dex set, so the collection survives past the
-  // results cap. SADD is idempotent, so re-syncing the same games never double-counts.
-  const dexArr = [...new Set(fresh.flatMap((e) => decodeLineup(e.encoded)))];
-  if (dexArr.length) await redis.sadd(keyDex(uid), dexArr[0], ...dexArr.slice(1));
-  return fresh.length;
+  try {
+    const existing = (await redis.lrange<ProfileResult>(keyResults(uid), 0, -1)) ?? [];
+    const seen = new Set(existing.map((e) => `${e.mode}:${e.encoded}`));
+    const fresh: ProfileResult[] = [];
+    for (const e of entries) {
+      const k = `${e.mode}:${e.encoded}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      fresh.push(e);
+    }
+    if (!fresh.length) return 0;
+    const merged = [...existing, ...fresh].sort((a, b) => b.ts - a.ts).slice(0, RESULTS_CAP);
+    // Rebuild the list newest-first: lpush leaves its LAST arg at the head, so push the reverse.
+    await redis.multi().del(keyResults(uid)).lpush(keyResults(uid), ...[...merged].reverse()).exec();
+    // Accumulate every fielded player into the unbounded dex set, so the collection survives past the
+    // results cap. SADD is idempotent, so re-syncing the same games never double-counts. Only REAL player
+    // ids — `encoded` is client-supplied, so a forged lineup must not inject arbitrary members.
+    const dexArr = [...new Set(realIds(fresh.flatMap(fieldedIds)))];
+    if (dexArr.length) await redis.sadd(keyDex(uid), dexArr[0], ...dexArr.slice(1));
+    return fresh.length;
+  } finally {
+    // owner-checked release: if we overran the TTL, the lock may now be another sync's
+    try { await redis.eval(RELEASE_LOCK_LUA, [lock], [token]); } catch { /* expires on its own */ }
+  }
 }
 
 // Every player-variant id the user has ever fielded (unbounded — survives the results cap).

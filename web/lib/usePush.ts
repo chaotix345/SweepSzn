@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { getUid } from "./streak";
+import { dayUTC } from "./day";
 
 // NEXT_PUBLIC_ vars are inlined at build time: when VAPID isn't configured this is undefined, so the
 // whole push opt-in self-disables (renders nothing) until the env is set AND the app is redeployed.
@@ -29,6 +30,25 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
 
 export type PushState = "unsupported" | "ios-needs-install" | "default" | "granted" | "denied" | "busy";
 
+const postSubscription = (sub: PushSubscription) => fetch("/api/push/subscribe", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ uid: getUid(), subscription: sub.toJSON() }),
+});
+
+// The server expires a subscription 31 days after it was stored, and the opt-in click only POSTs once —
+// so an already-opted-in device silently re-POSTs its live subscription, at most once per UTC day.
+const REFRESHED_KEY = "szn_push_refreshed";
+async function refreshSubscription() {
+  try {
+    const today = dayUTC();
+    if (localStorage.getItem(REFRESHED_KEY) === today) return;
+    localStorage.setItem(REFRESHED_KEY, today); // stamped up front so two prompts mounting together can't both POST
+    const sub = await (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription();
+    if (sub) await postSubscription(sub);
+  } catch { /* best-effort — no storage / no SW / offline */ }
+}
+
 export function usePush() {
   const [state, setState] = useState<PushState>("unsupported");
 
@@ -47,6 +67,7 @@ export function usePush() {
     // Defer off the synchronous effect path (react-hooks/set-state-in-effect) — capability detection
     // reads the browser once on mount; a microtask is plenty.
     Promise.resolve().then(() => { if (on) setState(detect()); });
+    if (pushSupported() && Notification.permission === "granted") void refreshSubscription();
     return () => { on = false; };
   }, []);
 
@@ -63,12 +84,8 @@ export function usePush() {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(PUBLIC_KEY!),
       });
-      await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ uid: getUid(), subscription: sub.toJSON() }),
-      });
-      setState("granted");
+      const res = await postSubscription(sub);
+      setState(res.ok ? "granted" : "default"); // not stored (e.g. 503) — keep the CTA up rather than claim it's on
     } catch {
       setState(Notification.permission === "denied" ? "denied" : "default");
     }

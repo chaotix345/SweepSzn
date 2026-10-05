@@ -1,8 +1,9 @@
 import { NextResponse, after } from "next/server";
 import { getSession } from "@/lib/authServer";
 import { isRedisEnabled, rateLimit, ipOf } from "@/lib/redis";
-import { syncStreakDates, syncResults, getStreakCount, getStoredBadges, addStoredBadges, type ProfileResult } from "@/lib/profileStore";
+import { syncStreakDates, syncResults, getStreakCount, getStoredBadges, addStoredBadges, ResultsLockBusyError, type ProfileResult } from "@/lib/profileStore";
 import { loadDexState } from "@/lib/dexState";
+import { getPlayersByIds } from "@/lib/data";
 import { enqueueNotif } from "@/lib/notifyStore";
 import { buildBadgeNotification } from "@/lib/notify";
 import { BADGES } from "@/lib/dex";
@@ -55,7 +56,15 @@ export async function POST(req: Request) {
   const results = cleanResults(body.results);
 
   await syncStreakDates(session.uid, history);
-  const merged = await syncResults(session.uid, results);
+  let merged: number;
+  try {
+    merged = await syncResults(session.uid, results, (ids) => getPlayersByIds(ids).map((p) => p.id));
+  } catch (err) {
+    // another device's sync still holds the per-uid lock — a retryable conflict, not a server fault
+    // (the client sync is best-effort: syncToAccount/pushResult ignore non-2xx; the union merge is idempotent)
+    if (err instanceof ResultsLockBusyError) return NextResponse.json({ error: "sync busy — retry" }, { status: 409 });
+    throw err;
+  }
   const streak = await getStreakCount(session.uid, Date.now());
 
   // Fire a notification when a Dex badge NEWLY unlocks (post-commit, descriptive — §12). Diffed against

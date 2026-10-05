@@ -37,3 +37,11 @@ describe("resolveSharedLineup — decode + evaluate a shared lineup segment", ()
     expect(resolveSharedLineup(encodeLineup([...FIVE.slice(0, 4), "nobody_unknown_xyz_0000"]))).toBeNull();
   });
 });
+
+describe("resolveSharedLineup — one person per five", () => {
+  it("rejects the same person in several eras (distinct ids, one person_id)", () => {
+    const mjs = ["michael_jordan_chi_1980s_1988", "michael_jordan_chi_1990s_1991", "michael_jordan_was_2000s_2003"];
+    expect(resolveSharedLineup(encodeLineup([...mjs, FIVE[2], FIVE[3]]))).toBeNull();
+    expect(resolveSharedLineup(encodeLineup([mjs[0], mjs[1], FIVE[1], FIVE[2], FIVE[3]]))).toBeNull();
+  });
+});

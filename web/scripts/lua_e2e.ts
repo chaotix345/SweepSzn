@@ -14,6 +14,7 @@ const redis = new Redis({ url, token });
 
 const tag = `test:${Math.random().toString(36).slice(2, 10)}`;
 const dz = `lb:${tag}:daily`, wz = `lb:${tag}:week`, az = `lb:${tag}:alltime`;
+const dh = `${dz}:meta`, wh = `${wz}:meta`, ah = `${az}:meta`;
 const run = (uid: string, wins: number, net: number) =>
   redis.eval(KEEP_BEST_LUA, [dz, wz, az], [uid, encScore(wins, net), wins, 3600, 3600]) as Promise<[number, number, number, number]>;
 
@@ -51,9 +52,19 @@ const assert = (c: boolean, m: string) => { if (!c) { console.error("FAIL:", m);
     const top = await redis.zrange<string[]>(az, 0, -1, { rev: true });
     assert(top[0] === "u3" && top.includes("u1") && top.includes("u2"), "all-time ranks by wins (u3=82 first)");
 
+    // META MODE (KEYS 4-6): the meta rows move with the score, and only on improvement
+    const meta = (uid: string, wins: number, name: string) =>
+      redis.eval(KEEP_BEST_LUA, [dz, wz, az, dh, wh, ah],
+        [uid, encScore(wins, 0), wins, 3600, 3600, JSON.stringify({ uid, name, wins }), JSON.stringify({ uid, name }).slice(0, -1) + ',"wins":']);
+    await meta("u4", 70, "B");
+    await meta("u4", 50, "A");
+    const wm = await redis.hget<{ uid: string; name: string; wins: number }>(wh, "u4");
+    const dm = await redis.hget<{ name: string }>(dh, "u4");
+    assert(wm?.uid === "u4" && wm.name === "B" && wm.wins === 70 && dm?.name === "B", "meta mode: rows written with the winning score only");
+
     console.log(fail ? `\n${fail} LUA E2E ASSERTION(S) FAILED` : "\nALL LUA E2E CHECKS PASSED");
   } finally {
-    await redis.del(dz, wz, az); // cleanup throwaway keys
+    await redis.del(dz, wz, az, dh, wh, ah); // cleanup throwaway keys
     console.log("cleaned up throwaway keys", tag);
   }
   process.exit(fail ? 1 : 0);

@@ -96,7 +96,8 @@ export default function SessionProvider({ children }: { children: React.ReactNod
             role="dialog"
             aria-modal="true"
             aria-labelledby="signin-title"
-            onKeyDown={(e) => buildFocusTrapHandler(popoverRef, () => setSignInOpen(false))(e)}
+            // the Google button is a GIS iframe, not a <button> — the trap's default selector would skip it
+            onKeyDown={(e) => buildFocusTrapHandler(popoverRef, () => setSignInOpen(false), { selector: "button:not([disabled]), iframe, [tabindex]:not([tabindex='-1'])" })(e)}
             className="fixed right-3 top-16 z-50 w-72 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 shadow-2xl shadow-black/50 outline-none"
           >
             <div className="mb-2 flex items-start justify-between gap-2">

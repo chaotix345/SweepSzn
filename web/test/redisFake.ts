@@ -1,5 +1,6 @@
-import { KEEP_BEST_LUA, KEEP_BEST_ROW_LUA, TRIM_BOARD_LUA } from "@/lib/score";
+import { KEEP_BEST_LUA, KEEP_BEST_ROW_LUA, TRIM_BOARD_LUA, RELEASE_LOCK_LUA } from "@/lib/score";
 import { PICKEM_VOTE_LUA } from "@/lib/pickem";
+import { PUSH_SAVE_LUA } from "@/lib/notify";
 
 // In-memory stand-in for @upstash/redis covering the command surface this codebase uses.
 // Mirrors the real client's JSON auto-(de)serialization: strings are stored raw, everything
@@ -46,6 +47,19 @@ export function createRedisFake() {
   const hasKey = (k: string) =>
     strings.has(k) || !!hashes.get(k)?.size || !!zsets.get(k)?.size || !!lists.get(k)?.length || !!sets.get(k)?.size;
 
+  // Whole-state copy/restore (in place — tests hold the map references) for multi()'s all-or-nothing.
+  const snapshot = () => ({
+    strings: new Map(strings), ttls: new Map(ttls),
+    hashes: new Map([...hashes].map(([k, v]) => [k, new Map(v)])),
+    zsets: new Map([...zsets].map(([k, v]) => [k, new Map(v)])),
+    lists: new Map([...lists].map(([k, v]) => [k, [...v]])),
+    sets: new Map([...sets].map(([k, v]) => [k, new Set(v)])),
+  });
+  const restore = (s: ReturnType<typeof snapshot>) => {
+    const put = <V,>(dst: Map<string, V>, src: Map<string, V>) => { dst.clear(); for (const [k, v] of src) dst.set(k, v); };
+    put(strings, s.strings); put(ttls, s.ttls); put(hashes, s.hashes); put(zsets, s.zsets); put(lists, s.lists); put(sets, s.sets);
+  };
+
   // Ascending by score, ties ascending by member (real sorted-set ordering).
   const zsorted = (k: string): [string, number][] =>
     [...(zsets.get(k) ?? new Map<string, number>())].sort((x, y) => x[1] - y[1] || (x[0] < y[0] ? -1 : 1));
@@ -90,6 +104,15 @@ export function createRedisFake() {
       aw = zsets.get(allZ)?.get(uid) ?? 0;
     }
     rawExpire(weekZ, Number(args[4]));
+    // optional meta rows (KEYS 4-6), written atomically with the score — only on improvement
+    const [dailyH, weekH, allH] = keys.slice(3);
+    if (dailyH) {
+      hash(dailyH).set(uid, String(args[5]));
+      rawExpire(dailyH, Number(args[3]));
+      hash(weekH).set(uid, `${args[6]}${Math.floor(ww)}}`);
+      hash(allH).set(uid, `${args[6]}${Math.floor(aw)}}`);
+      rawExpire(weekH, Number(args[4]));
+    }
     return [1, delta, Math.floor(ww), Math.floor(aw)];
   }
 
@@ -120,6 +143,16 @@ export function createRedisFake() {
     return doomed.length;
   }
 
+  // PUSH_SAVE_LUA (lib/notify.ts): cap-checked subscription store — new field refused at the cap.
+  function pushSave(keys: string[], args: (string | number)[]): number {
+    const [k] = keys;
+    const f = String(args[0]);
+    if (!hashes.get(k)?.has(f) && (hashes.get(k)?.size ?? 0) >= Number(args[2])) return 0;
+    hash(k).set(f, String(args[1]));
+    rawExpire(k, Number(args[3]));
+    return 1;
+  }
+
   // PICKEM_VOTE_LUA (lib/pickem.ts): claim voter slot, bump matching counter, read back both counts.
   function pickemVote(keys: string[], args: (string | number)[]): (string | number)[] {
     const [voterK, yK, nK] = keys;
@@ -139,6 +172,14 @@ export function createRedisFake() {
     const y = strings.get(yK) ?? "0";
     const n = strings.get(nK) ?? "0";
     return [claimed, stored, y, n];
+  }
+
+  // RELEASE_LOCK_LUA (lib/score.ts): compare-and-delete — DEL only while the lock holds ARGV[1].
+  function releaseLock(keys: string[], args: (string | number)[]): number {
+    const [k] = keys;
+    if (strings.get(k) !== String(args[0])) return 0;
+    strings.delete(k); ttls.delete(k);
+    return 1;
   }
 
   const fake = {
@@ -298,12 +339,19 @@ export function createRedisFake() {
       if (script === PICKEM_VOTE_LUA) return deepDe(pickemVote(keys, args));
       if (script === KEEP_BEST_ROW_LUA) return keepBestRow(keys, args);
       if (script === TRIM_BOARD_LUA) return trimBoard(keys, args);
+      if (script === PUSH_SAVE_LUA) return pushSave(keys, args);
+      if (script === RELEASE_LOCK_LUA) return releaseLock(keys, args);
       throw new Error("redisFake.eval: unknown script — add its semantics here before using it in tests");
     },
 
-    pipeline: () => {
+    // MULTI/EXEC (redis.multi(), the /multi-exec endpoint): a pipeline applied as ONE unit — no other
+    // command interleaves, and a failed request applies nothing (modelled by snapshot-restore).
+    multi: () => fake.pipeline(true),
+
+    pipeline: (atomic = false) => {
       const ops: Array<() => Promise<unknown>> = [];
       const p = {
+        del: (...ks: string[]) => { ops.push(() => fake.del(...ks)); return p; },
         incr: (k: string) => { ops.push(() => fake.incr(k)); return p; },
         expire: (k: string, sec: number, opt?: string) => { ops.push(() => fake.expire(k, sec, opt)); return p; },
         lpush: (k: string, ...vs: unknown[]) => { ops.push(() => fake.lpush(k, ...vs)); return p; },
@@ -313,12 +361,23 @@ export function createRedisFake() {
         hincrby: (k: string, f: string, by: number) => { ops.push(() => fake.hincrby(k, f, by)); return p; },
         zrem: (k: string, ...members: string[]) => { ops.push(() => fake.zrem(k, ...members)); return p; },
         sadd: (k: string, ...members: unknown[]) => { ops.push(() => fake.sadd(k, ...members)); return p; },
+        exists: (...ks: string[]) => { ops.push(() => fake.exists(...ks)); return p; },
+        hlen: (k: string) => { ops.push(() => fake.hlen(k)); return p; },
+        hexists: (k: string, f: string) => { ops.push(() => fake.hexists(k, f)); return p; },
+        scard: (k: string) => { ops.push(() => fake.scard(k)); return p; },
         // a pipeline is ONE round trip no matter how many ops it carries: the sub-ops above each
         // log (and bump trips); collapse their count back to a single trip on exec.
         exec: async () => {
           const before = trips;
           const out: unknown[] = [];
-          for (const op of ops) out.push(await op());
+          if (atomic) {
+            // every fake op body is synchronous, so invoking them all in one map() runs them in a single
+            // tick (nothing interleaves); any failure rolls the whole transaction back
+            const snap = snapshot();
+            try { out.push(...(await Promise.all(ops.map((op) => op())))); } catch (err) { restore(snap); trips = before + 1; throw err; }
+          } else {
+            for (const op of ops) out.push(await op());
+          }
           trips = before + 1;
           return out;
         },

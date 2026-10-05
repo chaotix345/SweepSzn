@@ -38,6 +38,25 @@ describe("cleanName", () => {
     expect(cleanName("a" + ISO + "b")).toBe("ab");
   });
 
+  it("strips invisible operators / word joiner (U+2060-2064), ALM, and MVS", () => {
+    for (const cp of [0x2060, 0x2061, 0x2062, 0x2063, 0x2064, 0x061c, 0x180e]) {
+      expect(cleanName("a" + String.fromCharCode(cp) + "b")).toBe("ab");
+    }
+  });
+
+  it("strips Hangul fillers (blank-looking names collapse to empty)", () => {
+    for (const cp of [0x3164, 0x115f, 0x1160, 0xffa0]) {
+      expect(cleanName(String.fromCharCode(cp).repeat(3))).toBe("");
+    }
+  });
+
+  it("caps by code point, never splitting a surrogate pair", () => {
+    const E = String.fromCodePoint(0x1f3c0); // basketball (astral, 2 UTF-16 units)
+    const out = cleanName("x" + E.repeat(30));
+    expect(out).toBe("x" + E.repeat(23));
+    expect(out.isWellFormed()).toBe(true);
+  });
+
   it("leaves normal names intact", () => {
     expect(cleanName("normal name")).toBe("normal name");
   });
