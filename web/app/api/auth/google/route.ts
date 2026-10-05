@@ -58,13 +58,17 @@ export async function POST(req: Request) {
     // bind the caller's own anon uid into the session so claim-cleanup can only ever remove THEIR row
     anon: isAnonUid(anonUid) ? anonUid : undefined,
   };
+  // The stored account handle is canonical (a custom /api/profile/name handle must survive a re-sign-in),
+  // so seed/read the profile BEFORE minting the session. Best-effort: a Redis error keeps the Google name
+  // rather than failing sign-in. Re-cleaned because pre-cleanName sign-ins stored raw Google names.
+  const stored = await upsertProfileOnSignIn(user.uid, user.name, user.picture ?? "", Date.now()).catch(() => null);
+  user.name = cleanName(stored) || user.name;
   await setSessionCookie(await signSession(user));
   c.delete(NONCE_COOKIE);
   after(() => bump(redis, "signin", { uid: user.uid }));
-  // Persist the account's display handle and carry this device's anonymous push subscriptions onto
-  // the account. Best-effort and deferred so neither can slow or fail the sign-in response.
+  // Carry this device's anonymous push subscriptions onto the account. Best-effort and deferred so it
+  // can't slow or fail the sign-in response.
   after(async () => {
-    await upsertProfileOnSignIn(user.uid, user.name, user.picture ?? "", Date.now());
     if (user.anon && user.anon !== user.uid) await migratePushSubs(user.anon, user.uid);
   });
   return NextResponse.json({ user: { uid: user.uid, name: user.name, picture: user.picture } });

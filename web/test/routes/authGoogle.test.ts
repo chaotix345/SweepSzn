@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { enableRedisEnv, freshFake, ctx, authEnv, req, readJson, exhaustRateLimit } from "@/test/routeHarness";
+import { enableRedisEnv, freshFake, ctx, authEnv, req, readJson, exhaustRateLimit, flushAfter } from "@/test/routeHarness";
 import type { JWTVerifyGetKey } from "jose";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
@@ -210,5 +210,29 @@ describe("POST /api/auth/google — display name sanitization", () => {
   it("falls back to Player when the Google name is empty after cleaning", async () => {
     const { session } = await signInWith({ name: "​‮" });
     expect(session?.name).toBe("Player");
+  });
+});
+
+// M14: the account handle set via /api/profile/name is canonical — a re-sign-in (new device, expired
+// session) must neither overwrite it with the Google name nor mint a session that shows the Google name.
+describe("POST /api/auth/google — custom handle survives sign-in", () => {
+  it("keeps the stored profile name and mints the session with it", async () => {
+    const uid = authedUid("123");
+    ctx.redis!.hashes.set(`profile:${uid}`, new Map([["name", "Custom"], ["picture", "old"], ["createdAt", "1"]]));
+    const { status, body, session } = await signInWith({ name: "Google", picture: "https://x/new.png" });
+    await flushAfter();
+    expect(status).toBe(200);
+    expect((body.user as { name: string }).name).toBe("Custom");
+    expect(session?.name).toBe("Custom");
+    const h = ctx.redis!.hashes.get(`profile:${uid}`)!;
+    expect(h.get("name")).toBe("Custom");
+    expect(h.get("picture")).toBe("https://x/new.png");
+  });
+
+  it("seeds a first-time account's profile with the (cleaned) Google name", async () => {
+    const { session } = await signInWith({ name: "Charlie" });
+    await flushAfter();
+    expect(session?.name).toBe("Charlie");
+    expect(ctx.redis!.hashes.get(`profile:${authedUid("123")}`)?.get("name")).toBe("Charlie");
   });
 });

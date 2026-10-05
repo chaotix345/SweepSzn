@@ -121,12 +121,18 @@ export async function getStreakCount(uid: string, now: number): Promise<number> 
 
 // --- profile (display handle) ---
 
-// On sign-in: keep name/picture current across devices (idempotent), but stamp createdAt only once.
-// hsetnx is atomic — no check-then-set race when two devices sign in at the same moment.
-export async function upsertProfileOnSignIn(uid: string, name: string, picture: string, now: number): Promise<void> {
-  if (!redis) return;
-  await redis.hset(keyProfile(uid), { name, picture });
-  await redis.hsetnx(keyProfile(uid), "createdAt", now);
+// On sign-in: seed the handle only when the account has none (a custom /api/profile/name handle must
+// survive a re-sign-in on a new device), refresh the picture, stamp createdAt once. hsetnx is atomic —
+// no check-then-set race when two devices sign in at the same moment. Returns the account's canonical
+// handle (the stored one when it exists) so the route can mint the session with it.
+export async function upsertProfileOnSignIn(uid: string, name: string, picture: string, now: number): Promise<string | null> {
+  if (!redis) return null;
+  const [seeded] = await Promise.all([
+    redis.hsetnx(keyProfile(uid), "name", name),
+    redis.hset(keyProfile(uid), { picture }),
+    redis.hsetnx(keyProfile(uid), "createdAt", now),
+  ]);
+  return seeded ? name : getProfileName(uid);
 }
 
 export async function setProfileName(uid: string, name: string): Promise<void> {
