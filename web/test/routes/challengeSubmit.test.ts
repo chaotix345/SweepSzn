@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   enableRedisEnv,
   freshFake,
@@ -73,7 +73,12 @@ vi.mock("@/lib/engine", () => ({
 }));
 
 // Keep push silent — VAPID keys are absent, so isPushEnabled() returns false and sendPushToUid no-ops.
-// No extra mock needed.
+// The push-gating block below sets VAPID env for its own tests only; web-push is stubbed so its
+// fan-out is observable without network.
+const sendNotification = vi.fn(async (..._a: unknown[]) => ({ statusCode: 201 }));
+vi.mock("web-push", () => ({
+  default: { setVapidDetails: vi.fn(), sendNotification: (...a: unknown[]) => sendNotification(...a) },
+}));
 
 enableRedisEnv();
 authEnv();
@@ -469,6 +474,53 @@ describe("POST /api/challenge/submit — after() notification fan-out", () => {
 
     const notifList = ctx.redis!.lists.get(`notif:${creatorUid}`);
     expect(!notifList || notifList.length === 0).toBe(true);
+  });
+});
+
+describe("POST /api/challenge/submit — push gating (dedup + per-creator cap)", () => {
+  const creatorUid = "creator-uid-push";
+  const VAPID = { VAPID_PUBLIC_KEY: "test-public-key", VAPID_PRIVATE_KEY: "test-private-key", VAPID_SUBJECT: "mailto:t@example.com" };
+  beforeEach(() => {
+    Object.assign(process.env, VAPID);
+    sendNotification.mockClear();
+    const weakInfo = {
+      uid: creatorUid, name: "Creator", wins: 10, losses: 72, net: -10.0,
+      grade: "F", lineup: "p0pg,p1sg,p2sf,p3pf,p4c", seed: `h2h-${VALID_ID}`, hinted: false,
+    };
+    ctx.redis!.strings.set(`chal:${VALID_ID}:info`, JSON.stringify(weakInfo));
+    ctx.redis!.hashes.set(`push:${creatorUid}`, new Map([["f1", JSON.stringify({ endpoint: "https://fcm.googleapis.com/x", keys: { p256dh: "k", auth: "a" } })]]));
+  });
+  afterEach(() => { for (const k of Object.keys(VAPID)) delete process.env[k]; });
+
+  it("replaying one trace under many fresh uids+names pushes the creator at most CHALLENGE_PUSH_CAP times", async () => {
+    const { CHALLENGE_PUSH_CAP } = await import("@/lib/notifyStore");
+    const n = CHALLENGE_PUSH_CAP + 3;
+    for (let i = 0; i < n; i++) {
+      await post({ id: VALID_ID, uid: `spam-uid-${i}0000`, name: `Spammer ${i}`, trace: LEGIT_TRACE }, `7.7.7.${i}`);
+      await flushAfter();
+    }
+    expect(sendNotification).toHaveBeenCalledTimes(CHALLENGE_PUSH_CAP);
+    // the inbox still records every fresh responder — only the OS push is capped
+    expect(ctx.redis!.lists.get(`notif:${creatorUid}`)?.length).toBe(n);
+  });
+
+  it("a deduped enqueue (same responder uid under a new name) sends no push and adds no inbox item", async () => {
+    await post({ id: VALID_ID, uid: "dup-responder-01", name: "Bob", trace: LEGIT_TRACE });
+    await flushAfter();
+    ctx.redis!.zsets.get(`chal:${VALID_ID}`)!.delete("dup-responder-01"); // force improved=true on the replay
+    await post({ id: VALID_ID, uid: "dup-responder-01", name: "Robert", trace: LEGIT_TRACE });
+    await flushAfter();
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+    expect(ctx.redis!.lists.get(`notif:${creatorUid}`)?.length).toBe(1);
+  });
+
+  it("two distinct nameless ('Anonymous') responders are two inbox items, not one", async () => {
+    await post({ id: VALID_ID, uid: "anon-friend-0001", trace: LEGIT_TRACE });
+    await flushAfter();
+    await post({ id: VALID_ID, uid: "anon-friend-0002", trace: LEGIT_TRACE });
+    await flushAfter();
+    expect(ctx.redis!.lists.get(`notif:${creatorUid}`)?.length).toBe(2);
+    expect(sendNotification).toHaveBeenCalledTimes(2);
   });
 });
 
