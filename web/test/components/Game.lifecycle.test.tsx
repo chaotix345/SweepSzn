@@ -236,3 +236,74 @@ describe("Game — no live projection for challenge responders (M7, DESIGN.md §
     expect(screen.queryByText(/Projected wins/)).toBeNull();
   });
 });
+
+describe("Game — the no-fit warning offers an action that can change the spin (M21)", () => {
+  // Round 0 deals an anchor who fits anywhere; every later spin (base or re-spun) deals a PG-only
+  // player — so once PG is filled the board is a dead end. A plain spin is deterministic in
+  // (seed, round, salt), so only a re-spin (salted + counted in the trace) or a restart moves it.
+  let spinBodies: Record<string, unknown>[] = [];
+  const stuckFetch = () => vi.fn(async (url: string, init?: RequestInit) => {
+    const path = typeof url === "string" ? url.split("?")[0] : "";
+    if (path !== "/api/spin") return { ok: true, json: async () => ({}) } as Response;
+    const b = JSON.parse(String(init?.body));
+    spinBodies.push(b);
+    const anchor = b.round === 0;
+    const team = anchor ? "BOS" : b.salt ? `T${b.salt}` : "LAL";
+    return { ok: true, json: async () => ({
+      team, decade: "1980s",
+      candidates: [{ id: `p_${team}`, name: anchor ? "Anchor Guy" : `Stuck ${team}`, year: 1986, decade: "1980s", team, pos: "PG", eligible: anchor ? ["PG", "SG", "SF", "PF", "C"] : ["PG"], pts: 1, trb: 1, ast: 1 }],
+    }) } as Response;
+  });
+  const settle = async () => { await act(async () => { vi.advanceTimersByTime(1200); }); await act(async () => {}); };
+  const warningAction = () => screen.getByText(/No one here fits/).querySelector("button")!;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    spinBodies = [];
+    vi.stubGlobal("fetch", stuckFetch());
+    try { localStorage.clear(); } catch { /* */ }
+  });
+  afterEach(async () => {
+    await act(async () => {});
+    cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks();
+    window.history.replaceState({}, "", "/");
+  });
+
+  async function reachDeadEnd() {
+    render(<Game />);
+    await click(modeBtn(/^Play Classic mode/));
+    await click(btn((t) => /^🎰 spin/i.test(t.trim()))!);
+    await settle();
+    await click(screen.getAllByRole("button", { name: /^Select Anchor Guy/ })[0]);
+    await click(screen.getAllByRole("button", { name: /^PG slot/ })[0]);
+    await click(btn((t) => /^🎰 spin/i.test(t.trim()))!);
+    await settle();
+    expect(screen.queryByText(/No one here fits/)).toBeTruthy();
+  }
+
+  it("with a re-spin left, the warning's action is that re-spin — not a repeat of the identical spin", async () => {
+    await reachDeadEnd();
+    const before = spinBodies.length;
+    await click(warningAction());
+    await settle();
+    expect(spinBodies).toHaveLength(before + 1);
+    const last = spinBodies[before];
+    expect(last).not.toEqual(spinBodies[before - 1]);
+    expect(last).toMatchObject({ round: 1, salt: 1, lockedDecade: "1980s", excludeTeam: "LAL" });
+  });
+
+  it("with both re-spins spent, the warning offers a restart instead of a dead button", async () => {
+    await reachDeadEnd();
+    await click(btn((t) => t.includes("Re-spin Team"))!);
+    await settle();
+    await click(btn((t) => t.includes("Re-spin Era"))!);
+    await settle();
+    expect(screen.queryByText(/No one here fits/)).toBeTruthy();
+    const before = spinBodies.length;
+    await click(warningAction());
+    await act(async () => {});
+    expect(spinBodies).toHaveLength(before); // no futile spin request
+    expect(screen.queryByText(/No one here fits/)).toBeNull();
+    expect(screen.getByRole("img", { name: /Lineup so far/ }).getAttribute("aria-label")).toContain("PG open"); // fresh game
+  });
+});

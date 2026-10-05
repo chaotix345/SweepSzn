@@ -777,7 +777,11 @@ export default function Game() {
           {current && !canPlaceAny && (
             <div className="mt-3 rounded-lg border border-amber-600/40 bg-amber-500/10 p-3 text-center text-xs text-amber-400">
               No one here fits your open slot ({openSlots.join("/")}).{" "}
-              <button onClick={spin} className="font-bold underline">Spin again</button>
+              {/* a plain spin is deterministic in (seed, round, salt) — it would deal this same dead end —
+                  so offer what can change it: an unused re-spin, else a restart */}
+              {!skips.team ? <button onClick={reSpinTeam} className="font-bold underline">Re-spin the team</button>
+                : mode !== "prime" && !skips.era ? <button onClick={reSpinEra} className="font-bold underline">Re-spin the era</button>
+                : <>Out of re-spins — <button onClick={() => start(mode)} className="font-bold underline">restart</button></>}
             </div>
           )}
         </div>
