@@ -49,9 +49,10 @@ export async function bumpSurgeonSubs(date: string, uid: string): Promise<number
 // unlocked replay of the same five could walk all 3×5 swap combos through keep-best until the
 // optimum landed (the spec's brute-force hole). SET NX makes the lock write-once with no
 // read-modify-write race; a NEW lineup (legit re-draft) locks fresh. Returns the swap to grade:
-// the requested one when this lineup is first seen, the locked one otherwise.
+// the requested one when this lineup is first seen, the locked one otherwise. Keyed on the SORTED
+// id set (swaps name players, not slots) so re-slotting the same five can't mint a fresh lock.
 const keySwap = (d: string, uid: string, lineup: string) =>
-  `lb:surgeon:${d}:swap:${uid}:${createHash("sha256").update(lineup).digest("hex").slice(0, 16)}`;
+  `lb:surgeon:${d}:swap:${uid}:${createHash("sha256").update(lineup.split(",").sort().join(",")).digest("hex").slice(0, 16)}`;
 
 export async function lockSurgeonSwap(
   date: string, uid: string, lineup: string, requested: { outId: string; inId: string },
