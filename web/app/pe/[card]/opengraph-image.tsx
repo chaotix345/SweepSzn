@@ -1,8 +1,5 @@
 import { ImageResponse } from "next/og";
-import { getPlayersByIds, getCoefficients } from "@/lib/data";
-import { evaluateLineup } from "@/lib/engine";
-import { decodeShare } from "@/lib/share";
-import { decodePickemCard } from "@/lib/pickem";
+import { resolveSharedPickem } from "@/lib/sharedLineup";
 import { resultOgElement, brandOgElement, OG_SIZE, OG_ALT } from "@/lib/og";
 
 export const runtime = "nodejs";
@@ -12,13 +9,8 @@ export const contentType = "image/png";
 
 export default async function Image({ params }: { params: Promise<{ card: string }> }) {
   const { card } = await params;
-  const dec = decodePickemCard(card);
-  if (!dec) return new ImageResponse(brandOgElement("Build an all-time NBA starting five."), { ...OG_SIZE });
-  const { ids, hinted } = decodeShare(dec.lineup);
-  const players = getPlayersByIds(ids);
-  if (ids.length !== 5 || new Set(ids).size !== 5 || players.length !== 5) {
-    return new ImageResponse(brandOgElement("Build an all-time NBA starting five."), { ...OG_SIZE });
-  }
-  const result = evaluateLineup(players, getCoefficients());
-  return new ImageResponse(resultOgElement(result, players, hinted, dec.view), { ...OG_SIZE });
+  const data = resolveSharedPickem(card);
+  if (!data) return new ImageResponse(brandOgElement("Build an all-time NBA starting five."), { ...OG_SIZE });
+  const { result, players, hinted, view, prime, blueprint } = data;
+  return new ImageResponse(resultOgElement(result, players, hinted, view, prime, blueprint ?? undefined), { ...OG_SIZE });
 }

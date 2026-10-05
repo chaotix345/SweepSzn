@@ -2,6 +2,7 @@ import "server-only";
 import { getPlayersByIds, getCoefficients } from "./data";
 import { evaluateLineup } from "./engine";
 import { decodeShare } from "./share";
+import { decodePickemCard, type PickemView } from "./pickem";
 import { bpFromCode, gradeBlueprint, type BlueprintView } from "./blueprint";
 import type { LineupResult, Player } from "./types";
 
@@ -29,4 +30,12 @@ export function resolveSharedLineup(segment: string): SharedLineup | null {
   // blueprint and prime are mutually exclusive modes — a crafted bs~p~ URL renders as blueprint only.
   const bpKey = bpFromCode(bp);
   return { players, result, hinted, prime: bpKey ? false : prime, blueprint: bpKey ? gradeBlueprint(bpKey, result) : null };
+}
+
+// /pe/<card>: the frozen Pick'Em crowd snapshot around the same five as /r/ — through the SAME
+// resolver, so a Blueprint/Prime Pick'Em share keeps its execution grade / PRIME stamp.
+export function resolveSharedPickem(card: string): (SharedLineup & { view: PickemView }) | null {
+  const dec = decodePickemCard(card);
+  const data = dec ? resolveSharedLineup(dec.lineup) : null;
+  return dec && data ? { ...data, view: dec.view } : null;
 }
