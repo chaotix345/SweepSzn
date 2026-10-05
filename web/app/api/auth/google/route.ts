@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { isAuthEnabled, authedUid, signSession, verifyNonce, sha256hex, NONCE_COOKIE } from "@/lib/auth";
+import { isAuthEnabled, authedUid, isAnonUid, signSession, verifyNonce, sha256hex, NONCE_COOKIE } from "@/lib/auth";
 import { setSessionCookie } from "@/lib/authServer";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
@@ -9,7 +9,6 @@ import { upsertProfileOnSignIn } from "@/lib/profileStore";
 import { migratePushSubs } from "@/lib/pushStore";
 
 export const runtime = "nodejs";
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 
 // Module-level singleton so warm invocations reuse the JWKS cache.
 const JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
@@ -56,7 +55,7 @@ export async function POST(req: Request) {
     name: typeof payload.name === "string" ? payload.name.slice(0, 24) : "Player",
     picture: typeof payload.picture === "string" ? payload.picture : undefined,
     // bind the caller's own anon uid into the session so claim-cleanup can only ever remove THEIR row
-    anon: typeof anonUid === "string" && UID_RE.test(anonUid) ? anonUid : undefined,
+    anon: isAnonUid(anonUid) ? anonUid : undefined,
   };
   await setSessionCookie(await signSession(user));
   c.delete(NONCE_COOKIE);
