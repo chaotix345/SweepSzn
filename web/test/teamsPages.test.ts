@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import * as indexPage from "@/app/(site)/teams/page";
 import * as teamPage from "@/app/(site)/teams/[team]/page";
+import sitemap from "@/app/sitemap";
+import { baseUrl } from "@/lib/site";
 import { FRANCHISES } from "@/lib/teams";
 import { franchiseMetadata, teamsIndexMetadata } from "@/lib/franchise";
 
 // Wiring for the programmatic-SEO franchise pages: static generation over exactly the 30 franchises
-// (unknown slugs 404 via dynamicParams=false), per-page metadata.
+// (unknown slugs 404 via dynamicParams=false), per-page metadata, and sitemap discoverability.
 describe("/teams index page", () => {
   it("exports the index metadata (title, canonical, siteName)", () => {
     const md = indexPage.metadata;
@@ -34,5 +36,14 @@ describe("/teams/[team] page", () => {
 
   it("returns empty metadata for an unknown slug (the page itself 404s)", async () => {
     expect(await teamPage.generateMetadata({ params: Promise.resolve({ team: "xyz" }) })).toEqual({});
+  });
+});
+
+describe("sitemap", () => {
+  it("lists /teams and every franchise page", () => {
+    const urls = sitemap().map((e) => e.url);
+    expect(urls).toContain(`${baseUrl}/teams`);
+    expect(urls).toContain(`${baseUrl}/teams/chi`);
+    for (const t of FRANCHISES) expect(urls).toContain(`${baseUrl}/teams/${t.toLowerCase()}`);
   });
 });
