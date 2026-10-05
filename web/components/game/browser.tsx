@@ -7,7 +7,7 @@ import { ComparePanel } from "@/components/game/ComparePanel";
 import { Dossier } from "@/components/game/Dossier";
 
 type Spin = { team: string; decade: string; candidates: DraftCandidate[]; era?: EraContext };
-export type SortKey = "szn" | "fit" | "ppg" | "rpg" | "apg" | "az";
+type SortKey = "szn" | "fit" | "ppg" | "rpg" | "apg" | "az";
 
 // Decades that can contain pre-1985 players, whose box dominance the engine discounts (eraStrength,
 // fullYear 1985). The badge tooltip discloses the RULE at draft time — it never shows a per-player
@@ -16,12 +16,12 @@ const ERA_ADJUSTED = new Set(["1960s", "1970s", "1980s"]);
 const ERA_ADJ_TIP = "Pre-1985 box stats are era-adjusted — discounted for the weaker, shallower early league.";
 
 // color the fit swing: green shades by tier when it helps, muted when it doesn't move the needle
-export function fitColor(f: CandidateFit): string {
+function fitColor(f: CandidateFit): string {
   if (f.delta <= 0) return "text-zinc-500";
   return f.tier === "elite" ? "text-green-300" : f.tier === "strong" ? "text-green-400" : f.tier === "solid" ? "text-green-500/80" : "text-zinc-400";
 }
 
-export function Mini({ v, k, className }: { v: number | null | undefined; k: string; className?: string }) {
+function Mini({ v, k, className }: { v: number | null | undefined; k: string; className?: string }) {
   return (
     <div className={`w-8 ${className ?? ""}`}>
       <div className="font-semibold text-zinc-300 tabular-nums">{v == null ? "–" : v.toFixed(1)}</div>
