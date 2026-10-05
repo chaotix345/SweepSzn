@@ -45,3 +45,32 @@ describe("rankShare", () => {
     expect(decodeRankCard("d.x.2.3.4.5.bm9wZQ")).toBe(null);
   });
 });
+
+// Crafted /rank/<card> URLs used to render nonsense ("#1e+300 of 1e+300", 300-char names).
+describe("rankShare — decode rejects out-of-range cards", () => {
+  const card = (over: Partial<RankCard>) => encodeRankCard({ ...daily, ...over });
+  it("rejects non-integer / astronomic / out-of-order ranks", () => {
+    expect(decodeRankCard(card({ rank: 1e300, total: 1e300 }))).toBe(null);
+    expect(decodeRankCard("d.25e-1.1280.78.4.234.bm9wZQ")).toBe(null); // rank 2.5 isn't an integer
+    expect(decodeRankCard(card({ rank: 0 }))).toBe(null);
+    expect(decodeRankCard(card({ rank: 1281, total: 1280 }))).toBe(null);
+  });
+
+  it("bounds a daily record to one 82-game season and |net| < 100", () => {
+    expect(decodeRankCard(card({ wins: 83, losses: 0 }))).toBe(null);
+    expect(decodeRankCard(card({ wins: 10, losses: -1 }))).toBe(null);
+    expect(decodeRankCard(card({ net: 100 }))).toBe(null);
+    expect(decodeRankCard(card({ net: -100 }))).toBe(null);
+    expect(eq({ ...daily, wins: 82, losses: 0, net: 99.9 }, decodeRankCard(card({ wins: 82, losses: 0, net: 99.9 })))).toBe(true);
+  });
+
+  it("bounds cumulative wins per scope (a week is at most 7 games' worth)", () => {
+    expect(decodeRankCard(encodeRankCard({ ...week, wins: 82 * 7 + 1 }))).toBe(null);
+    expect(decodeRankCard(encodeRankCard({ ...week, wins: -5 }))).toBe(null);
+    expect(eq(alltime, decodeRankCard(encodeRankCard(alltime)))).toBe(true);
+  });
+
+  it("caps the decoded display name like cleanName", () => {
+    expect(decodeRankCard(card({ name: "x".repeat(300) }))!.name.length).toBeLessThanOrEqual(24);
+  });
+});
