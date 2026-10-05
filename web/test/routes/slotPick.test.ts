@@ -4,9 +4,15 @@ import { enableRedisEnv, freshFake, ctx, req, exhaustRateLimit, flushAfter } fro
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
 vi.mock("next/server", async (orig) => (await import("@/test/routeHarness")).nextServerMockModule(await orig()));
+// pass-through spy: lets a test see WHEN the players.json-backed lookup runs
+vi.mock("@/lib/data", async (orig) => {
+  const actual = await orig<typeof import("@/lib/data")>();
+  return { ...actual, getPersonName: vi.fn(actual.getPersonName) };
+});
 
 enableRedisEnv();
 const { POST } = await import("@/app/api/slot-pick/route");
+const { getPersonName } = await import("@/lib/data");
 
 const ok = { mode: "classic", spinKey: "BOS|2010s", slot: "PG", personId: "isaiah_thomas" };
 const HKEY = "slot_picks:classic:BOS|2010s:PG";
@@ -47,6 +53,15 @@ describe("POST /api/slot-pick (silent crowd logging)", () => {
     expect(ctx.redis!.hashes.has(HKEY)).toBe(false);
     await flushAfter();
     expect(ctx.redis!.hashes.get(HKEY)?.get("isaiah_thomas")).toBe("1");
+  });
+
+  it("the personId check (players.json parse) runs inside after(), not before the 204", async () => {
+    vi.mocked(getPersonName).mockClear();
+    const res = await POST(req("/api/slot-pick", { body: ok }));
+    expect(res.status).toBe(204);
+    expect(getPersonName).not.toHaveBeenCalled();
+    await flushAfter();
+    expect(getPersonName).toHaveBeenCalledWith("isaiah_thomas");
   });
 
   it("segments counts by mode (Classic crowd != Prime crowd)", async () => {

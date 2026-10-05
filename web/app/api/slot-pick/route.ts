@@ -13,7 +13,8 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   if (!(await rateLimit(`rl:slotpick:${ipOf(req)}`, 150, 60))) return new Response(null, { status: 204 });
   const parsed = parseSlotPick(await req.json().catch(() => null));
-  // only a REAL person may mint a field — a junk id would otherwise render raw in /api/crowd
-  if (parsed && getPersonName(parsed.personId)) after(() => logSlotPick(redis, parsed));
+  // only a REAL person may mint a field — a junk id would otherwise render raw in /api/crowd. Checked
+  // inside after(): the lookup parses players.json on a cold instance, which the 204 must not wait on.
+  if (parsed) after(() => (getPersonName(parsed.personId) ? logSlotPick(redis, parsed) : undefined));
   return new Response(null, { status: 204 });
 }
