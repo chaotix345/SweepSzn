@@ -74,10 +74,11 @@ describe("GET /api/board/weekly", () => {
     const { status, body } = await readJson(await get(`week=${WEEK}`));
     expect(status).toBe(200);
     expect(body.total).toBe(3);
-    const top = body.top as Array<{ uid: string; wins: number; rank: number }>;
-    expect(top[0]).toMatchObject({ uid: "user-bbbb0002", wins: 20, rank: 1 });
-    expect(top[1]).toMatchObject({ uid: "user-aaaa0001", wins: 15, rank: 2 });
-    expect(top[2]).toMatchObject({ uid: "user-cccc0003", wins: 10, rank: 3 });
+    const top = body.top as Array<{ name: string; wins: number; rank: number; uid?: string }>;
+    expect(top[0]).toMatchObject({ name: "Bob", wins: 20, rank: 1 });
+    expect(top[1]).toMatchObject({ name: "Alice", wins: 15, rank: 2 });
+    expect(top[2]).toMatchObject({ name: "Carol", wins: 10, rank: 3 });
+    expect(top.every((r) => r.uid === undefined)).toBe(true); // rows never carry a uid (H2)
   });
 
   it("highlights the signed-in user's rank when they are in the top 100", async () => {
@@ -87,9 +88,10 @@ describe("GET /api/board/weekly", () => {
       { uid: "user-bbbb0002", name: "Bob",   wins: 20 },
     ]);
     const { body } = await readJson(await get(`week=${WEEK}`));
-    const you = body.you as { uid: string; wins: number; rank: number };
+    const you = body.you as { uid?: string; name: string; me?: boolean; wins: number; rank: number };
     expect(you).toBeDefined();
-    expect(you.uid).toBe("user-aaaa0001");
+    expect(you.uid).toBeUndefined();
+    expect(you).toMatchObject({ name: "Alice", me: true });
     expect(you.rank).toBe(2);
   });
 
@@ -104,9 +106,10 @@ describe("GET /api/board/weekly", () => {
     }));
     seedWeeklyBoard(WEEK, rows);
     const { body } = await readJson(await get(`week=${WEEK}`));
-    const you = body.you as { uid: string; rank: number; wins: number };
+    const you = body.you as { uid?: string; name: string; me?: boolean; rank: number; wins: number };
     expect(you).toBeDefined();
-    expect(you.uid).toBe(outsideUid);
+    expect(you.uid).toBeUndefined();
+    expect(you).toMatchObject({ name: "User100", me: true });
     expect(you.rank).toBe(101);
     expect(you.wins).toBe(1);
   });
@@ -120,5 +123,26 @@ describe("GET /api/board/weekly", () => {
     expect(body.scope).toBe("week");
     expect(typeof body.key).toBe("string");
     expect(/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/.test(body.key as string)).toBe(true);
+  });
+});
+
+// H2: signed-in rows carry the account uid; no board response may carry any uid. The session
+// caller's row is marked with a server-computed `me` instead.
+describe("GET /api/board/weekly — no uids on the wire", () => {
+  it("strips every uid and marks only the session caller's row with me: true (top + you)", async () => {
+    const rows = [
+      { uid: "user-aaaa0001", name: "Alice", wins: 100 },
+      { uid: "user-bbbb0002", name: "Bob", wins: 250 },
+      { uid: "user-cccc0003", name: "Carol", wins: 175 },
+    ];
+    seedWeeklyBoard(WEEK, rows);
+    await signIn({ uid: "user-cccc0003", name: "Carol" });
+    const { status, body } = await readJson(await get(`week=${WEEK}`));
+    expect(status).toBe(200);
+    const wire = JSON.stringify(body);
+    for (const r of rows) expect(wire).not.toContain(r.uid);
+    const top = body.top as Array<{ name: string; me?: boolean }>;
+    expect(top.filter((r) => r.me).map((r) => r.name)).toEqual(["Carol"]);
+    expect(body.you).toMatchObject({ name: "Carol", rank: 2, me: true });
   });
 });

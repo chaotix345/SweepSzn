@@ -137,6 +137,6 @@ export interface BpRow {
   grade: string;        // blueprint-execution grade
   score: number;        // display score: wins × mult, e.g. 86.1
 }
-export interface BpBoardRow extends BpRow { rank: number }
+export interface BpBoardRow extends Omit<BpRow, "uid"> { rank: number; me?: true } // wire row: uid stripped, caller marked `me`
 export interface BpBoardView { date: string; bp: BlueprintKey | "all"; total: number; top: BpBoardRow[]; you?: BpBoardRow }
 

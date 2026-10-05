@@ -102,13 +102,15 @@ export interface DraftCandidate {
 // server can replay today's deterministic spins and verify every pick was legal.
 export type DraftStep = { slot: Slot; pickedId: string; respins: ("team" | "era")[] };
 export interface DailySubmission { date: string; uid: string; name: string; trace: DraftStep[] }
-export interface LeaderboardRow { rank: number; uid: string; name: string; wins: number; losses: number; net: number; lineup: string }
+// Board rows on the wire never carry a uid (bearer identity — DESIGN.md §12); the server marks the
+// caller's own row(s) `me` instead. The stored meta row (with uid) is lib/redis.ts StoredRow.
+export interface LeaderboardRow { rank: number; name: string; wins: number; losses: number; net: number; lineup: string; me?: true }
 export interface LeaderboardView { date: string; total: number; top: LeaderboardRow[]; you?: LeaderboardRow }
 
 // Weekly + all-time boards rank by CUMULATIVE wins (a single number), not a W-L record — so the
 // row deliberately omits losses/net/lineup (don't reuse StoredRow, whose fields would be undefined).
 export interface AggRow { uid: string; name: string; wins: number }
-export interface AggLeaderboardRow extends AggRow { rank: number }
+export interface AggLeaderboardRow extends Omit<AggRow, "uid"> { rank: number; me?: true }
 export interface AggBoardView { scope: "week" | "alltime"; key: string; total: number; top: AggLeaderboardRow[]; you?: AggLeaderboardRow }
 
 // H2H Challenge: a shared draft seed (h2h-<id>) + the creator's verified result as the bar.

@@ -137,13 +137,14 @@ describe("GET /api/blueprint/leaderboard — rows with ranks", () => {
     const { status, body } = await readJson(await get(`date=${DATE}&bp=balanced`));
     expect(status).toBe(200);
     expect(body.total).toBe(3);
-    const top = body.top as Array<{ uid: string; rank: number }>;
+    const top = body.top as Array<{ name: string; rank: number; uid?: string }>;
     expect(top).toHaveLength(3);
-    expect(top[0].uid).toBe("uid-alice-12345678");
+    expect(top.every((r) => r.uid === undefined)).toBe(true); // rows never carry a uid (H2)
+    expect(top[0].name).toBe("Alice");
     expect(top[0].rank).toBe(1);
-    expect(top[1].uid).toBe("uid-bob-123456789");
+    expect(top[1].name).toBe("Bob");
     expect(top[1].rank).toBe(2);
-    expect(top[2].uid).toBe("uid-carol-12345678");
+    expect(top[2].name).toBe("Carol");
     expect(top[2].rank).toBe(3);
   });
 
@@ -156,10 +157,10 @@ describe("GET /api/blueprint/leaderboard — rows with ranks", () => {
     const { status, body } = await readJson(await get(`date=${DATE}&bp=all`));
     expect(status).toBe(200);
     expect(body.total).toBe(2);
-    const top = body.top as Array<{ uid: string; rank: number }>;
-    expect(top[0].uid).toBe("uid-xray-123456789");
+    const top = body.top as Array<{ name: string; rank: number }>;
+    expect(top[0].name).toBe("Xray");
     expect(top[0].rank).toBe(1);
-    expect(top[1].uid).toBe("uid-yankee-12345678");
+    expect(top[1].name).toBe("Yankee");
     expect(top[1].rank).toBe(2);
   });
 
@@ -186,7 +187,9 @@ describe("GET /api/blueprint/leaderboard — you lookup", () => {
     expect(status).toBe(200);
     const you = body.you as Record<string, unknown> | undefined;
     expect(you).toBeDefined();
-    expect(you!.uid).toBe("uid-target-12345678");
+    expect(you!.uid).toBeUndefined();
+    expect(you!.name).toBe("Target");
+    expect(you!.me).toBe(true);
     expect(you!.rank).toBe(1);
   });
 
@@ -219,7 +222,9 @@ describe("GET /api/blueprint/leaderboard — you lookup", () => {
     expect((body.top as unknown[]).length).toBe(100);
     const you = body.you as Record<string, unknown> | undefined;
     expect(you).toBeDefined();
-    expect(you!.uid).toBe(last);
+    expect(you!.uid).toBeUndefined();
+    expect(you!.name).toBe("Last");
+    expect(you!.me).toBe(true);
     expect(you!.rank).toBe(101);
   });
 });
@@ -243,8 +248,8 @@ describe("GET /api/blueprint/leaderboard — different dates are independent", (
     const { body: body9  } = await readJson(await get("date=2026-6-9&bp=balanced"));
     const { body: body10 } = await readJson(await get("date=2026-6-10&bp=balanced"));
 
-    expect((body9.top  as Array<{ uid: string }>)[0].uid).toBe("uid-yesterday-1234");
-    expect((body10.top as Array<{ uid: string }>)[0].uid).toBe("uid-today-12345678");
+    expect((body9.top  as Array<{ name: string }>)[0].name).toBe("Yesterday");
+    expect((body10.top as Array<{ name: string }>)[0].name).toBe("Today");
   });
 });
 
@@ -253,4 +258,25 @@ describe("GET /api/blueprint/leaderboard — disabled board", () => {
   it.todo(
     "returns 503 when isBpBoardEnabled() is false (Redis env absent at module import time) — cannot be exercised in this file without a full vi.resetModules() flow because the redis singleton is already bound at module eval",
   );
+});
+
+// H2: no board response may carry a uid (bearer token — DESIGN.md §12); the caller's row is `me`.
+describe("blueprint leaderboard — no uids on the wire", () => {
+  const ROWS = [
+    { uid: "bp-alice-1234", name: "Alice", wins: 70, net: 12 },
+    { uid: "bp-bob-12345", name: "Bob", wins: 60, net: 8 },
+    { uid: "bp-carol-1234", name: "Carol", wins: 50, net: 4 },
+  ];
+  const mine = (uid: string) => get(`date=${DATE}&bp=all&uid=${uid}`);
+
+  it("strips every uid and marks only the caller's row with me: true (top + you)", async () => {
+    seedBpBoard(DATE, "all", ROWS);
+    const { status, body } = await readJson(await mine("bp-bob-12345"));
+    expect(status).toBe(200);
+    const wire = JSON.stringify(body);
+    for (const r of ROWS) expect(wire).not.toContain(r.uid);
+    const top = body.top as Array<{ name: string; me?: boolean }>;
+    expect(top.filter((r) => r.me).map((r) => r.name)).toEqual(["Bob"]);
+    expect(body.you).toMatchObject({ name: "Bob", rank: 2, me: true });
+  });
 });

@@ -106,23 +106,26 @@ describe("GET /api/daily/leaderboard — seeded board", () => {
     const { status, body } = await readJson(await get(`date=${DATE}`));
     expect(status).toBe(200);
     expect(body.total).toBe(3);
-    const top = body.top as Array<{ uid: string; rank: number }>;
+    const top = body.top as Array<{ name: string; rank: number; uid?: string }>;
     expect(top).toHaveLength(3);
-    // sorted highest score first
-    expect(top[0].uid).toBe("uid-alice-12345678");
+    // sorted highest score first; rows never carry a uid (H2)
+    expect(top.every((r) => r.uid === undefined)).toBe(true);
+    expect(top[0].name).toBe("Alice");
     expect(top[0].rank).toBe(1);
-    expect(top[1].uid).toBe("uid-bob-123456789");
+    expect(top[1].name).toBe("Bob");
     expect(top[1].rank).toBe(2);
-    expect(top[2].uid).toBe("uid-carol-12345678");
+    expect(top[2].name).toBe("Carol");
     expect(top[2].rank).toBe(3);
   });
 
   it("returns the requesting uid's row in 'you' when they are in the top 100", async () => {
     const { status, body } = await readJson(await get(`date=${DATE}&uid=uid-bob-123456789`));
     expect(status).toBe(200);
-    const you = body.you as { uid: string; rank: number; wins: number } | undefined;
+    const you = body.you as { name: string; rank: number; wins: number; me?: boolean; uid?: string } | undefined;
     expect(you).toBeDefined();
-    expect(you!.uid).toBe("uid-bob-123456789");
+    expect(you!.name).toBe("Bob");
+    expect(you!.me).toBe(true);
+    expect(you!.uid).toBeUndefined();
     expect(you!.rank).toBe(2);
     expect(you!.wins).toBe(60);
   });
@@ -151,9 +154,11 @@ describe("GET /api/daily/leaderboard — uid outside top 100", () => {
 
     const { status, body } = await readJson(await get(`date=${DATE}&uid=${lastUid}`));
     expect(status).toBe(200);
-    const you = body.you as { uid: string; rank: number } | undefined;
+    const you = body.you as { name: string; rank: number; me?: boolean; uid?: string } | undefined;
     expect(you).toBeDefined();
-    expect(you!.uid).toBe(lastUid);
+    expect(you!.name).toBe("Player104");
+    expect(you!.me).toBe(true);
+    expect(you!.uid).toBeUndefined();
     // rank should be 105 (1-based, last place)
     expect(you!.rank).toBe(105);
   });
@@ -167,8 +172,8 @@ describe("GET /api/daily/leaderboard — different dates are independent", () =>
     const { body: body9 } = await readJson(await get("date=2026-6-9"));
     const { body: body10 } = await readJson(await get("date=2026-6-10"));
 
-    expect((body9.top as Array<{ uid: string }>)[0].uid).toBe("uid-yesterday-1234");
-    expect((body10.top as Array<{ uid: string }>)[0].uid).toBe("uid-today-12345678");
+    expect((body9.top as Array<{ name: string }>)[0].name).toBe("Yesterday");
+    expect((body10.top as Array<{ name: string }>)[0].name).toBe("Today");
   });
 });
 
@@ -182,5 +187,35 @@ describe("GET /api/daily/leaderboard — Redis trip budget", () => {
     const { status } = await readJson(await get(`date=${DATE}&uid=uid-aaa-12345678`));
     expect(status).toBe(200);
     expect(ctx.redis!.trips - before).toBeLessThanOrEqual(4);
+  });
+});
+
+// H2: no board response may carry a uid — the anon uid is a bearer token (DESIGN.md §12) and a
+// signed-in row's uid is the account key. The caller's own row is marked with a server-computed `me`.
+describe("daily leaderboard — no uids on the wire", () => {
+  const ROWS = [
+    { uid: "uid-alice-12345678", name: "Alice", wins: 70, net: 12 },
+    { uid: "uid-bob-123456789", name: "Bob", wins: 60, net: 8 },
+    { uid: "uid-carol-12345678", name: "Carol", wins: 50, net: 4 },
+  ];
+  const mine = (uid: string) => get(`date=${DATE}&uid=${uid}`);
+
+  it("strips every uid and marks only the caller's row with me: true (top + you)", async () => {
+    seedBoard(DATE, ROWS);
+    const { status, body } = await readJson(await mine("uid-bob-123456789"));
+    expect(status).toBe(200);
+    const wire = JSON.stringify(body);
+    for (const r of ROWS) expect(wire).not.toContain(r.uid);
+    const top = body.top as Array<{ name: string; me?: boolean }>;
+    expect(top.filter((r) => r.me).map((r) => r.name)).toEqual(["Bob"]);
+    expect(body.you).toMatchObject({ name: "Bob", rank: 2, me: true });
+  });
+
+  it("an un-personalized read carries no uid and no me marker", async () => {
+    seedBoard(DATE, ROWS);
+    const { body } = await readJson(await get(`date=${DATE}`));
+    const wire = JSON.stringify(body);
+    for (const r of ROWS) expect(wire).not.toContain(r.uid);
+    expect(wire).not.toContain("\"me\"");
   });
 });

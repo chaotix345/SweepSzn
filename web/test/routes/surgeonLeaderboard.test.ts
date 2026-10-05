@@ -104,7 +104,8 @@ describe("GET /api/surgeon/leaderboard — single row", () => {
     expect(body.total).toBe(1);
     const top = body.top as Record<string, unknown>[];
     expect(top.length).toBe(1);
-    expect(top[0].uid).toBe("userabc123");
+    expect(top[0].uid).toBeUndefined(); // rows never carry a uid (H2)
+    expect(top[0].name).toBe("Alice");
     expect(top[0].rank).toBe(1);
   });
 
@@ -117,7 +118,9 @@ describe("GET /api/surgeon/leaderboard — single row", () => {
 
     const { body } = await readJson(await get(`date=${DATE}&uid=userabc123`));
     const you = body.you as Record<string, unknown> | undefined;
-    expect(you?.uid).toBe("userabc123");
+    expect(you?.uid).toBeUndefined();
+    expect(you?.me).toBe(true);
+    expect(you?.name).toBe("Alice");
     expect(you?.rank).toBe(1);
   });
 });
@@ -137,11 +140,11 @@ describe("GET /api/surgeon/leaderboard — rank ordering", () => {
     const { body } = await readJson(await get(`date=${DATE}`));
     const top = body.top as Record<string, unknown>[];
     expect(top.length).toBe(3);
-    expect(top[0].uid).toBe("highscore01");
+    expect(top[0].name).toBe("highscore01");
     expect(top[0].rank).toBe(1);
-    expect(top[1].uid).toBe("midrange001");
+    expect(top[1].name).toBe("midrange001");
     expect(top[1].rank).toBe(2);
-    expect(top[2].uid).toBe("lowater0001");
+    expect(top[2].name).toBe("lowater0001");
     expect(top[2].rank).toBe(3);
   });
 
@@ -171,14 +174,16 @@ describe("GET /api/surgeon/leaderboard — you outside top 100", () => {
     expect(body.total).toBe(101);
     expect((body.top as unknown[]).length).toBe(100);
     const you = body.you as Record<string, unknown> | undefined;
-    expect(you?.uid).toBe(uid101);
+    expect(you?.uid).toBeUndefined();
+    expect(you?.name).toBe("Outlier");
+    expect(you?.me).toBe(true);
     expect(you?.rank).toBe(101);
   });
 });
 
 // ---------- response row shape ----------
 describe("GET /api/surgeon/leaderboard — response row shape", () => {
-  it("top rows contain uid, name, delta, beforeWins, afterWins, net, card, rank", async () => {
+  it("top rows contain name, delta, beforeWins, afterWins, net, card, rank — and no uid", async () => {
     const row: SurgeonRow = {
       uid: "shapetest01", name: "Shaper", delta: 3,
       beforeWins: 54, afterWins: 57, net: 4.5, card: "a,b,c,d,e.2.g",
@@ -187,11 +192,30 @@ describe("GET /api/surgeon/leaderboard — response row shape", () => {
 
     const { body } = await readJson(await get(`date=${DATE}`));
     const r = (body.top as Record<string, unknown>[])[0];
-    expect(r.uid).toBe("shapetest01");
+    expect(r.uid).toBeUndefined();
     expect(r.name).toBe("Shaper");
     expect(r.delta).toBe(3);
     expect(r.beforeWins).toBe(54);
     expect(r.afterWins).toBe(57);
     expect(typeof r.rank).toBe("number");
+  });
+});
+
+// H2: no board response may carry a uid (bearer token — DESIGN.md §12); the caller's row is `me`.
+describe("surgeon leaderboard — no uids on the wire", () => {
+  const UIDS = ["sg-alice-1234", "sg-bob-12345", "sg-carol-1234"];
+  const mine = (uid: string) => get(`date=${DATE}&uid=${uid}`);
+
+  it("strips every uid and marks only the caller's row with me: true (top + you)", async () => {
+    UIDS.forEach((u, i) => seedRow(DATE, u, {
+      uid: u, name: `P${i}`, delta: 5 - i, beforeWins: 50, afterWins: 55 - i, net: 1, card: "a,b,c,d,e.1.f",
+    }, 105_000 - i * 1000));
+    const { status, body } = await readJson(await mine(UIDS[1]));
+    expect(status).toBe(200);
+    const wire = JSON.stringify(body);
+    for (const u of UIDS) expect(wire).not.toContain(u);
+    const top = body.top as Array<{ name: string; me?: boolean }>;
+    expect(top.filter((r) => r.me).map((r) => r.name)).toEqual(["P1"]);
+    expect(body.you).toMatchObject({ name: "P1", rank: 2, me: true });
   });
 });

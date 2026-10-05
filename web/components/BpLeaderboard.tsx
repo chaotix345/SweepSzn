@@ -103,7 +103,7 @@ export default function BpLeaderboard({ date, trace, blueprint, usedHints = fals
             </div>
           )}
           {err && <div className="mt-2 text-xs text-red-400">{err}</div>}
-          {view && <Board view={view} uid={uid} />}
+          {view && <Board view={view} />}
         </>
       ) : (
         <div className="mt-2 text-xs text-zinc-600">Board opens soon — your execution grade still counts for bragging rights.</div>
@@ -119,9 +119,10 @@ function Chip({ active, onClick, label, title }: { active: boolean; onClick: () 
   );
 }
 
-function Board({ view, uid }: { view: BpBoardView; uid: string }) {
+// Rows carry no uid (server-stripped); the caller's own row arrives marked `me`.
+function Board({ view }: { view: BpBoardView }) {
   const rows = view.top;
-  const youOutside = view.you && !rows.some((r) => r.uid === uid);
+  const youOutside = view.you && !rows.some((r) => r.me);
   if (!rows.length) return (
     <div className="mt-3 text-xs text-zinc-500">
       {view.bp === "all" ? "Be the first to post a score today." : `No one has gone ${blueprintDef(view.bp as BlueprintKey).label} yet — claim it.`}
@@ -133,7 +134,7 @@ function Board({ view, uid }: { view: BpBoardView; uid: string }) {
         <span>Today&apos;s top {Math.min(rows.length, 100)}</span><span>{view.total} {view.bp === "all" ? "played" : "on this blueprint"}</span>
       </div>
       <div className="max-h-[min(18rem,55dvh)] space-y-1 overflow-y-auto">
-        {rows.map((r) => <Row key={r.uid} r={r} me={r.uid === uid} showBp={view.bp === "all"} />)}
+        {rows.map((r) => <Row key={r.rank} r={r} me={r.me} showBp={view.bp === "all"} />)}
         {youOutside && view.you && <Row r={view.you} me showBp={view.bp === "all"} />}
       </div>
     </div>

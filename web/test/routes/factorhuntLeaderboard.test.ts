@@ -75,10 +75,12 @@ describe("GET /api/factorhunt/leaderboard — response shape", () => {
     expect(Array.isArray(body.top)).toBe(true);
     expect((body.top as unknown[]).length).toBe(1);
     const top0 = (body.top as Record<string, unknown>[])[0];
-    expect(top0.uid).toBe("userabc123");
+    expect(top0.uid).toBeUndefined(); // rows never carry a uid (H2)
+    expect(top0.name).toBe("Alice");
+    expect(top0.me).toBe(true);
     expect(top0.rank).toBe(1);
     // `you` should be the same entry (uid is in top-100)
-    expect((body.you as Record<string, unknown> | undefined)?.uid).toBe("userabc123");
+    expect(body.you).toMatchObject({ name: "Alice", rank: 1, me: true });
   });
 
   it("returns you outside top 100 with their rank", async () => {
@@ -107,7 +109,9 @@ describe("GET /api/factorhunt/leaderboard — response shape", () => {
     expect((body.top as unknown[]).length).toBe(100);
     // you should be present with rank 101
     const you = body.you as Record<string, unknown> | undefined;
-    expect(you?.uid).toBe(uid101);
+    expect(you?.uid).toBeUndefined();
+    expect(you?.name).toBe("Outlier");
+    expect(you?.me).toBe(true);
     expect(you?.rank).toBe(101);
   });
 
@@ -120,5 +124,27 @@ describe("GET /api/factorhunt/leaderboard — response shape", () => {
   it("accepts a uid with uppercase letters (case-insensitive UID_RE)", async () => {
     const { status } = await readJson(await get(`date=${DATE}&uid=ABCDEFGH`));
     expect(status).toBe(200);
+  });
+});
+
+// H2: no board response may carry a uid (bearer token — DESIGN.md §12); the caller's row is `me`.
+describe("factorhunt leaderboard — no uids on the wire", () => {
+  const UIDS = ["fh-alice-1234", "fh-bob-12345", "fh-carol-1234"];
+  const mine = (uid: string) => get(`date=${DATE}&uid=${uid}`);
+
+  it("strips every uid and marks only the caller's row with me: true (top + you)", async () => {
+    const keyZ = `lb:fh:${DATE}`;
+    const keyH = `lb:fh:${DATE}:meta`;
+    ctx.redis!.zsets.set(keyZ, new Map(UIDS.map((u, i) => [u, 70000 - i * 1000] as [string, number])));
+    ctx.redis!.hashes.set(keyH, new Map(UIDS.map((u, i) => [u, JSON.stringify({
+      uid: u, name: `P${i}`, wins: 70 - i, losses: 12 + i, net: 1, lineup: "a,b,c,d,e", predicted: null, correct: false, score: 70 - i,
+    })] as [string, string])));
+    const { status, body } = await readJson(await mine(UIDS[1]));
+    expect(status).toBe(200);
+    const wire = JSON.stringify(body);
+    for (const u of UIDS) expect(wire).not.toContain(u);
+    const top = body.top as Array<{ name: string; me?: boolean }>;
+    expect(top.filter((r) => r.me).map((r) => r.name)).toEqual(["P1"]);
+    expect(body.you).toMatchObject({ name: "P1", rank: 2, me: true });
   });
 });

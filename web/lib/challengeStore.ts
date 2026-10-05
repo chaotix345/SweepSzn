@@ -33,7 +33,7 @@ const strip = (r: LeaderboardRow): ChallengeBoardRow => ({ rank: r.rank, name: r
 
 async function board(id: string, uid?: string): Promise<ChallengeBoard> {
   if (!redis) return { total: 0, top: [] };
-  // raw rows still carry uid (server-side only); "you" is resolved before stripping
+  // readBoardView already drops uids (resolving "you" first); strip also drops lineup + the me marker
   const { total, top: raw, you: rawYou } = await readBoardView<StoredRow>(keyZ(id), keyH(id), uid);
   const top = raw.map(strip);
   const you: ChallengeBoardRow | undefined = rawYou ? strip(rawYou) : undefined;

@@ -393,3 +393,17 @@ describe("POST /api/daily/submit — Google-namespace uid on the anon path", () 
     expect(ctx.redis!.zsets.get(`lb:${TODAY}`)?.has(victim) ?? false).toBe(false);
   });
 });
+
+// H2: the submit response IS a board view — it must not carry anyone's uid (incl. the submitter's).
+describe("POST /api/daily/submit — no uids on the wire", () => {
+  it("returns the fresh board with no uids and the submitter's row marked me", async () => {
+    await submit({ date: TODAY, trace: LEGIT_TRACE, uid: "anon-first-12345678", name: "First" });
+    const { status, body } = await readJson(await submit({ date: TODAY, trace: LEGIT_TRACE, uid: "anon-second-1234567", name: "Second" }));
+    expect(status).toBe(200);
+    const wire = JSON.stringify(body);
+    expect(wire).not.toContain("anon-first-12345678");
+    expect(wire).not.toContain("anon-second-1234567");
+    expect((body.top as Array<{ name: string; me?: boolean }>).filter((r) => r.me).map((r) => r.name)).toEqual(["Second"]);
+    expect(body.you).toMatchObject({ name: "Second", me: true });
+  });
+});
