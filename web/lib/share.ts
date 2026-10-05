@@ -15,6 +15,13 @@ const HINT_PREFIX = "h~";
 const PRIME_PREFIX = "p~";
 const BP_PREFIX_RE = /^b([a-z])~/;
 
+// Next already URL-decodes route params; the decoders re-decode to tolerate a still-encoded segment,
+// but an already-decoded literal "%" (e.g. /r/%25zz → "%zz") would throw URIError → 500. Fall back to
+// the input as-is so the caller's validation rejects it.
+export function safeDecode(s: string): string {
+  try { return decodeURIComponent(s); } catch { return s; }
+}
+
 export function encodeLineup(ids: string[], usedHints = false, prime = false, bp: string | null = null): string {
   return (bp ? `b${bp}~` : "") + (prime ? PRIME_PREFIX : "") + (usedHints ? HINT_PREFIX : "") + ids.join(LINEUP_SEP);
 }
@@ -22,7 +29,7 @@ export function encodeLineup(ids: string[], usedHints = false, prime = false, bp
 // Decode a /r/ segment into the 5 ids plus its flag stamps (`bp` = the one-letter blueprint code).
 export function decodeShare(segment: string): { ids: string[]; hinted: boolean; prime: boolean; bp: string | null } {
   // Next already URL-decodes the route param; guard against a still-encoded comma anyway.
-  let s = decodeURIComponent(segment);
+  let s = safeDecode(segment);
   let hinted = false, prime = false, bp: string | null = null;
   for (;;) {
     if (!hinted && s.startsWith(HINT_PREFIX)) { hinted = true; s = s.slice(HINT_PREFIX.length); continue; }
@@ -50,7 +57,7 @@ export function encodeDexShare(ids: string[], count: number, badges: number): st
   return `${c}.${b}~${ids.slice(0, DEX_CARD_CAP).join(LINEUP_SEP)}`;
 }
 export function decodeDexShare(segment: string): { ids: string[]; count: number; badges: number } | null {
-  const m = /^(\d{1,5})\.(\d{1,3})~([a-z0-9_,]+)$/.exec(decodeURIComponent(segment));
+  const m = /^(\d{1,5})\.(\d{1,3})~([a-z0-9_,]+)$/.exec(safeDecode(segment));
   if (!m) return null;
   const ids = m[3].split(LINEUP_SEP).map((x) => x.trim()).filter(Boolean).slice(0, DEX_CARD_CAP);
   if (!ids.length) return null;
