@@ -13,7 +13,20 @@ Branch `feat/improvement-pass` (worktree `.claude/worktrees/improvement-pass`, b
 - [x] Phase 3b — #1 My Stats (`/stats`), #2 Franchise pages (`/teams` + 30 static team pages), #3 "vs you" board compare — all merged
 - [x] Integration gates — tsc, eslint, 140 files / 1980 tests, `next build`, local `next start` smoke test of new/changed routes
 - [x] Phase 4a — independent final review (correctness + security): no blockers; actionable findings fixed (9 commits)
-- [ ] Phase 4b — PR → CI → merge → production deploy check
+- [x] Phase 4b — [PR #80](https://github.com/chaotix345/SweepSzn/pull/80) merged to `main` as `aee007d` on
+  2026-10-05.
+  - **CI:** green on the PR and on `main` (tsc, eslint, 1980 tests, build); Socket and the Vercel preview also passed.
+  - **Production deploy** (live about 75s after merge). All checks are read-only curl, with no JS, so no analytics
+    beacons fired:
+    - `/api/health` → `ok`, Redis reachable, `data: true`.
+    - `/teams`, `/teams/chi`, `/stats` → 200 (they were 404 before); `/teams/xyz` → 404.
+    - `/api/result/%25zz` → 404 (was 500).
+    - Board GET and POST bodies contain no `uid`, and POST is `private, no-store`.
+    - A g-uid on the anon POST → 400; `GET /api/notifications?uid=` → 400.
+    - OG cards are served `X-Vercel-Cache: HIT`.
+    - The sitemap has 37 URLs.
+  - **Not done:** no browser dogfood on production, because client beacons would write analytics events to prod
+    Redis.
 
 ## Baseline (Phase 1, before any change)
 
