@@ -8,10 +8,12 @@ Branch `feat/improvement-pass` (worktree `.claude/worktrees/improvement-pass`, b
 - [x] Phase 2a — parallel audit (5 areas) → deduped + verified issue list (below)
 - [x] Owner sign-off (2026-10-05): full identity/auth bundle approved; Next 16.2.9→16.3.8 upgrade approved
 - [x] H1 fixed — `next` 16.3.8 (commit `3295703`), all gates green
-- [ ] Phase 2b — fixes in 4 parallel workstreams (identity, client, data, verify/pages), each TDD red→green
+- [x] Phase 2b — fixes in 4 parallel workstreams (identity, client, data, verify/pages), each TDD red→green; all merged
 - [x] Phase 3a — feature brainstorm + shortlist (below)
-- [ ] Phase 3b — build: #1 My Stats, #2 Franchise pages (in progress); #3 board "vs yours" compare (after fixes merge)
-- [ ] Phase 4 — final gates, independent review, PR, CI, merge
+- [x] Phase 3b — #1 My Stats (`/stats`), #2 Franchise pages (`/teams` + 30 static team pages), #3 "vs you" board compare — all merged
+- [x] Integration gates — tsc, eslint, 140 files / 1980 tests, `next build`, local `next start` smoke test of new/changed routes
+- [x] Phase 4a — independent final review (correctness + security): no blockers; actionable findings fixed (9 commits)
+- [ ] Phase 4b — PR → CI → merge → production deploy check
 
 ## Baseline (Phase 1, before any change)
 
@@ -136,6 +138,66 @@ work lands.
 | L22 | Surgeon counter INCR/EXPIRE in two trips; push cap check non-atomic; admin metrics fan-out | `surgeonBoard.ts:42`, `pushStore.ts:52` |
 | L23 | `/api/health` can't detect a data-load failure | `health/route.ts` |
 
+### Resolution
+
+Every fix landed with a regression test that was run red (failing on the old code for the stated reason) before
+the fix and green after; the red→green evidence is in each workstream's commit series.
+
+| Status | IDs |
+|---|---|
+| **Fixed** | H1, H2, H3, H4 · M2–M18, M20, M22 · L1–L12, L16–L23 |
+| **Fixed (client-only, minimal)** | M21 — the no-fit warning now offers an unused team/era re-spin, else Restart (changing `selectSpin`/the verifier would alter Daily determinism, so it was out of scope). It also removed a worse bug: the old "Spin again" after a re-spin returned the unsalted base spin, so a pick from it failed verification as off-pool. |
+| **Fixed (partial)** | M1 — a Google-namespace uid can no longer be bound as a session's `anon`. Full proof-of-possession for anon-uid binding is deferred; H2 + M2 removed the vectors for discovering someone else's anon uid. |
+| **Also fixed (found during the pass)** | `/api/ev` beacon accepted g-uids (completes H3); `ModeSelect` `location.assign` lint regression introduced by the Next 16.3 lint rules; `/api/slot-pick` added to the `public/data` tracing list after M15 made it a data reader |
+| **Deferred** | see below |
+
+**Deferred (low severity or needs an owner decision), with reasons:**
+
+| ID | Why deferred |
+|---|---|
+| M19 | Blueprint ships fit grades on its shared daily seed, and its "HINTS used" stamp is client-reported. `lib/projection.ts` documents this as intentional, and changing it removes user-facing functionality. **Owner decision:** keep it, gate fit behind a server-recorded hint endpoint, or treat `bp-` like Daily. |
+| L13 | Fit lock bypassable by brute-forcing `salt` (~45 scripted calls). Script-level, which DESIGN §12 accepts; it can't be closed while seeds are client-chosen. |
+| L14 | Projection "ceiling" is a greedy fill; up to 2 wins below a coordinate-ascent ceiling. A fix changes numbers players see mid-draft. Relabel ("projected best") or add 1–2 ascent passes in a follow-up. |
+| L15 | `person_id` merges namesakes (Paxson, R. Williams, Dunleavy, G. Henderson Sr/Jr). Needs a data-pipeline rebuild (`_sr`/`_jr` ids); the dataset is frozen for 82-0 parity (DESIGN §12). |
+| — | Referral-credit farming via fresh random uids on the unauthenticated `first_play` beacon. Credits are cosmetic and private; a real fix credits only on a verified submit (product change). |
+| — | `npm audit`: 5 remaining highs are dev-only lint tooling (`eslint-config-next` → `fast-glob` → `micromatch` → `braces`); the only offered fix is a downgrade to v14. Not shipped to the runtime. |
+| — | M20 caveat: once focus is inside Google's cross-origin sign-in iframe, Tab can't be trapped back (keydown never reaches the page); a sentinel element would fix it. |
+| — | Data: accolades show Jordan as 13× All-Star (the real count is 14); `/teams/was` all-time five projects 32-50 (the engine's honest verdict, but a weak page). Both are data/content follow-ups. |
+
+### Final independent review (Phase 4)
+
+Two independent opus reviewers covered the full diff vs `main`: correctness/integration and security. Verdicts:
+**APPROVE with nits** and **PASS WITH NOTES**, with no blockers. Both confirmed:
+- every changed signature and endpoint shape is consumed correctly across the merged workstreams;
+- no response, URL, or log line exposes another player's uid;
+- every anonymous-uid path rejects g-uids;
+- the Lua scripts match the test fake;
+- `npm audit --omit=dev` is clean.
+
+| Finding | Disposition |
+|---|---|
+| FH/Surgeon replay locks reopen on deploy day (new sorted-id key misses today's slot-order locks) | Fixed: legacy-key fallback |
+| Signed-in Surgeon results drop 2 players from the Dex (`decodeLineup` on a surgeon card) | Fixed |
+| `/api/slot-pick` parses players.json before responding | Fixed: validation moved into `after()` |
+| `/teams/[team]` 5-card grid cramped at tablet widths | Fixed |
+| `syncResults` lock: unowned release, ~60 retries, 500 on contention | Fixed: token + compare-and-delete, fewer retries, 409 |
+| Pre-deploy session cookies can carry a g-uid as `anon` (renewed via `/api/profile/name`) | Fixed: `verifySession` applies `isAnonUid` |
+| `ref:credits:*` / `ref:referrers` unbounded | Fixed: TTL / cap |
+| `/c/[id]` OG caches the fallback card after a Redis blip | Fixed: `no-store` on the fallback |
+| `cleanName` misses some invisible/filler chars; truncation can split an emoji | Fixed |
+| uids harvested from the board API **before** this deploy remain valid bearer tokens | **Accepted risk.** Pre-launch/low traffic; rotating anon uids is a large identity change (owner decision) |
+| A responder can exhaust a creator's 5/hour challenge-push cap (inbox items still land) | **Accepted.** A bounded mute replaces unbounded spam |
+| IPv6: hex-form IPv4-mapped addresses share one bucket; shared /64 = shared limits | **Accepted.** Vercel's `x-real-ip` doesn't send that form; same exposure as IPv4 NAT |
+| Public boards show today's top lineups before you play (pre-existing on `main`) | **Owner decision (DESIGN §12).** Daily spins are deterministic, so copying #1 needs no devtools. The challenge board already strips lineups for this reason. |
+
+### Test coverage delta
+
+| | Baseline | After |
+|---|---|---|
+| Test files | 128 | 140 (+12) |
+| Tests passing | 1668 | 1980 (+312) |
+| New guard tests | — | `test/nextConfig.test.ts` (every runtime `public/data` reader is force-traced), `test/uidInUrl.meta.test.ts` (no `uid=` query strings in client code), board "no uids on the wire" tests for all six board routes |
+
 Rejected false positives (checked by the agents, not acted on): zero-players-in-prod tracing (the tracer does
 include the files — confirmed via `.nft.json`), JWT alg confusion / missing exp, empty-secret forgery, login CSRF,
 push SSRF, Redis key injection, ISO-week boundaries, record sums ≠ 82, NaN propagation, keep-best double-credit on
@@ -153,7 +215,7 @@ persistent Redis data without owner sign-off, descriptive-only per DESIGN §12, 
 |---|---|---|---|---|---|
 | 1 | **My Stats page** (`/stats`): games played, best record per mode, avg wins, grade distribution, current + best Daily streak, from local history (+ synced account history when signed in) | High — retention; 82-0 now ships a guest stats profile; today SweepSzn only lists raw results | S–M | Low (client-only, no new storage) | **Build** |
 | 2 | **Franchise pages** (`/teams`, `/teams/[team]`): each franchise's legends by decade with real stat lines + accolades, and its all-time accolade five with the engine's verdict | High — distribution: only 5 indexable URLs today; "all-time <team> starting five" is a natural search query and the explainable engine is the moat | M | Low–Med (static at build; descriptive only) | **Build** |
-| 3 | **"Vs. yours" compare from the Daily board**: once you've played today, each board row links to `/compare/<yours>/<theirs>` | Med — makes the board social; reuses the existing compare page | S | Low (post-commit only) | **Build** (after the board API fix lands) |
+| 3 | **"Vs. yours" compare from the Daily board**: once you've played today, each board row links to `/compare/<yours>/<theirs>` | Med — makes the board social; reuses the existing compare page | S | Low (post-commit only) | **Built** |
 | 4 | Draft Duel vs a bot (82-0's 1v1: pick clock, opponent-pick reveal, split result) | High fun/virality | L | Med–High (new mode through `Game.tsx`, §12 review) | Cut — too big for this pass; top recommendation for next |
 | 5 | Past-Daily archive (replay any previous Daily, unranked) | Med–High for players who miss days | M | Med (seed/mode plumbing in `Game.tsx`) | Cut — Game.tsx is being changed by H4/L20 fixes in this pass; next |
 | 6 | Lifetime points board incl. guests (82-0 style) | Med | M | Med — new Redis data (needs sign-off) | Cut |
@@ -165,6 +227,35 @@ persistent Redis data without owner sign-off, descriptive-only per DESIGN §12, 
 | 12 | Calendar (.ics) daily reminder for users without push (iOS non-PWA) | Med–Low | S | Low | Cut — unproven value |
 | 13 | Desktop keyboard shortcuts for the draft | Low–Med | S–M | Low (`Game.tsx`) | Cut |
 
+**What shipped:**
+- **My Stats** (`/stats`, noindex): games played, best record per mode (linked), average wins, grade distribution,
+  current and best Daily streak, last-7-days count. Uses local history plus the signed-in account's synced history
+  (same dedupe as "Your results"). Linked from the "Your results" header on the mode picker. Pure `lib/stats.ts`
+  (22 tests) + `StatsBoard` (7 component tests).
+- **Franchise pages** (`/teams` + `/teams/<abbr>` ×30, statically generated, per-team OG cards, in the sitemap, footer
+  link). Each page shows the franchise's all-time five: slot-legal, one person per slot, chosen by the existing
+  accolade-based "Top" order with full-time starters (30+ mpg) first. It also shows the engine's verdict on that five
+  (linking to its `/r/` breakdown), legends by decade with real stat lines and accolades, and a CTA to `/play`.
+  Descriptive only per DESIGN §12. `lib/franchise.ts` has 88 tests, plus 5 page/sitemap tests.
+- **"Vs you" compare** on the Daily board: after you've posted, each other row links to `/compare/<yours>/<theirs>`
+  (tracked as `board_compare`).
+
 ## Recommended next steps
 
-_(populated at the end)_
+1. **Run `scripts/lua_e2e.ts` against a non-production Upstash** to cover the new `KEEP_BEST_LUA` meta mode on
+   Upstash's own Lua runtime. It already passed on a local Redis 7.0 during this pass.
+2. **Two §12 owner decisions:**
+   - **M19:** Blueprint fit on a shared seed. Keep it, gate it behind a server-recorded hint, or make Blueprint blind
+     like Daily.
+   - **Board lineups before you play:** whether today's board lineups should be hidden (or names-only) until you've
+     posted. The challenge board already does this; Daily, FH, BP and Surgeon don't.
+3. **Draft Duel vs bot** (feature #4): the strongest fun/virality gap vs 82-0.com today. Pair it with the optional
+   shot clock (#7).
+4. **Past-Daily archive** (#5): unranked replay of missed Dailies. The H4/L20 lifecycle fixes in `Game.tsx` make
+   this safer to build now.
+5. **Watch the new funnel signals:** `board_compare` clicks, `/teams/*` organic landings (Search Console), and `/stats`
+   visits (Vercel Analytics). Check whether the referral loop and nudges convert now that sharing is fixed (M11: X and
+   Bluesky shares from permalink pages used to drop the absolute URL and the `?ref=`).
+6. **Data follow-ups:** namesake `person_id`s (L15), the Jordan All-Star count, and the projection-ceiling relabel (L14).
+7. **Clean up stale branches/worktrees:** ~25 merged remote branches and 2 old `.claude/worktrees` remain from earlier
+   sessions.
