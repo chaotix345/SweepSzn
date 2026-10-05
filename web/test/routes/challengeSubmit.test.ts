@@ -75,9 +75,11 @@ vi.mock("@/lib/engine", () => ({
 // Keep push silent — VAPID keys are absent, so isPushEnabled() returns false and sendPushToUid no-ops.
 // The push-gating block below sets VAPID env for its own tests only; web-push is stubbed so its
 // fan-out is observable without network.
-const sendNotification = vi.fn(async (..._a: unknown[]) => ({ statusCode: 201 }));
+const sendNotification = vi.fn<(sub: unknown, body: string) => Promise<{ statusCode: number }>>(
+  async () => ({ statusCode: 201 }),
+);
 vi.mock("web-push", () => ({
-  default: { setVapidDetails: vi.fn(), sendNotification: (...a: unknown[]) => sendNotification(...a) },
+  default: { setVapidDetails: vi.fn(), sendNotification: (sub: unknown, body: string) => sendNotification(sub, body) },
 }));
 
 enableRedisEnv();
