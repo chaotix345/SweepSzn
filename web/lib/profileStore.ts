@@ -2,7 +2,6 @@ import "server-only";
 import { redis } from "./redis";
 import { dayUTC } from "./day";
 import { decodeLineup } from "./share";
-import { getPlayersByIds } from "./data";
 
 // Per-account persistence for signed-in players: the cross-device home for streak, result history,
 // and the editable display handle. Anonymous players keep using localStorage (lib/streak.ts,
@@ -157,8 +156,10 @@ export async function getResults(uid: string): Promise<ProfileResult[]> {
 // cap can never evict a newer entry in favour of an older backfilled one.
 // Serialized per uid (results:lock NX): two devices syncing at once each read the same list, and the
 // later rewrite duplicated or dropped the other's entries. The DEL+LPUSH rewrite is one MULTI, so a
-// failure mid-rewrite can no longer wipe the stored history.
-export async function syncResults(uid: string, entries: ProfileResult[]): Promise<number> {
+// failure mid-rewrite can no longer wipe the stored history. `realIds` keeps only REAL player ids for the
+// dex (the sync route passes the lib/data lookup) — injected, not imported, so the auth/profile routes
+// that share this store don't pull public/data into their functions.
+export async function syncResults(uid: string, entries: ProfileResult[], realIds: (ids: string[]) => string[]): Promise<number> {
   if (!redis || !entries.length) return 0;
   const lock = keyResultsLock(uid);
   // bounded wait, just past the lock TTL (a crashed holder's lock expires); real contention clears in ms
@@ -183,7 +184,7 @@ export async function syncResults(uid: string, entries: ProfileResult[]): Promis
     // Accumulate every fielded player into the unbounded dex set, so the collection survives past the
     // results cap. SADD is idempotent, so re-syncing the same games never double-counts. Only REAL player
     // ids — `encoded` is client-supplied, so a forged lineup must not inject arbitrary members.
-    const dexArr = [...new Set(getPlayersByIds(fresh.flatMap((e) => decodeLineup(e.encoded))).map((p) => p.id))];
+    const dexArr = [...new Set(realIds(fresh.flatMap((e) => decodeLineup(e.encoded))))];
     if (dexArr.length) await redis.sadd(keyDex(uid), dexArr[0], ...dexArr.slice(1));
     return fresh.length;
   } finally {

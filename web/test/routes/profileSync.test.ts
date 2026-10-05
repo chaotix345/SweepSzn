@@ -80,6 +80,13 @@ describe("POST /api/profile/sync", () => {
     expect(ctx.redis!.lists.get(`results:${UID}`)!.length).toBe(3);
   });
 
+  it("a forged encoded lineup syncs the result but only REAL player ids enter the dex", async () => {
+    await signIn({ uid: UID, name: "X" });
+    const { body } = await readJson(await post({ results: [{ encoded: `${FIVE[0]},zzz_fake,yyy_fake`, mode: "classic", wins: 1, losses: 81, grade: "F", ts: 1 }] }));
+    expect(body.results).toBe(1);
+    expect([...(ctx.redis!.sets.get(`dex:${UID}`) ?? [])]).toEqual([FIVE[0]]);
+  });
+
   it("drops entries with an unknown mode at the trust boundary", async () => {
     await signIn({ uid: UID, name: "X" });
     const { body } = await readJson(await post({ results: [

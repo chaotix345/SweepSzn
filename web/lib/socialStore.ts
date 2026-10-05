@@ -1,7 +1,6 @@
 import "server-only";
 import type { Redis } from "@upstash/redis";
 import { logError } from "./log";
-import { getPersonName } from "./data";
 import { FRANCHISES, DECADES } from "./teams";
 
 // Silent crowd-signal + rarity logging. Both writers are best-effort and MUST NEVER throw or block a
@@ -14,7 +13,8 @@ const SLOTS = new Set(["PG", "SG", "SF", "PF", "C"]);
 const SPINKEY_RE = /^[A-Za-z]{2,4}\|[A-Za-z0-9]{2,6}$/; // TEAM|DECADE, decade incl. "PRIME"
 const PERSON_RE = /^[a-z0-9_]{1,64}$/;
 // The beacon is unauthenticated: only REAL spin configs (current franchise | draftable decade or PRIME)
-// and real people may mint keys/fields — bounds the keyspace, and junk ids never reach /api/crowd.
+// may mint keys — bounds the keyspace. (The real-PERSON check needs public/data, so the slot-pick route
+// does it: this store is also imported by /api/rarity, which must not pull players.json in.)
 const TEAMS = new Set(FRANCHISES);
 const SPIN_DECADES = new Set<string>([...DECADES, "PRIME"]);
 // Sliding TTL, refreshed on every write: a live (mode, spin, slot) config keeps its counts; an abandoned
@@ -36,7 +36,7 @@ export function parseSlotPick(body: unknown): SlotPick | null {
   const [team, decade] = b.spinKey.split("|");
   if (!TEAMS.has(team) || !SPIN_DECADES.has(decade)) return null;
   if (typeof b.slot !== "string" || !SLOTS.has(b.slot)) return null;
-  if (typeof b.personId !== "string" || !PERSON_RE.test(b.personId) || !getPersonName(b.personId)) return null;
+  if (typeof b.personId !== "string" || !PERSON_RE.test(b.personId)) return null;
   return { mode: b.mode, spinKey: b.spinKey, slot: b.slot, personId: b.personId };
 }
 
@@ -83,7 +83,10 @@ export interface CrowdResult { total: number; choices: CrowdChoice[] }
 
 // Top-3 picks at a slot for a (mode, spin) config, with their share — only once the slot has enough
 // plays to be meaningful. Returns null below the gate. Read-only; never reveals an engine ranking.
-export async function crowdForSlot(redis: Redis | null, mode: string, spinKey: string, slot: string): Promise<CrowdResult | null> {
+// `known` drops person ids that aren't real (junk written before the beacon validated people).
+export async function crowdForSlot(
+  redis: Redis | null, mode: string, spinKey: string, slot: string, known: (personId: string) => boolean = () => true,
+): Promise<CrowdResult | null> {
   if (!redis) return null;
   try {
     const h = await redis.hgetall<Record<string, number | string>>(slotPickHashKey(mode, spinKey, slot));
@@ -91,7 +94,7 @@ export async function crowdForSlot(redis: Redis | null, mode: string, spinKey: s
     const total = Number(h.__total__ ?? 0);
     if (total < CROWD_MIN) return null;
     const choices = Object.entries(h)
-      .filter(([k]) => k !== "__total__" && getPersonName(k) !== undefined) // junk written pre-validation never renders
+      .filter(([k]) => k !== "__total__" && known(k))
       .map(([personId, v]) => ({ personId, pct: Math.round((Number(v) / total) * 1000) / 10 }))
       .sort((a, b) => b.pct - a.pct)
       .slice(0, 3);

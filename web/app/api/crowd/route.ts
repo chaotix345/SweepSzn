@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   if (!MODES.has(mode) || !SPINKEY_RE.test(spinKey) || !SLOTS.has(slot)) {
     return NextResponse.json({ error: "bad params" }, { status: 400 });
   }
-  const crowd = await crowdForSlot(redis, mode, spinKey, slot);
+  const crowd = await crowdForSlot(redis, mode, spinKey, slot, (id) => getPersonName(id) !== undefined);
   if (!crowd) return NextResponse.json({ crowd: null });
   return NextResponse.json({
     crowd: {
