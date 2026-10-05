@@ -6,7 +6,6 @@ import { isAnonUid } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-
 // Drop one of the caller's push subscriptions (toggle-off / revoke). Guarded on redis (not VAPID) so a
 // user can always clean up even after push is disabled. Only ever touches the caller's own uid.
 export async function POST(req: Request) {

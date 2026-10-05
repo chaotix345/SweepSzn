@@ -17,7 +17,6 @@ export const runtime = "nodejs";
 // apply the cosmetic ×1.05 ONLY when the locked prediction matches the recomputed answer. The
 // engine result is never modified — the bonus lives in the board's sort score and display.
 
-
 const deps = engineDeps();
 
 export async function POST(req: Request) {

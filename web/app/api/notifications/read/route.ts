@@ -6,7 +6,6 @@ import { isAnonUid } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-
 // Mark the caller's inbox read (sets the read watermark). Only ever affects the caller's own uid.
 export async function POST(req: Request) {
   if (!isNotifyEnabled()) return NextResponse.json({ error: "notifications not configured" }, { status: 503 });

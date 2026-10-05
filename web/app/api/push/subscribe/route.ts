@@ -7,7 +7,6 @@ import { isAnonUid } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-
 // Store a web-push subscription for the caller's uid. Self-disabling: 503 when VAPID isn't configured
 // (the client opt-in is also hidden in that case). Identity mirrors the other uid-gated routes.
 export async function POST(req: Request) {

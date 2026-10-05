@@ -20,7 +20,6 @@ export const runtime = "nodejs";
 // replay all five blueprints on one seed" — the modal commitment is gameplay psychology, not a
 // server invariant. The engine result is never modified; the multiplier lives in the board score.
 
-
 const deps = engineDeps();
 
 export async function POST(req: Request) {
