@@ -103,6 +103,15 @@ export function createRedisFake() {
       aw = zsets.get(allZ)?.get(uid) ?? 0;
     }
     rawExpire(weekZ, Number(args[4]));
+    // optional meta rows (KEYS 4-6), written atomically with the score — only on improvement
+    const [dailyH, weekH, allH] = keys.slice(3);
+    if (dailyH) {
+      hash(dailyH).set(uid, String(args[5]));
+      rawExpire(dailyH, Number(args[3]));
+      hash(weekH).set(uid, `${args[6]}${Math.floor(ww)}}`);
+      hash(allH).set(uid, `${args[6]}${Math.floor(aw)}}`);
+      rawExpire(weekH, Number(args[4]));
+    }
     return [1, delta, Math.floor(ww), Math.floor(aw)];
   }
 

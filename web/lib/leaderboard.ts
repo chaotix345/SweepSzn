@@ -51,31 +51,23 @@ export async function removeEntry(date: string, uid: string): Promise<void> {
 // --- Weekly + all-time (signed-in submitters only) ---
 
 // Authed submit: daily keep-best AND credit the win delta to this week + all-time, via the atomic
-// KEEP_BEST_LUA (see score.ts). Returns the daily view for the submitter.
+// KEEP_BEST_LUA (see score.ts). Returns the daily view for the submitter. The daily/weekly/all-time
+// meta rows are written INSIDE the script, only when the daily best improved (incl. a net-only, delta-0
+// improvement, so the display name stays current): a separate meta pipeline let a concurrent worse run's
+// row land under the better score.
 export async function submitScoreAuthed(date: string, row: StoredRow, result: LineupResult): Promise<LeaderboardView | null> {
   if (!redis) return null;
   const score = encScore(result.wins, result.netRtg);
   if (!Number.isFinite(score)) return getLeaderboard(date, row.uid);
   const week = isoWeek(date);
-  const [changed, , ww, aw] = (await redis.eval(
+  // agg meta row = {uid, name, wins}; the script appends the current total + "}" (same JSON as before)
+  const aggPrefix = JSON.stringify({ uid: row.uid, name: row.name }).slice(0, -1) + ',"wins":';
+  const [changed] = (await redis.eval(
     KEEP_BEST_LUA,
-    [keyZ(date), keyWeekZ(week), keyAlltimeZ()],
-    [row.uid, score, result.wins, TTL, TTL_WEEK],
+    [keyZ(date), keyWeekZ(week), keyAlltimeZ(), keyH(date), keyWeekH(week), keyAlltimeH()],
+    [row.uid, score, result.wins, TTL, TTL_WEEK, JSON.stringify(row), aggPrefix],
   )) as [number, number, number, number];
-  if (changed) {
-    // agg meta is display-only (the sorted-set score is authoritative for ranking). Refresh it
-    // whenever the daily best changes — incl. a net-only (delta 0) improvement — so the display
-    // name stays current. ww/aw are the current totals returned by the Lua in both branches.
-    // One pipeline: Upstash is HTTP, so these five writes were five sequential round trips.
-    await redis.pipeline()
-      .hset(keyH(date), { [row.uid]: row })
-      .expire(keyH(date), TTL)
-      .hset(keyWeekH(week), { [row.uid]: { uid: row.uid, name: row.name, wins: ww } })
-      .hset(keyAlltimeH(), { [row.uid]: { uid: row.uid, name: row.name, wins: aw } })
-      .expire(keyWeekH(week), TTL_WEEK) // all-time meta: persistent, no expire
-      .exec();
-    // the all-time pair has no TTL — cap it so it can't grow unboundedly (O(1) until full)
-    await redis.eval(TRIM_BOARD_LUA, [keyAlltimeZ(), keyAlltimeH()], [ALLTIME_CAP]);
-  }
+  // the all-time pair has no TTL — cap it so it can't grow unboundedly (O(1) until full)
+  if (changed) await redis.eval(TRIM_BOARD_LUA, [keyAlltimeZ(), keyAlltimeH()], [ALLTIME_CAP]);
   return getLeaderboard(date, row.uid);
 }

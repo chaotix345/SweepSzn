@@ -55,6 +55,21 @@ describe("eval: KEEP_BEST_LUA port", () => {
     expect(Number(await fake.zscore(az, "u2"))).toBe(60);
   });
 
+  it("with meta KEYS 4-6 it writes the daily/weekly/all-time rows only when the daily best improved", async () => {
+    const f = createRedisFake();
+    const agg = (uid: string, name: string) => JSON.stringify({ uid, name }).slice(0, -1) + ',"wins":';
+    const go = (wins: number, name: string) =>
+      f.eval(KEEP_BEST_LUA, ["d", "w", "a", "dh", "wh", "ah"], ["u", encScore(wins, 0), wins, 3600, 7200, JSON.stringify({ uid: "u", name, wins }), agg("u", name)]);
+    expect(await go(70, "B")).toEqual([1, 70, 70, 70]);
+    expect(await go(50, "A")).toEqual([0, 0, 0, 0]); // worse: no meta write
+    expect(JSON.parse(f.hashes.get("dh")!.get("u")!)).toEqual({ uid: "u", name: "B", wins: 70 });
+    expect(JSON.parse(f.hashes.get("wh")!.get("u")!)).toEqual({ uid: "u", name: "B", wins: 70 });
+    expect(JSON.parse(f.hashes.get("ah")!.get("u")!)).toEqual({ uid: "u", name: "B", wins: 70 });
+    expect(f.ttls.get("dh")).toBe(3600);
+    expect(f.ttls.get("wh")).toBe(7200);
+    expect(f.ttls.has("ah")).toBe(false); // all-time meta: persistent, never expired
+  });
+
   it("all-time ranks by wins", async () => {
     await run("u3", 82, 10);
     const top = (await fake.zrange(az, 0, -1, { rev: true })) as string[];
