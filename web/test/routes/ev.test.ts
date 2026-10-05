@@ -12,7 +12,7 @@ enableRedisEnv();
 vi.useFakeTimers({ now: new Date("2026-06-15T12:00:00Z"), toFake: ["Date"] });
 
 const { POST } = await import("@/app/api/ev/route");
-const { EV_TTL, EV_REF_CAP, REF_REFERRED_CAP } = await import("@/lib/evServer");
+const { EV_TTL, EV_REF_CAP, REF_REFERRED_CAP, REF_REFERRERS_CAP } = await import("@/lib/evServer");
 
 // dayUTC() returns YYYY-MM-DD for today UTC — we replicate its logic here so assertions match.
 function dayUTC(): string {
@@ -313,6 +313,24 @@ describe("POST /api/ev — referral attribution", () => {
     await post({ ev: "first_play", uid: "referee-cap-0002", ref: "rabc123def45" });
     expect(full.size).toBe(REF_REFERRED_CAP);
     expect(full.has("referee-cap-0002")).toBe(false);
+    expect(Number(ctx.redis!.strings.get("ref:credits:referrer-uid-001"))).toBe(1);
+  });
+
+  it("the ref:credits counter carries a TTL (codes minted for fresh uids must not leave no-TTL keys)", async () => {
+    ctx.redis!.strings.set("ref:code:rabc123def45", "referrer-uid-001");
+    await post({ ev: "first_play", uid: "referee-ttl-0003", ref: "rabc123def45" });
+    expect(Number(ctx.redis!.strings.get("ref:credits:referrer-uid-001"))).toBe(1);
+    expect(ctx.redis!.ttls.get("ref:credits:referrer-uid-001")).toBeGreaterThan(0);
+  });
+
+  it("stops growing ref:referrers past REF_REFERRERS_CAP but still credits the referrer", async () => {
+    const full = new Set<string>();
+    for (let i = 0; i < REF_REFERRERS_CAP; i++) full.add(`seed-referrer-${i}`);
+    ctx.redis!.sets.set("ref:referrers", full);
+    ctx.redis!.strings.set("ref:code:rabc123def45", "referrer-uid-001");
+    await post({ ev: "first_play", uid: "referee-cap-0003", ref: "rabc123def45" });
+    expect(full.size).toBe(REF_REFERRERS_CAP);
+    expect(full.has("referrer-uid-001")).toBe(false);
     expect(Number(ctx.redis!.strings.get("ref:credits:referrer-uid-001"))).toBe(1);
   });
 
