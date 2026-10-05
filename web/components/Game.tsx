@@ -109,6 +109,7 @@ export default function Game() {
   const hintsUsedRef = useRef(0);                  // synchronous count, read at simulate time
   const saltRef = useRef(0);
   const tickRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const genRef = useRef(0);                            // game generation: bumped when a game is abandoned so its late spin/crowd fetch bails
   const traceRef = useRef<DraftStep[]>([]);            // ordered picks for leaderboard verification
   const roundRespinsRef = useRef<("team" | "era")[]>([]); // re-spins used in the current round
   const [convertedId, setConvertedId] = useState<string | null>(null); // challenge minted from a finished game
@@ -200,6 +201,8 @@ export default function Game() {
 
   const runSpin = useCallback(async (opts: SpinOpts, locked: "team" | "era" | null = null) => {
     if (spinning) return;
+    const gen = genRef.current;
+    const stale = () => gen !== genRef.current; // restarted / left for the picker mid-spin — drop everything
     setError(null); setSpinning(true); setCurrent(null); setSelPlayer(null); setSelSlot(null); setLockedReel(locked); setCrowdNote(null);
     if (tickRef.current) clearTimeout(tickRef.current);
     const reduce = typeof window !== "undefined" && (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false);
@@ -228,17 +231,21 @@ export default function Game() {
         // in Daily/HoopIQ/Challenge/Factor Hunt so the network response can't be read to draft optimally
         body: JSON.stringify({ seed, round: filled, exclude: drafted.map((p) => p.id), fit: mode === "classic" || mode === "prime" || mode === "blueprint", ...opts }),
       });
+      if (stale()) return;
       if (!r.ok) throw new Error("spin failed");
       const res: Spin = await r.json();
+      if (stale()) return;
       // result known — restart the churn as a deceleration ramp from the first (fast) step
       if (!reduce) { if (tickRef.current) clearTimeout(tickRef.current); decel = true; step = 0; schedule(); }
       await new Promise((rs) => setTimeout(rs, 1100));
+      if (stale()) return;
       if (tickRef.current) { clearTimeout(tickRef.current); tickRef.current = null; }
       setReel({ team: res.team, era: eraLabel(res.decade) });
       setCurrent(res);
       // a single haptic "click" at the landing — Android only; iOS/desktop silently no-op
       if (!reduce) { try { navigator.vibrate?.(35); } catch { /* no haptics */ } }
     } catch {
+      if (stale()) return; // the rollback below would hit the NEXT game's skips/salt
       setLockedReel(null); setReel({ team: "ATL", era: mode === "prime" ? "PRIME" : "60's" });
       // roll back the re-spin we optimistically charged before this call so a network error doesn't
       // silently burn the skip (and don't leave a phantom re-spin in the verification trace)
@@ -249,8 +256,7 @@ export default function Game() {
       if (locked !== null) { roundRespinsRef.current = roundRespinsRef.current.slice(0, -1); saltRef.current--; }
       setError("Network hiccup — tap SPIN to try again.");
     } finally {
-      if (tickRef.current) clearTimeout(tickRef.current);
-      setSpinning(false);
+      if (!stale()) { if (tickRef.current) clearTimeout(tickRef.current); setSpinning(false); }
     }
   }, [spinning, seed, filled, drafted, mode]);
 
@@ -307,6 +313,15 @@ export default function Game() {
   // Factor Hunt: hook placed after simulate so beginFhPrediction can close over the stable callback.
   const { fhStep, fhPick, setFhPick, fhPrediction, setFhPrediction, fhRef, beginFhPrediction, lockFh, fhFetching, reset: resetFh } = useFactorHunt(seed, simulate, setError);
 
+  // Abandon the current game's in-flight work: bump the generation (runSpin + the crowd note re-check it
+  // after every await), stop the reel churn, and cancel any in-flight simulate.
+  const abandonInFlight = useCallback(() => {
+    genRef.current += 1;
+    if (tickRef.current) { clearTimeout(tickRef.current); tickRef.current = null; }
+    setSpinning(false);
+    abortSimRef.current?.abort(); abortSimRef.current = null;
+  }, []);
+
   // start() placed after all per-mode hook calls so it can close over their stable reset functions
   // without triggering react-hooks/immutability (resetFh, resetPickem, resetBp, resetSg all have []
   // deps — but must be declared before start references them).
@@ -318,7 +333,7 @@ export default function Game() {
     // layout effect has persisted the source), falling back to the stored first-touch source — same
     // ordering-robust pattern as Beacon.tsx.
     markFirstPlay(getUid(), currentUtmSource() ?? getUtmSource() ?? undefined, currentRefCode() ?? getRefCode() ?? undefined);
-    abortSimRef.current?.abort(); abortSimRef.current = null; // cancel any in-flight simulate
+    abandonInFlight(); // cancel the old game's spin / crowd note / simulate
     setMode(m);
     let cid: string | null = null;
     let crole: "create" | "respond" | null = null;
@@ -347,7 +362,7 @@ export default function Game() {
         window.history.replaceState(null, "", u.pathname + u.search + u.hash);
       }
     } catch { /* no history API */ }
-  }, [resetPickem, resetFh, resetBp, resetSg]);
+  }, [abandonInFlight, resetPickem, resetFh, resetBp, resetSg]);
 
   // Bootstrap the view from the URL (hold-your-place restore on refresh). Priority: a joiner deep link
   // (?c=<id>) → respond mode; then a creator dashboard (?own=<id>); then a finished-result restore
@@ -474,9 +489,10 @@ export default function Game() {
       // to keep its mystery. The read sees plays BEFORE this one, so it reflects how others went.
       if (mode !== "hoopiq") {
         const sp = `${current.team}|${current.decade}`;
+        const gen = genRef.current;
         fetch(`/api/crowd?mode=${mode}&spinKey=${encodeURIComponent(sp)}&slot=${slot}`)
           .then((r) => (r.ok ? r.json() : null))
-          .then((d) => { const top = d?.crowd?.choices?.[0]; if (top) setCrowdNote(`${top.pct}% of players took ${top.name} at ${slot} here.`); })
+          .then((d) => { const top = d?.crowd?.choices?.[0]; if (top && gen === genRef.current) setCrowdNote(`${top.pct}% of players took ${top.name} at ${slot} here.`); })
           .catch(() => {});
       }
     }
