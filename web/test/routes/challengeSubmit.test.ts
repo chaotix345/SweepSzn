@@ -11,6 +11,7 @@ import {
   flushAfter,
 } from "@/test/routeHarness";
 import type { DraftStep } from "@/lib/types";
+import { dayUTC } from "@/lib/day";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -521,5 +522,21 @@ describe("POST /api/challenge/submit — isGameSeed allowlist", () => {
     expect(status).toBe(200);
     const stored = JSON.parse(ctx.redis!.strings.get(`chal:${VALID_ID}:info`)!);
     expect(stored.seed).toBe("daily-2026-6-10");
+  });
+
+  it("today's daily- seed is accepted from the creator", async () => {
+    const today = `daily-${dayUTC()}`;
+    expect((await post({ id: VALID_ID, uid: anonUid, trace: LEGIT_TRACE, seed: today })).status).toBe(200);
+    expect(JSON.parse(ctx.redis!.strings.get(`chal:${VALID_ID}:info`)!).seed).toBe(today);
+  });
+
+  it("a FUTURE (or malformed) daily- seed is NOT accepted — falls back to h2h-<id>", async () => {
+    const tomorrow = `daily-${dayUTC(new Date(Date.now() + 86_400_000))}`;
+    for (const seed of [tomorrow, "daily-2099-1-1", "daily-2026-2-30", "daily-2026-06-10", "daily-x"]) {
+      freshFake();
+      const { status } = await readJson(await post({ id: VALID_ID, uid: anonUid, trace: LEGIT_TRACE, seed }));
+      expect(status).toBe(200);
+      expect(JSON.parse(ctx.redis!.strings.get(`chal:${VALID_ID}:info`)!).seed, seed).toBe(`h2h-${VALID_ID}`);
+    }
   });
 });
