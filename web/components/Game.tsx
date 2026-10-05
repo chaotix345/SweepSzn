@@ -151,7 +151,7 @@ export default function Game() {
   const roundNum = Math.min(filled + 1, 5);
   const openSlots = useMemo(() => SLOTS.filter((s) => !roster[s]), [roster]);
   const rosterKey = useMemo(() => SLOTS.map((s) => roster[s]?.id ?? "").join("|"), [roster]);
-  const projAllowed = projectionAllowed(seed);
+  const projAllowed = mode !== "challenge" && projectionAllowed(seed); // a converted challenge carries its classic-<n> seed — responders stay blind (§12)
 
   useEffect(() => () => { if (tickRef.current) clearTimeout(tickRef.current); }, []);
 

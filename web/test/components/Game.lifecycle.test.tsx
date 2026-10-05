@@ -46,6 +46,7 @@ type Deferred = { resolve: (body: unknown) => void };
 let crowd: Deferred[] = [];
 let evals: Deferred[] = [];
 let spinSeeds: string[] = [];
+let calls: string[] = [];
 
 const IDS = ["p0", "p1", "p2", "p3", "p4"];
 const makeEval = () => ({
@@ -54,9 +55,14 @@ const makeEval = () => ({
 });
 
 function makeFetchMock() {
-  crowd = []; evals = []; spinSeeds = [];
+  crowd = []; evals = []; spinSeeds = []; calls = [];
   return vi.fn(async (url: string, init?: RequestInit) => {
     const path = typeof url === "string" ? url.split("?")[0] : "";
+    calls.push(path);
+    if (path.startsWith("/api/challenge/")) return { ok: true, json: async () => ({ seed: "classic-4242" }) } as Response;
+    if (path === "/api/project") {
+      return { ok: true, json: async () => ({ floor: { wins: 30, losses: 52, grade: "D" }, ceiling: { wins: 60, losses: 22, grade: "A" }, n: 1 }) } as Response;
+    }
     if (path === "/api/evaluate") {
       return new Promise<Response>((res) => {
         evals.push({ resolve: (body) => res({ ok: true, json: async () => body } as Response) });
@@ -187,5 +193,46 @@ describe("Game — ← Modes abandons the game and owns the URL (L20)", () => {
     await act(async () => {});
     expect(listResults()).toEqual([]);
     expect(screen.queryByText(/Pick your mode/i)).toBeTruthy();
+  });
+});
+
+describe("Game — no live projection for challenge responders (M7, DESIGN.md §12)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", makeFetchMock());
+    try { localStorage.clear(); } catch { /* */ }
+  });
+  afterEach(async () => {
+    await act(async () => {});
+    cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks();
+    window.history.replaceState({}, "", "/");
+  });
+
+  async function firstPick() {
+    await click(btn((t) => /^🎰 spin/i.test(t.trim()))!);
+    await act(async () => { vi.advanceTimersByTime(1200); });
+    await act(async () => {});
+    await click(screen.getAllByRole("button", { name: /^Select Player/ })[0]);
+    await click(screen.getAllByRole("button", { name: /^PG slot/ })[0]);
+    await act(async () => {});
+  }
+
+  it("Classic free-play shows the floor↔ceiling meter after the first pick (control)", async () => {
+    render(<Game />);
+    await click(modeBtn(/^Play Classic mode/));
+    await firstPick();
+    expect(calls).toContain("/api/project");
+    expect(screen.queryByText(/Projected wins/)).toBeTruthy();
+  });
+
+  it("a challenge converted from Classic (classic-<n> seed) never fetches or shows the projection", async () => {
+    window.history.replaceState({}, "", "/play?c=abc123");
+    render(<Game />);
+    await act(async () => {});
+    expect(document.querySelector("header span.capitalize")?.textContent).toBe("challenge");
+    await firstPick();
+    expect(spinSeeds).toEqual(["classic-4242"]);
+    expect(calls).not.toContain("/api/project");
+    expect(screen.queryByText(/Projected wins/)).toBeNull();
   });
 });
