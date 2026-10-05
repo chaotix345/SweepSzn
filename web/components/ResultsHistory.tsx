@@ -56,7 +56,10 @@ export default function ResultsHistory({ onOpenChallenge }: { onOpenChallenge: (
 
   return (
     <div className="mx-auto mt-10 max-w-2xl border-t border-zinc-800/60 pt-8 text-left">
-      <div className="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-500">Your results</div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="text-xs font-bold uppercase tracking-widest text-zinc-500">Your results</div>
+        <Link href="/stats" className="text-xs font-bold text-zinc-400 transition hover:text-orange-300">Your stats →</Link>
+      </div>
       <div className="space-y-2">
         {items.slice(0, 12).map((e) => {
           const cls = "flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 transition hover:border-zinc-600";
