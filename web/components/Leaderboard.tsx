@@ -299,18 +299,20 @@ function Board({ view }: { view: LeaderboardView }) {
         <span className="w-12 shrink-0 text-right" title="Net rating — per-100 scoring margin; the tiebreak when wins are equal">Net</span>
       </div>
       <div className="max-h-[min(18rem,55dvh)] space-y-1 overflow-y-auto">
-        {rows.map((r) => <Row key={r.rank} r={r} me={r.me} />)}
+        {rows.map((r) => <Row key={r.rank} r={r} me={r.me} mine={view.you?.lineup} />)}
         {youOutside && view.you && <Row r={view.you} me />}
       </div>
     </div>
   );
 }
 
-function Row({ r, me }: { r: LeaderboardRow; me?: boolean }) {
+// `mine` = the caller's own posted lineup (view.you): once you're on the board, every other row gets a
+// sibling "vs you" link to the head-to-head compare page (post-commit only — DESIGN.md §12).
+function Row({ r, me, mine }: { r: LeaderboardRow; me?: boolean; mine?: string }) {
   const lead = r.rank === 1;
-  return (
+  const row = (
     <Link href={`/r/${r.lineup}`}
-      className={`flex items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : lead ? "bg-gold/5 ring-1 ring-gold/25" : "bg-zinc-950/50 hover:bg-zinc-800/60"}`}>
+      className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : lead ? "bg-gold/5 ring-1 ring-gold/25" : "bg-zinc-950/50 hover:bg-zinc-800/60"}`}>
       <span className={`w-7 shrink-0 text-right text-xs font-bold tabular-nums ${medalText(r.rank)}`}>{r.rank}</span>
       <span className="min-w-0 flex-1 truncate font-semibold text-zinc-200">{r.name}{me && <span className="ml-1 text-[10px] text-orange-300">you</span>}</span>
       <span className={`shrink-0 tabular-nums font-bold ${lead ? "font-display text-base" : ""}`}>
@@ -318,6 +320,17 @@ function Row({ r, me }: { r: LeaderboardRow; me?: boolean }) {
       </span>
       <span title="Net rating — per-100 scoring margin; breaks ties when wins are equal" className="w-12 shrink-0 text-right text-xs tabular-nums text-zinc-500">{r.net > 0 ? "+" : ""}{r.net.toFixed(1)}</span>
     </Link>
+  );
+  if (!mine || me) return row;
+  return (
+    <div className="flex items-center gap-1">
+      {row}
+      <Link href={`/compare/${mine}/${r.lineup}`} onClick={() => track("board_compare", { rank: r.rank })}
+        aria-label={`Compare your lineup with ${r.name}'s`}
+        className="shrink-0 rounded-md px-1.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-zinc-500 transition hover:bg-zinc-800/60 hover:text-zinc-200">
+        vs you
+      </Link>
+    </div>
   );
 }
 

@@ -65,3 +65,38 @@ describe("Leaderboard without a date prop", () => {
     act(() => root.unmount());
   });
 });
+
+// Feature: once you've posted today, every other row on the Daily board links a head-to-head of your
+// five vs theirs (/compare/<yours>/<theirs>) — post-commit only, so it's §12-safe.
+describe("Leaderboard 'vs you' compare links", () => {
+  const MINE = "a1,a2,a3,a4,a5";
+  const THEIRS = "h~b1,b2,b3,b4,b5";
+  const row = (rank: number, lineup: string, me?: true) => ({ rank, name: `P${rank}`, wins: 70 - rank, losses: 12 + rank, net: 5, lineup, ...(me ? { me } : {}) });
+  async function renderWith(view: object) {
+    vi.stubGlobal("fetch", vi.fn((url: string) =>
+      url === "/api/daily/leaderboard"
+        ? Promise.resolve(new Response(JSON.stringify(view), { status: 200, headers: { "content-type": "application/json" } }))
+        : new Promise(() => {})));
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => { root.render(<Leaderboard date="2026-6-15" trace={[]} readOnly />); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+    return { container, root };
+  }
+
+  it("links each other row to /compare/<yours>/<theirs> once you're on the board", async () => {
+    const { container, root } = await renderWith({ date: "2026-6-15", total: 2, top: [row(1, THEIRS), row(2, MINE, true)], you: row(2, MINE, true) });
+    const hrefs = [...container.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain(`/compare/${MINE}/${THEIRS}`);
+    expect(hrefs).not.toContain(`/compare/${MINE}/${MINE}`); // never against your own row
+    expect(hrefs).toContain(`/r/${THEIRS}`); // the row itself still opens their result
+    act(() => root.unmount());
+  });
+
+  it("offers no compare before you've posted (pre-commit)", async () => {
+    const { container, root } = await renderWith({ date: "2026-6-15", total: 1, top: [row(1, THEIRS)] });
+    expect([...container.querySelectorAll("a")].some((a) => a.getAttribute("href")?.startsWith("/compare/"))).toBe(false);
+    act(() => root.unmount());
+  });
+});
