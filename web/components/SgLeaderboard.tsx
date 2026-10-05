@@ -18,10 +18,14 @@ export default function SgLeaderboard({ date, preloaded }: { date: string; prelo
   useEffect(() => {
     const ctl = new AbortController();
     (async () => {
-      const id = user?.uid ?? getUid(); // signed in: "you" highlight keys off the account
       if (preloaded) return; // submit response already carried the fresh board
       try {
-        const r = await fetch(`/api/surgeon/leaderboard?date=${encodeURIComponent(date)}&uid=${encodeURIComponent(id)}`, { signal: ctl.signal });
+        // POST: the anon uid rides the body, never a URL (DESIGN.md §12); signed in, the server keys
+        // "you" off the session instead
+        const r = await fetch("/api/surgeon/leaderboard", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ date, uid: getUid() }), signal: ctl.signal,
+        });
         if (r.status === 503) { setEnabled(false); return; }
         if (r.ok) setView(await r.json());
       } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline — board hidden */ }

@@ -18,7 +18,9 @@ vi.mock("next/server", async (orig) => (await import("@/test/routeHarness")).nex
 enableRedisEnv();
 authEnv();
 
-const { GET } = await import("@/app/api/surgeon/leaderboard/route");
+const { GET, POST } = await import("@/app/api/surgeon/leaderboard/route");
+// the personalized read: uid in the POST body, never the URL
+const post = (body: unknown, ip = "9.9.9.9") => POST(req("/api/surgeon/leaderboard", { body, ip }));
 
 const DATE = "2026-6-10";
 
@@ -59,11 +61,10 @@ describe("GET /api/surgeon/leaderboard — guard rails", () => {
     expect(status).toBe(400);
   });
 
-  it("accepts valid uid param (uid is optional — invalid uid is silently dropped, not 400)", async () => {
-    // The route drops invalid uids (UID_RE fail → uid = undefined), so it still returns 200
+  it("a junk uid query param is ignored, not a 400 (GET never reads a uid)", async () => {
+    // GET is the public read and ignores any uid param (personalized reads POST it), so a stale
+    // client's junk value can't break the board.
     const { status } = await readJson(await get(`date=${DATE}&uid=bad uid!!!`));
-    // Route checks DATE_RE, returns 400 for bad date — uid validity just controls 'you' lookup
-    // This confirms the UID is dropped and request still proceeds.
     expect(status).toBe(200);
   });
 
@@ -84,7 +85,7 @@ describe("GET /api/surgeon/leaderboard — empty board", () => {
   });
 
   it("you is absent when uid is provided but not on the board", async () => {
-    const { status, body } = await readJson(await get(`date=${DATE}&uid=abcdefgh12`));
+    const { status, body } = await readJson(await post({ date: DATE, uid: "abcdefgh12" }));
     expect(status).toBe(200);
     expect(body.you).toBeUndefined();
   });
@@ -116,7 +117,7 @@ describe("GET /api/surgeon/leaderboard — single row", () => {
     };
     seedRow(DATE, "userabc123", row, 105_005);
 
-    const { body } = await readJson(await get(`date=${DATE}&uid=userabc123`));
+    const { body } = await readJson(await post({ date: DATE, uid: "userabc123" }));
     const you = body.you as Record<string, unknown> | undefined;
     expect(you?.uid).toBeUndefined();
     expect(you?.me).toBe(true);
@@ -170,7 +171,7 @@ describe("GET /api/surgeon/leaderboard — you outside top 100", () => {
     const uid101 = "outlierusr01";
     seedRow(DATE, uid101, { uid: uid101, name: "Outlier", delta: -3, beforeWins: 60, afterWins: 57, net: 3, card: "a,b,c,d,e.0.z" }, 500);
 
-    const { body } = await readJson(await get(`date=${DATE}&uid=${uid101}`));
+    const { body } = await readJson(await post({ date: DATE, uid: uid101 }));
     expect(body.total).toBe(101);
     expect((body.top as unknown[]).length).toBe(100);
     const you = body.you as Record<string, unknown> | undefined;
@@ -204,7 +205,7 @@ describe("GET /api/surgeon/leaderboard — response row shape", () => {
 // H2: no board response may carry a uid (bearer token — DESIGN.md §12); the caller's row is `me`.
 describe("surgeon leaderboard — no uids on the wire", () => {
   const UIDS = ["sg-alice-1234", "sg-bob-12345", "sg-carol-1234"];
-  const mine = (uid: string) => get(`date=${DATE}&uid=${uid}`);
+  const mine = (uid: string) => post({ date: DATE, uid });
 
   it("strips every uid and marks only the caller's row with me: true (top + you)", async () => {
     UIDS.forEach((u, i) => seedRow(DATE, u, {
@@ -217,5 +218,53 @@ describe("surgeon leaderboard — no uids on the wire", () => {
     const top = body.top as Array<{ name: string; me?: boolean }>;
     expect(top.filter((r) => r.me).map((r) => r.name)).toEqual(["P1"]);
     expect(body.you).toMatchObject({ name: "P1", rank: 2, me: true });
+  });
+});
+
+// M2: the anon uid must never ride a URL (DESIGN.md §12). Personalized reads POST it in the body;
+// GET is the public, CDN-cached read and ignores any uid query param.
+describe("surgeon leaderboard — personalized reads are POST-only", () => {
+  const UIDS = ["sg-alice-1234", "sg-bob-12345"];
+  const seed = () => UIDS.forEach((u, i) => seedRow(DATE, u, {
+    uid: u, name: `P${i}`, delta: 5 - i, beforeWins: 50, afterWins: 55 - i, net: 1, card: "a,b,c,d,e.1.f",
+  }, 105_000 - i * 1000));
+
+  it("GET ignores a uid query param (no you, no me) and stays CDN-cacheable", async () => {
+    seed();
+    const res = await get(`date=${DATE}&uid=${UIDS[1]}`);
+    const { status, body } = await readJson(res);
+    expect(status).toBe(200);
+    expect(body.you).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain("\"me\"");
+    expect(res.headers.get("cache-control")).toMatch(/s-maxage/);
+  });
+
+  it("POST returns you + me for the body uid and is never cached", async () => {
+    seed();
+    const res = await post({ date: DATE, uid: UIDS[1] });
+    const { status, body } = await readJson(res);
+    expect(status).toBe(200);
+    expect(body.you).toMatchObject({ name: "P1", rank: 2, me: true });
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("POST prefers the session uid over the body uid", async () => {
+    const { signIn } = await import("@/test/routeHarness");
+    seed();
+    await signIn({ uid: UIDS[0], name: "P0" });
+    const { body } = await readJson(await post({ date: DATE, uid: UIDS[1] }));
+    expect(body.you).toMatchObject({ name: "P0", me: true });
+  });
+
+  it("POST without a session rejects a missing or Google-namespace uid", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    expect((await readJson(await post({ date: DATE }))).status).toBe(400);
+    expect((await readJson(await post({ date: DATE, uid: authedUid("123") }))).status).toBe(400);
+  });
+
+  it("POST rejects a bad date and shares the per-IP board bucket", async () => {
+    expect((await readJson(await post({ date: "nope", uid: UIDS[0] }))).status).toBe(400);
+    exhaustRateLimit("rl:sgboard:7.7.7.7", 60);
+    expect((await readJson(await post({ date: DATE, uid: UIDS[0] }, "7.7.7.7"))).status).toBe(429);
   });
 });

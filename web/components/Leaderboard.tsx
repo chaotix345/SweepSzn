@@ -57,8 +57,12 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
       // submit (so quitting, going offline, or a stale-date 400 doesn't inflate the streak/history).
       if (!readOnly) setStreak(getStreak());
       try {
-        const uid = user?.uid ?? id;
-        const r = await fetch(`/api/daily/leaderboard?date=${encodeURIComponent(date)}&uid=${encodeURIComponent(uid)}`, { signal: ctl.signal });
+        // POST: the anon uid rides the body, never a URL (DESIGN.md §12); signed in, the server keys
+        // "you" off the session instead
+        const r = await fetch("/api/daily/leaderboard", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ date, uid: id }), signal: ctl.signal,
+        });
         if (r.status === 503) { setEnabled(false); return; }
         if (r.ok) { const v = await r.json(); setView(v); setSubmitted(!!v?.you); }
       } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline — leave board hidden */ }

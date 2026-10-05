@@ -1,31 +1,45 @@
 import { NextResponse } from "next/server";
-import { bpKeyOk } from "@/lib/blueprint";
+import { bpKeyOk, type BlueprintKey } from "@/lib/blueprint";
 import { isBpBoardEnabled, getBpLeaderboard } from "@/lib/blueprintBoard";
 import { rateLimit, ipOf } from "@/lib/redis";
-import { BOARD_CACHE } from "@/lib/boardCache";
+import { BOARD_CACHE, PRIVATE_NO_STORE } from "@/lib/boardCache";
+import { getSession } from "@/lib/authServer";
+import { isAnonUid } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-// Read the day's blueprint board: ?date=YYYY-M-D&bp=<blueprint|all>&uid=<optional>.
-// Separate GET bucket from the submit POST so board polling can't starve submits.
+// Read the day's blueprint board: GET ?date=YYYY-M-D&bp=<blueprint|all> (public),
+// POST {date, bp, uid} (personalized). Separate bucket from the submit POST so board polling can't
+// starve submits.
 
 const DATE_RE = /^\d{4}-\d{1,2}-\d{1,2}$/;
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
+const limited = async (req: Request) => !(await rateLimit(`rl:bpboard:${ipOf(req)}`, 60, 60));
+const boardKey = (bp: unknown): BlueprintKey | "all" | null => (bp == null || bp === "all" ? "all" : bpKeyOk(bp) ? bp : null);
 
+// Public, un-personalized read (CDN-cached). Any uid query param is IGNORED — the bearer anon uid must
+// never ride a URL (DESIGN.md §12); personalized reads POST it (mirrors daily/leaderboard).
 export async function GET(req: Request) {
   if (!isBpBoardEnabled()) return NextResponse.json({ error: "leaderboard not configured" }, { status: 503 });
-  if (!(await rateLimit(`rl:bpboard:${ipOf(req)}`, 60, 60))) {
-    return NextResponse.json({ error: "too many requests" }, { status: 429 });
-  }
+  if (await limited(req)) return NextResponse.json({ error: "too many requests" }, { status: 429 });
   const url = new URL(req.url);
   const date = url.searchParams.get("date") ?? "";
-  const bpParam = url.searchParams.get("bp") ?? "all";
-  const uidParam = url.searchParams.get("uid");
   if (!DATE_RE.test(date)) return NextResponse.json({ error: "bad date" }, { status: 400 });
-  const bp = bpParam === "all" ? "all" : bpKeyOk(bpParam) ? bpParam : null;
+  const bp = boardKey(url.searchParams.get("bp"));
   if (!bp) return NextResponse.json({ error: "bad blueprint" }, { status: 400 });
-  // a present-but-malformed uid is a 400, not a silent anonymous read (FH board route parity)
-  if (uidParam != null && !UID_RE.test(uidParam)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
-  const view = await getBpLeaderboard(date, bp, uidParam ?? undefined);
+  const view = await getBpLeaderboard(date, bp);
   return NextResponse.json(view, { headers: BOARD_CACHE });
+}
+
+// Personalized read ("you" + `me`): uid in the POST body, never cached; a session wins over the body uid.
+export async function POST(req: Request) {
+  if (!isBpBoardEnabled()) return NextResponse.json({ error: "leaderboard not configured" }, { status: 503 });
+  if (await limited(req)) return NextResponse.json({ error: "too many requests" }, { status: 429 });
+  const body = (await req.json().catch(() => ({}))) ?? {};
+  if (typeof body.date !== "string" || !DATE_RE.test(body.date)) return NextResponse.json({ error: "bad date" }, { status: 400 });
+  const bp = boardKey(body.bp);
+  if (!bp) return NextResponse.json({ error: "bad blueprint" }, { status: 400 });
+  const uid = (await getSession())?.uid ?? (isAnonUid(body.uid) ? body.uid : null);
+  if (!uid) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+  const view = await getBpLeaderboard(body.date, bp, uid);
+  return NextResponse.json(view, { headers: PRIVATE_NO_STORE });
 }

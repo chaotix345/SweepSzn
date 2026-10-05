@@ -39,7 +39,11 @@ export default function BpLeaderboard({ date, trace, blueprint, usedHints = fals
       const id = user?.uid ?? getUid(); // signed in: highlight + "already posted" key off the account
       setUid(id); setNameState(getName());
       try {
-        const r = await fetch(`/api/blueprint/leaderboard?date=${encodeURIComponent(date)}&bp=${tab}&uid=${encodeURIComponent(id)}`, { signal: ctl.signal });
+        // POST: the anon uid rides the body, never a URL (DESIGN.md §12); signed in, the session wins
+        const r = await fetch("/api/blueprint/leaderboard", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ date, bp: tab, uid: getUid() }), signal: ctl.signal,
+        });
         if (r.status === 503) { setEnabled(false); return; }
         if (r.ok) {
           const v = await r.json();

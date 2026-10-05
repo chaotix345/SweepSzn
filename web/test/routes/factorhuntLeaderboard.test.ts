@@ -15,11 +15,13 @@ vi.mock("next/server", async (orig) => (await import("@/test/routeHarness")).nex
 
 enableRedisEnv();
 authEnv();
-const { GET } = await import("@/app/api/factorhunt/leaderboard/route");
+const { GET, POST } = await import("@/app/api/factorhunt/leaderboard/route");
 
 const DATE = "2026-6-10";
 
 const get = (qs: string, ip = "9.9.9.9") => GET(req(`/api/factorhunt/leaderboard?${qs}`, { ip }));
+// the personalized read: uid in the POST body, never the URL
+const post = (body: unknown, ip = "9.9.9.9") => POST(req("/api/factorhunt/leaderboard", { body, ip }));
 
 beforeEach(() => { freshFake(); });
 
@@ -39,7 +41,7 @@ describe("GET /api/factorhunt/leaderboard — guard rails", () => {
   });
 
   it("rejects an invalid uid with 400", async () => {
-    const { status } = await readJson(await get(`date=${DATE}&uid=bad uid!`));
+    const { status } = await readJson(await post({ date: DATE, uid: "bad uid!" }));
     expect(status).toBe(400);
   });
 
@@ -69,7 +71,7 @@ describe("GET /api/factorhunt/leaderboard — response shape", () => {
     ctx.redis!.zsets.set(keyZ, new Map([["userabc123", 57750 + 103]]));
     ctx.redis!.hashes.set(keyH, new Map([["userabc123", JSON.stringify(row)]]));
 
-    const { status, body } = await readJson(await get(`date=${DATE}&uid=userabc123`));
+    const { status, body } = await readJson(await post({ date: DATE, uid: "userabc123" }));
     expect(status).toBe(200);
     expect(body.total).toBe(1);
     expect(Array.isArray(body.top)).toBe(true);
@@ -102,7 +104,7 @@ describe("GET /api/factorhunt/leaderboard — response shape", () => {
     const r101 = { uid: uid101, name: "Outlier", wins: 5, losses: 77, net: -8, lineup: "a,b,c,d,e", predicted: null, correct: false, score: 5 };
     ctx.redis!.hashes.get(keyH)!.set(uid101, JSON.stringify(r101));
 
-    const { status, body } = await readJson(await get(`date=${DATE}&uid=targetuidxx01`));
+    const { status, body } = await readJson(await post({ date: DATE, uid: "targetuidxx01" }));
     expect(status).toBe(200);
     expect(body.total).toBe(101);
     // top should have 100 entries
@@ -116,13 +118,13 @@ describe("GET /api/factorhunt/leaderboard — response shape", () => {
   });
 
   it("omits you when the uid is not on the board", async () => {
-    const { status, body } = await readJson(await get(`date=${DATE}&uid=abcdefgh12`));
+    const { status, body } = await readJson(await post({ date: DATE, uid: "abcdefgh12" }));
     expect(status).toBe(200);
     expect(body.you).toBeUndefined();
   });
 
   it("accepts a uid with uppercase letters (case-insensitive UID_RE)", async () => {
-    const { status } = await readJson(await get(`date=${DATE}&uid=ABCDEFGH`));
+    const { status } = await readJson(await post({ date: DATE, uid: "ABCDEFGH" }));
     expect(status).toBe(200);
   });
 });
@@ -130,7 +132,7 @@ describe("GET /api/factorhunt/leaderboard — response shape", () => {
 // H2: no board response may carry a uid (bearer token — DESIGN.md §12); the caller's row is `me`.
 describe("factorhunt leaderboard — no uids on the wire", () => {
   const UIDS = ["fh-alice-1234", "fh-bob-12345", "fh-carol-1234"];
-  const mine = (uid: string) => get(`date=${DATE}&uid=${uid}`);
+  const mine = (uid: string) => post({ date: DATE, uid });
 
   it("strips every uid and marks only the caller's row with me: true (top + you)", async () => {
     const keyZ = `lb:fh:${DATE}`;
@@ -146,5 +148,56 @@ describe("factorhunt leaderboard — no uids on the wire", () => {
     const top = body.top as Array<{ name: string; me?: boolean }>;
     expect(top.filter((r) => r.me).map((r) => r.name)).toEqual(["P1"]);
     expect(body.you).toMatchObject({ name: "P1", rank: 2, me: true });
+  });
+});
+
+// M2: the anon uid must never ride a URL (DESIGN.md §12). Personalized reads POST it in the body;
+// GET is the public, CDN-cached read and ignores any uid query param.
+describe("factorhunt leaderboard — personalized reads are POST-only", () => {
+  const UIDS = ["fh-alice-1234", "fh-bob-12345"];
+  function seed() {
+    ctx.redis!.zsets.set(`lb:fh:${DATE}`, new Map(UIDS.map((u, i) => [u, 70000 - i * 1000] as [string, number])));
+    ctx.redis!.hashes.set(`lb:fh:${DATE}:meta`, new Map(UIDS.map((u, i) => [u, JSON.stringify({
+      uid: u, name: `P${i}`, wins: 70 - i, losses: 12 + i, net: 1, lineup: "a,b,c,d,e", predicted: null, correct: false, score: 70 - i,
+    })] as [string, string])));
+  }
+
+  it("GET ignores a uid query param (no you, no me) and stays CDN-cacheable", async () => {
+    seed();
+    const res = await get(`date=${DATE}&uid=${UIDS[1]}`);
+    const { status, body } = await readJson(res);
+    expect(status).toBe(200);
+    expect(body.you).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain("\"me\"");
+    expect(res.headers.get("cache-control")).toMatch(/s-maxage/);
+  });
+
+  it("POST returns you + me for the body uid and is never cached", async () => {
+    seed();
+    const res = await post({ date: DATE, uid: UIDS[1] });
+    const { status, body } = await readJson(res);
+    expect(status).toBe(200);
+    expect(body.you).toMatchObject({ name: "P1", rank: 2, me: true });
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("POST prefers the session uid over the body uid", async () => {
+    const { signIn } = await import("@/test/routeHarness");
+    seed();
+    await signIn({ uid: UIDS[0], name: "P0" });
+    const { body } = await readJson(await post({ date: DATE, uid: UIDS[1] }));
+    expect(body.you).toMatchObject({ name: "P0", me: true });
+  });
+
+  it("POST without a session rejects a missing or Google-namespace uid", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    expect((await readJson(await post({ date: DATE }))).status).toBe(400);
+    expect((await readJson(await post({ date: DATE, uid: authedUid("123") }))).status).toBe(400);
+  });
+
+  it("POST rejects a bad date and shares the per-IP board bucket", async () => {
+    expect((await readJson(await post({ date: "nope", uid: UIDS[0] }))).status).toBe(400);
+    exhaustRateLimit("rl:fhboard:7.7.7.7", 60);
+    expect((await readJson(await post({ date: DATE, uid: UIDS[0] }, "7.7.7.7"))).status).toBe(429);
   });
 });
