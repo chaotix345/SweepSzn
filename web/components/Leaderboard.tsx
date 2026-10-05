@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
 import type { DraftStep, LeaderboardView, LeaderboardRow, AggBoardView, AggLeaderboardRow } from "@/lib/types";
@@ -25,8 +25,19 @@ const hhmmss = (ms: number) => {
 // game that straddled midnight so we can warn before the submit 400s with a cryptic "stale date".
 const serverDate = dayUTC;
 
-export default function Leaderboard({ date, trace, usedHints = false, readOnly = false, onView }: { date: string; trace: DraftStep[]; usedHints?: boolean; readOnly?: boolean; onView?: (v: LeaderboardView | null) => void }) {
+// Hydration-safe "mounted" flag (the Game/ResultCard useSyncExternalStore pattern): false on the server
+// and during hydration, true after — so the time-dependent countdown can't mismatch the server HTML.
+const subscribeNoop = () => () => {};
+const getMounted = () => true;
+const getServerMounted = () => false;
+
+export default function Leaderboard({ date: dateProp, trace, usedHints = false, readOnly = false, onView }: { date?: string; trace: DraftStep[]; usedHints?: boolean; readOnly?: boolean; onView?: (v: LeaderboardView | null) => void }) {
   const { user, signOut, promptSignIn, signInNonce } = useSession();
+  // No date = today's board, resolved on the client at mount (lets /leaderboards prerender statically
+  // instead of rendering per request just to pass the date down; the date is never in the markup).
+  const [today] = useState(dayUTC);
+  const date = dateProp ?? today;
+  const mounted = useSyncExternalStore(subscribeNoop, getMounted, getServerMounted);
   const [tab, setTab] = useState<Tab>("daily");
   const [view, setView] = useState<LeaderboardView | null>(null);
 
@@ -167,7 +178,7 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
         <div className="text-sm font-bold text-zinc-200">🏆 Leaderboard</div>
         <div className="flex items-center gap-3 text-xs text-zinc-500">
           {displayStreak > 0 && <span className="rounded bg-orange-500/15 px-2 py-0.5 font-semibold text-orange-300">🔥 {displayStreak}-day streak</span>}
-          {tab === "daily" && <span>next in <span className="tabular-nums text-zinc-400">{hhmmss(countdown)}</span></span>}
+          {tab === "daily" && <span>next in <span className="tabular-nums text-zinc-400">{mounted ? hhmmss(countdown) : "--:--:--"}</span></span>}
         </div>
       </div>
 
