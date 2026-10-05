@@ -1,9 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { enableRedisEnv, freshFake, ctx, authEnv, req, readJson, exhaustRateLimit } from "@/test/routeHarness";
+import { enableRedisEnv, freshFake, ctx, authEnv, req, readJson, exhaustRateLimit, flushAfter } from "@/test/routeHarness";
+import type { JWTVerifyGetKey } from "jose";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
 vi.mock("next/server", async (orig) => (await import("@/test/routeHarness")).nextServerMockModule(await orig()));
+// Google's remote JWKS is swapped for a local test key set (filled in below) so the happy path can
+// run hermetically; every other jose export (session/nonce JWTs) stays real.
+const google = vi.hoisted(() => ({ jwks: null as null | JWTVerifyGetKey }));
+vi.mock("jose", async (orig) => ({
+  ...(await orig<typeof import("jose")>()),
+  createRemoteJWKSet: () => (...a: Parameters<JWTVerifyGetKey>) => google.jwks!(...a),
+}));
 
 // google/route.ts imports redis at module eval — enableRedisEnv() must run before dynamic import.
 enableRedisEnv();
@@ -11,7 +19,29 @@ authEnv();
 
 const { POST } = await import("@/app/api/auth/google/route");
 
-import { NONCE_COOKIE, signNonce } from "@/lib/auth";
+import { NONCE_COOKIE, SESSION_COOKIE, signNonce, verifySession, authedUid } from "@/lib/auth";
+import { generateKeyPair, exportJWK, createLocalJWKSet, SignJWT } from "jose";
+
+const googleKey = await generateKeyPair("RS256");
+google.jwks = createLocalJWKSet({ keys: [{ ...(await exportJWK(googleKey.publicKey)), kid: "test", alg: "RS256" }] });
+
+// A full successful sign-in: fresh nonce cookie + a Google-signed id_token carrying it.
+async function signInWith(claims: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+  authEnv();
+  const nonce = `nonce-${Math.random().toString(36).slice(2)}`;
+  ctx.cookies.set(NONCE_COOKIE, await signNonce(nonce));
+  const credential = await new SignJWT({ nonce, ...claims })
+    .setProtectedHeader({ alg: "RS256", kid: "test" })
+    .setIssuer("https://accounts.google.com")
+    .setAudience(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!)
+    .setSubject("123")
+    .setIssuedAt()
+    .setExpirationTime("5m")
+    .sign(googleKey.privateKey);
+  const res = await readJson(await post({ credential, ...extra }));
+  const tok = ctx.cookies.get(SESSION_COOKIE);
+  return { ...res, session: tok ? await verifySession(tok) : null };
+}
 
 const goodHeaders = { "content-type": "application/json", "x-requested-with": "fetch" };
 
@@ -147,5 +177,62 @@ describe("POST /api/auth/google", () => {
       expect(status).toBe(429);
       expect(body).toMatchObject({ error: "too many requests" });
     });
+  });
+});
+
+describe("POST /api/auth/google — happy path (local test JWKS)", () => {
+  it("signs in and binds a genuine anonymous uid as the session's anon", async () => {
+    const { status, session } = await signInWith({ name: "Charlie" }, { anonUid: "3b241101-e2bb-4255-8caf-4136c566a962" });
+    expect(status).toBe(200);
+    expect(session?.uid).toBe(authedUid("123"));
+    expect(session?.anon).toBe("3b241101-e2bb-4255-8caf-4136c566a962");
+  });
+
+  // M1: the anon binding drives claim cleanup (removeEntry(date, session.anon)) and push migration —
+  // a g-namespace uid must never be bound, or sign-in could delete/steal another account's rows.
+  it("never binds a Google-namespace uid as the session's anon", async () => {
+    const { status, session } = await signInWith({ name: "Charlie" }, { anonUid: authedUid("x") });
+    expect(status).toBe(200);
+    expect(session?.anon).toBeUndefined();
+  });
+});
+
+// L11: the Google display name is user-controlled too — it must go through the same cleanName()
+// trust boundary as every typed name (no bidi overrides / zero-width chars on boards or OG cards).
+describe("POST /api/auth/google — display name sanitization", () => {
+  it("strips bidi-override characters from the Google name", async () => {
+    const { status, body, session } = await signInWith({ name: "a‮b" });
+    expect(status).toBe(200);
+    expect(session?.name).toBe("ab");
+    expect((body.user as { name: string }).name).toBe("ab");
+  });
+
+  it("falls back to Player when the Google name is empty after cleaning", async () => {
+    const { session } = await signInWith({ name: "​‮" });
+    expect(session?.name).toBe("Player");
+  });
+});
+
+// M14: the account handle set via /api/profile/name is canonical — a re-sign-in (new device, expired
+// session) must neither overwrite it with the Google name nor mint a session that shows the Google name.
+describe("POST /api/auth/google — custom handle survives sign-in", () => {
+  it("keeps the stored profile name and mints the session with it", async () => {
+    const uid = authedUid("123");
+    ctx.redis!.hashes.set(`profile:${uid}`, new Map([["name", "Custom"], ["picture", "old"], ["createdAt", "1"]]));
+    const { status, body, session } = await signInWith({ name: "Google", picture: "https://x/new.png" });
+    await flushAfter();
+    expect(status).toBe(200);
+    expect((body.user as { name: string }).name).toBe("Custom");
+    expect(session?.name).toBe("Custom");
+    const h = ctx.redis!.hashes.get(`profile:${uid}`)!;
+    expect(h.get("name")).toBe("Custom");
+    expect(h.get("picture")).toBe("https://x/new.png");
+  });
+
+  it("seeds a first-time account's profile with the (cleaned) Google name", async () => {
+    const { session } = await signInWith({ name: "Charlie" });
+    await flushAfter();
+    expect(session?.name).toBe("Charlie");
+    expect(ctx.redis!.hashes.get(`profile:${authedUid("123")}`)?.get("name")).toBe("Charlie");
   });
 });

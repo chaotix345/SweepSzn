@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { ButtonLink } from "@/components/ui/Button";
 import Leaderboard from "@/components/Leaderboard";
 import Link from "next/link";
-import { dayUTC } from "@/lib/day";
 import { marketingMetadata } from "@/lib/marketingMeta";
 
 export const metadata: Metadata = {
@@ -10,11 +9,9 @@ export const metadata: Metadata = {
   alternates: { canonical: "/leaderboards" },
 };
 
-// The board date is request-time UTC (the Daily resets at UTC midnight), so render per request.
-export const dynamic = "force-dynamic";
-
+// Static: <Leaderboard> resolves today's (UTC) board date on the client, so nothing here is
+// request-time — no per-request render just to pass the date down.
 export default function Leaderboards() {
-  const date = dayUTC();
   return (
     <div className="mx-auto max-w-2xl px-5 py-12 sm:py-16">
       <p className="text-xs font-bold uppercase tracking-widest text-orange-400">Leaderboards</p>
@@ -23,7 +20,7 @@ export default function Leaderboards() {
         In Daily mode everyone gets the same spins, so the board is a pure test of judgment. Weekly sums your best
         daily wins; All-time is your career total. Play today&apos;s Daily to post a score.
       </p>
-      <Leaderboard date={date} trace={[]} readOnly />
+      <Leaderboard trace={[]} readOnly />
 
       {/* Factor Hunt / Blueprint / Surgeon run their own separate daily boards — surface them here so
           they're discoverable; each board lives on that mode's result screen. */}

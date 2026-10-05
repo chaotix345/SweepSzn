@@ -594,3 +594,15 @@ describe("POST /api/challenge/submit — isGameSeed allowlist", () => {
     }
   });
 });
+
+// H3: a cookie-less caller can't submit (or resolve as creator) under a signed-in player's g-uid.
+describe("POST /api/challenge/submit — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less submit claiming a signed-in uid and writes nothing", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    const { status, body } = await readJson(await post({ id: VALID_ID, uid: victim, trace: LEGIT_TRACE }));
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/bad uid/i);
+    expect(ctx.redis!.strings.has(`chal:${VALID_ID}:info`)).toBe(false);
+  });
+});

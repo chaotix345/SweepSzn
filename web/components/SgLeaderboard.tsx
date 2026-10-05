@@ -14,16 +14,18 @@ export default function SgLeaderboard({ date, preloaded }: { date: string; prelo
   const { user } = useSessionContext();
   const [view, setView] = useState<SurgeonBoardView | null>(preloaded ?? null);
   const [enabled, setEnabled] = useState(true);
-  const [uid, setUid] = useState("");
 
   useEffect(() => {
     const ctl = new AbortController();
     (async () => {
-      const id = user?.uid ?? getUid(); // signed in: "you" highlight keys off the account
-      setUid(id);
       if (preloaded) return; // submit response already carried the fresh board
       try {
-        const r = await fetch(`/api/surgeon/leaderboard?date=${encodeURIComponent(date)}&uid=${encodeURIComponent(id)}`, { signal: ctl.signal });
+        // POST: the anon uid rides the body, never a URL (DESIGN.md §12); signed in, the server keys
+        // "you" off the session instead
+        const r = await fetch("/api/surgeon/leaderboard", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ date, uid: getUid() }), signal: ctl.signal,
+        });
         if (r.status === 503) { setEnabled(false); return; }
         if (r.ok) setView(await r.json());
       } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline — board hidden */ }
@@ -38,7 +40,7 @@ export default function SgLeaderboard({ date, preloaded }: { date: string; prelo
         <div className="text-xs text-zinc-500">ranked by win delta</div>
       </div>
       {enabled ? (
-        view && view.top.length ? <Board view={view} uid={uid} /> :
+        view && view.top.length ? <Board view={view} /> :
         <div className="mt-3 text-xs text-zinc-500">Be the first to post a fix today.</div>
       ) : (
         <div className="mt-2 text-xs text-zinc-600">Board opens soon — your delta still counts for bragging rights.</div>
@@ -47,16 +49,17 @@ export default function SgLeaderboard({ date, preloaded }: { date: string; prelo
   );
 }
 
-function Board({ view, uid }: { view: SurgeonBoardView; uid: string }) {
+// Rows carry no uid (server-stripped); the caller's own row arrives marked `me`.
+function Board({ view }: { view: SurgeonBoardView }) {
   const rows = view.top;
-  const youOutside = view.you && !rows.some((r) => r.uid === uid);
+  const youOutside = view.you && !rows.some((r) => r.me);
   return (
     <div className="mt-3">
       <div className="mb-1 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-zinc-500">
         <span>Today&apos;s top {Math.min(rows.length, 100)}</span><span>{view.total} operated</span>
       </div>
       <div className="max-h-[min(18rem,55dvh)] space-y-1 overflow-y-auto">
-        {rows.map((r) => <Row key={r.uid} r={r} me={r.uid === uid} />)}
+        {rows.map((r) => <Row key={r.rank} r={r} me={r.me} />)}
         {youOutside && view.you && <Row r={view.you} me />}
       </div>
     </div>

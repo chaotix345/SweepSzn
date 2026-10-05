@@ -25,6 +25,14 @@ export function authedUid(sub: string): string {
   return "g" + sha256hex("google:" + sub).slice(0, 31);
 }
 
+// The one gate for a client-asserted ANONYMOUS uid (every no-session fallback + the sign-in anon
+// binding). authedUid's "g" + 31 hex also passes the shape regex, so without the namespace check a
+// cookie-less request could act AS a signed-in player. Real anon uids (lib/streak.ts: randomUUID,
+// id-…, anon-…) never take that shape. Case-insensitive: some stores lowercase the uid into a key.
+export function isAnonUid(u: unknown): u is string {
+  return typeof u === "string" && /^[a-z0-9-]{8,64}$/i.test(u) && !/^g[0-9a-f]{31}$/i.test(u);
+}
+
 export async function signSession(user: SessionUser): Promise<string> {
   return new SignJWT({ name: user.name, picture: user.picture, anon: user.anon })
     .setProtectedHeader({ alg: "HS256" })

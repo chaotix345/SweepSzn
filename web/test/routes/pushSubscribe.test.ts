@@ -177,3 +177,14 @@ describe("POST /api/push/subscribe", () => {
     expect(body.ok).toBe(true);
   });
 });
+
+// H3: a cookie-less caller can't attach a device to a signed-in player's push fan-out.
+describe("POST /api/push/subscribe — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less subscribe for a signed-in uid and stores nothing", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    const { status } = await readJson(await post({ uid: victim, subscription: validSub }));
+    expect(status).toBe(400);
+    expect(ctx.redis!.hashes.has(`push:${victim}`)).toBe(false);
+  });
+});

@@ -17,11 +17,13 @@ vi.mock("next/server", async (orig) => (await import("@/test/routeHarness")).nex
 enableRedisEnv();
 authEnv();
 
-const { GET } = await import("@/app/api/blueprint/leaderboard/route");
+const { GET, POST } = await import("@/app/api/blueprint/leaderboard/route");
 
 const DATE = "2026-6-10";
 
 const get = (qs: string, ip = "9.9.9.9") => GET(req(`/api/blueprint/leaderboard?${qs}`, { ip }));
+// the personalized read: uid in the POST body, never the URL
+const post = (body: unknown, ip = "9.9.9.9") => POST(req("/api/blueprint/leaderboard", { body, ip }));
 
 // Helper: seed a bp board directly without going through the submit route.
 function seedBpBoard(
@@ -75,13 +77,13 @@ describe("GET /api/blueprint/leaderboard — guard rails", () => {
   });
 
   it("returns 400 for a malformed uid", async () => {
-    const { status, body } = await readJson(await get(`date=${DATE}&bp=balanced&uid=bad uid!`));
+    const { status, body } = await readJson(await post({ date: DATE, bp: "balanced", uid: "bad uid!" }));
     expect(status).toBe(400);
     expect(body.error).toMatch(/bad uid/i);
   });
 
   it("returns 400 for a uid that is too long", async () => {
-    const { status, body } = await readJson(await get(`date=${DATE}&bp=all&uid=${"a".repeat(65)}`));
+    const { status, body } = await readJson(await post({ date: DATE, bp: "all", uid: "a".repeat(65) }));
     expect(status).toBe(400);
     expect(body.error).toMatch(/bad uid/i);
   });
@@ -93,7 +95,7 @@ describe("GET /api/blueprint/leaderboard — guard rails", () => {
   });
 
   it("accepts a uid with uppercase letters (case-insensitive UID_RE)", async () => {
-    const { status } = await readJson(await get(`date=${DATE}&bp=balanced&uid=ABCDEFGH`));
+    const { status } = await readJson(await post({ date: DATE, bp: "balanced", uid: "ABCDEFGH" }));
     expect(status).toBe(200);
   });
 
@@ -137,13 +139,14 @@ describe("GET /api/blueprint/leaderboard — rows with ranks", () => {
     const { status, body } = await readJson(await get(`date=${DATE}&bp=balanced`));
     expect(status).toBe(200);
     expect(body.total).toBe(3);
-    const top = body.top as Array<{ uid: string; rank: number }>;
+    const top = body.top as Array<{ name: string; rank: number; uid?: string }>;
     expect(top).toHaveLength(3);
-    expect(top[0].uid).toBe("uid-alice-12345678");
+    expect(top.every((r) => r.uid === undefined)).toBe(true); // rows never carry a uid (H2)
+    expect(top[0].name).toBe("Alice");
     expect(top[0].rank).toBe(1);
-    expect(top[1].uid).toBe("uid-bob-123456789");
+    expect(top[1].name).toBe("Bob");
     expect(top[1].rank).toBe(2);
-    expect(top[2].uid).toBe("uid-carol-12345678");
+    expect(top[2].name).toBe("Carol");
     expect(top[2].rank).toBe(3);
   });
 
@@ -156,10 +159,10 @@ describe("GET /api/blueprint/leaderboard — rows with ranks", () => {
     const { status, body } = await readJson(await get(`date=${DATE}&bp=all`));
     expect(status).toBe(200);
     expect(body.total).toBe(2);
-    const top = body.top as Array<{ uid: string; rank: number }>;
-    expect(top[0].uid).toBe("uid-xray-123456789");
+    const top = body.top as Array<{ name: string; rank: number }>;
+    expect(top[0].name).toBe("Xray");
     expect(top[0].rank).toBe(1);
-    expect(top[1].uid).toBe("uid-yankee-12345678");
+    expect(top[1].name).toBe("Yankee");
     expect(top[1].rank).toBe(2);
   });
 
@@ -182,16 +185,18 @@ describe("GET /api/blueprint/leaderboard — you lookup", () => {
       { uid: "uid-other-123456789", name: "Other",  wins: 50, net: 3 },
     ]);
 
-    const { status, body } = await readJson(await get(`date=${DATE}&bp=discipline&uid=uid-target-12345678`));
+    const { status, body } = await readJson(await post({ date: DATE, bp: "discipline", uid: "uid-target-12345678" }));
     expect(status).toBe(200);
     const you = body.you as Record<string, unknown> | undefined;
     expect(you).toBeDefined();
-    expect(you!.uid).toBe("uid-target-12345678");
+    expect(you!.uid).toBeUndefined();
+    expect(you!.name).toBe("Target");
+    expect(you!.me).toBe(true);
     expect(you!.rank).toBe(1);
   });
 
   it("returns you=undefined when the uid is not on the board", async () => {
-    const { status, body } = await readJson(await get(`date=${DATE}&bp=balanced&uid=notpresent01`));
+    const { status, body } = await readJson(await post({ date: DATE, bp: "balanced", uid: "notpresent01" }));
     expect(status).toBe(200);
     expect(body.you).toBeUndefined();
   });
@@ -213,13 +218,15 @@ describe("GET /api/blueprint/leaderboard — you lookup", () => {
     entries.push({ uid: last, wins: 5, net: -5, name: "Last" });
     seedBpBoard(DATE, "spacing", entries);
 
-    const { status, body } = await readJson(await get(`date=${DATE}&bp=spacing&uid=${last}`));
+    const { status, body } = await readJson(await post({ date: DATE, bp: "spacing", uid: last }));
     expect(status).toBe(200);
     expect(body.total).toBe(101);
     expect((body.top as unknown[]).length).toBe(100);
     const you = body.you as Record<string, unknown> | undefined;
     expect(you).toBeDefined();
-    expect(you!.uid).toBe(last);
+    expect(you!.uid).toBeUndefined();
+    expect(you!.name).toBe("Last");
+    expect(you!.me).toBe(true);
     expect(you!.rank).toBe(101);
   });
 });
@@ -243,8 +250,8 @@ describe("GET /api/blueprint/leaderboard — different dates are independent", (
     const { body: body9  } = await readJson(await get("date=2026-6-9&bp=balanced"));
     const { body: body10 } = await readJson(await get("date=2026-6-10&bp=balanced"));
 
-    expect((body9.top  as Array<{ uid: string }>)[0].uid).toBe("uid-yesterday-1234");
-    expect((body10.top as Array<{ uid: string }>)[0].uid).toBe("uid-today-12345678");
+    expect((body9.top  as Array<{ name: string }>)[0].name).toBe("Yesterday");
+    expect((body10.top as Array<{ name: string }>)[0].name).toBe("Today");
   });
 });
 
@@ -253,4 +260,88 @@ describe("GET /api/blueprint/leaderboard — disabled board", () => {
   it.todo(
     "returns 503 when isBpBoardEnabled() is false (Redis env absent at module import time) — cannot be exercised in this file without a full vi.resetModules() flow because the redis singleton is already bound at module eval",
   );
+});
+
+// H2: no board response may carry a uid (bearer token — DESIGN.md §12); the caller's row is `me`.
+describe("blueprint leaderboard — no uids on the wire", () => {
+  const ROWS = [
+    { uid: "bp-alice-1234", name: "Alice", wins: 70, net: 12 },
+    { uid: "bp-bob-12345", name: "Bob", wins: 60, net: 8 },
+    { uid: "bp-carol-1234", name: "Carol", wins: 50, net: 4 },
+  ];
+  const mine = (uid: string) => post({ date: DATE, bp: "all", uid });
+
+  it("strips every uid and marks only the caller's row with me: true (top + you)", async () => {
+    seedBpBoard(DATE, "all", ROWS);
+    const { status, body } = await readJson(await mine("bp-bob-12345"));
+    expect(status).toBe(200);
+    const wire = JSON.stringify(body);
+    for (const r of ROWS) expect(wire).not.toContain(r.uid);
+    const top = body.top as Array<{ name: string; me?: boolean }>;
+    expect(top.filter((r) => r.me).map((r) => r.name)).toEqual(["Bob"]);
+    expect(body.you).toMatchObject({ name: "Bob", rank: 2, me: true });
+  });
+});
+
+// M2: the anon uid must never ride a URL (DESIGN.md §12). Personalized reads POST it in the body;
+// GET is the public, CDN-cached read and ignores any uid query param.
+describe("blueprint leaderboard — personalized reads are POST-only", () => {
+  const ROWS = [
+    { uid: "bp-alice-1234", name: "Alice", wins: 70, net: 12 },
+    { uid: "bp-bob-12345", name: "Bob", wins: 60, net: 8 },
+  ];
+
+  it("GET ignores a uid query param (no you, no me) and stays CDN-cacheable", async () => {
+    seedBpBoard(DATE, "all", ROWS);
+    const res = await get(`date=${DATE}&bp=all&uid=bp-bob-12345`);
+    const { status, body } = await readJson(res);
+    expect(status).toBe(200);
+    expect(body.you).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain("\"me\"");
+    expect(res.headers.get("cache-control")).toMatch(/s-maxage/);
+  });
+
+  it("GET with a malformed uid query param is not an error", async () => {
+    const { status } = await readJson(await get(`date=${DATE}&bp=all&uid=bad%20uid!`));
+    expect(status).toBe(200);
+  });
+
+  it("POST returns you + me for the body uid and is never cached", async () => {
+    seedBpBoard(DATE, "all", ROWS);
+    const res = await post({ date: DATE, bp: "all", uid: "bp-bob-12345" });
+    const { status, body } = await readJson(res);
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ bp: "all" });
+    expect(body.you).toMatchObject({ name: "Bob", rank: 2, me: true });
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+  });
+
+  it("POST defaults bp to 'all' and rejects an unknown blueprint", async () => {
+    seedBpBoard(DATE, "all", ROWS);
+    const { body } = await readJson(await post({ date: DATE, uid: "bp-bob-12345" }));
+    expect(body).toMatchObject({ bp: "all" });
+    const bad = await readJson(await post({ date: DATE, bp: "unknown", uid: "bp-bob-12345" }));
+    expect(bad.status).toBe(400);
+    expect(bad.body.error).toMatch(/bad blueprint/i);
+  });
+
+  it("POST prefers the session uid over the body uid", async () => {
+    const { signIn } = await import("@/test/routeHarness");
+    seedBpBoard(DATE, "all", ROWS);
+    await signIn({ uid: "bp-alice-1234", name: "Alice" });
+    const { body } = await readJson(await post({ date: DATE, bp: "all", uid: "bp-bob-12345" }));
+    expect(body.you).toMatchObject({ name: "Alice", me: true });
+  });
+
+  it("POST without a session rejects a missing or Google-namespace uid", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    expect((await readJson(await post({ date: DATE, bp: "all" }))).status).toBe(400);
+    expect((await readJson(await post({ date: DATE, bp: "all", uid: authedUid("123") }))).status).toBe(400);
+  });
+
+  it("POST rejects a bad date and shares the per-IP board bucket", async () => {
+    expect((await readJson(await post({ date: "nope", bp: "all", uid: "bp-bob-12345" }))).status).toBe(400);
+    exhaustRateLimit("rl:bpboard:7.7.7.7", 60);
+    expect((await readJson(await post({ date: DATE, bp: "all", uid: "bp-bob-12345" }, "7.7.7.7"))).status).toBe(429);
+  });
 });

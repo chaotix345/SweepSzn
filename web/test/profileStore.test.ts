@@ -144,13 +144,23 @@ describe("profileStore — redis-backed", () => {
     expect(list[0].encoded).toBe("b"); // newest fresh entry at the head
   });
 
-  it("upsertProfileOnSignIn updates name on each sign-in but stamps createdAt only once", async () => {
+  it("upsertProfileOnSignIn seeds the name once, refreshes picture, stamps createdAt once", async () => {
     const uid = "u3";
-    await store.upsertProfileOnSignIn(uid, "First", "pic1", 1000);
-    await store.upsertProfileOnSignIn(uid, "Second", "pic2", 2000);
+    expect(await store.upsertProfileOnSignIn(uid, "First", "pic1", 1000)).toBe("First");
+    expect(await store.upsertProfileOnSignIn(uid, "Second", "pic2", 2000)).toBe("First");
     const h = ctx.redis!.hashes.get(`profile:${uid}`)!;
-    expect(h.get("name")).toBe("Second");
+    expect(h.get("name")).toBe("First");
+    expect(h.get("picture")).toBe("pic2");
     expect(Number(h.get("createdAt"))).toBe(1000);
+  });
+
+  // M14: a custom /api/profile/name handle must survive the next sign-in (new device / expiry)
+  it("upsertProfileOnSignIn never reverts a custom handle to the Google name", async () => {
+    const uid = "u4";
+    await store.upsertProfileOnSignIn(uid, "Google", "pic", 1000);
+    await store.setProfileName(uid, "Custom");
+    expect(await store.upsertProfileOnSignIn(uid, "Google", "pic", 2000)).toBe("Custom");
+    expect(await store.getProfileName(uid)).toBe("Custom");
   });
 });
 

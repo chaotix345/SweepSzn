@@ -405,3 +405,28 @@ describe("POST /api/factorhunt/submit — disabled board", () => {
     "returns 503 when isFhBoardEnabled() is false (Redis env absent at module import time) — cannot be exercised in this file without a full vi.resetModules() flow because the redis singleton is already bound at module eval",
   );
 });
+
+// H3: a cookie-less caller can't post under a signed-in player's g-uid.
+describe("POST /api/factorhunt/submit — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less submit claiming a signed-in uid and writes nothing", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    const { status, body } = await readJson(await post(anonBody({ uid: victim })));
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/bad uid/i);
+    expect(ctx.redis!.zsets.get(`lb:fh:${DATE}`)?.has(victim) ?? false).toBe(false);
+  });
+});
+
+// H2: the submit response IS a board view — it must not carry anyone's uid (incl. the submitter's).
+describe("POST /api/factorhunt/submit — no uids on the wire", () => {
+  it("returns the fresh board with no uids and the submitter's row marked me", async () => {
+    await post(anonBody({ uid: "anon-first-1234", name: "First" }));
+    const { status, body } = await readJson(await post(anonBody({ uid: "anon-second-123", name: "Second" })));
+    expect(status).toBe(200);
+    const wire = JSON.stringify(body);
+    expect(wire).not.toContain("anon-first-1234");
+    expect(wire).not.toContain("anon-second-123");
+    expect(body.you).toMatchObject({ name: "Second", me: true });
+  });
+});

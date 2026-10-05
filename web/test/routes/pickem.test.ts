@@ -24,15 +24,15 @@ describe("GET /api/pickem", () => {
   });
 
   it("returns zero counts and a null vote for a fresh seed", async () => {
-    const { status, body } = await readJson(await get(`seed=${seed}&uid=abcdefgh`));
+    const { status, body } = await readJson(await get(`seed=${seed}`));
     expect(status).toBe(200);
     expect(body).toStrictEqual({ y: 0, n: 0, vote: null });
   });
 
-  it("reflects this uid's stored vote and live counts", async () => {
+  it("reflects this uid's stored vote and live counts (POST read: uid in the body, no vote)", async () => {
     await post({ seed, vote: "y", uid: "abcdefgh" });
     await post({ seed, vote: "n", uid: "ijklmnop" });
-    const { body } = await readJson(await get(`seed=${seed}&uid=abcdefgh`));
+    const { body } = await readJson(await post({ seed, uid: "abcdefgh" }));
     expect(body).toStrictEqual({ y: 1, n: 1, vote: "y" });
   });
 
@@ -94,5 +94,47 @@ describe("POST /api/pickem", () => {
     freshFake();
     exhaustRateLimit("rl:pickem:g:8.8.8.8", 60);
     expect((await readJson(await post({ seed, vote: "y", uid: "abcdefgh" }, "8.8.8.8"))).status).toBe(200);
+  });
+});
+
+// H3: a g-uid (signed-in namespace) is not an acceptable anonymous voter id — it falls back to the
+// hashed-IP voter like any other invalid uid, so it can't cast or read a signed-in player's vote.
+describe("POST /api/pickem — Google-namespace uid", () => {
+  it("never keys a vote on a signed-in uid", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    await post({ seed, vote: "y", uid: victim });
+    const keys = [...ctx.redis!.strings.keys()].filter((k) => k.includes(":voted:"));
+    expect(keys.some((k) => k.endsWith(`:u:${victim}`))).toBe(false);
+    expect(keys.every((k) => /:voted:ip:[0-9a-f]{16}$/.test(k))).toBe(true);
+  });
+});
+
+// M2: the anon uid must never ride a URL (DESIGN.md §12). The personalized crowd read is a POST with
+// no `vote` (uid in the body); GET ignores any uid query param and reads the hashed-IP voter.
+describe("/api/pickem — the anon uid never rides a URL", () => {
+  it("GET ignores a uid query param (the uid's vote is not read back)", async () => {
+    await post({ seed, vote: "y", uid: "abcdefgh" }, "1.1.1.1");
+    const { status, body } = await readJson(await get(`seed=${seed}&uid=abcdefgh`, "2.2.2.2"));
+    expect(status).toBe(200);
+    expect(body).toStrictEqual({ y: 1, n: 0, vote: null });
+  });
+
+  it("POST without a vote is the personalized read: never counts, never cached", async () => {
+    await post({ seed, vote: "n", uid: "abcdefgh" });
+    const res = await post({ seed, uid: "abcdefgh" });
+    const { status, body } = await readJson(res);
+    expect(status).toBe(200);
+    expect(body).toStrictEqual({ y: 0, n: 1, vote: "n" });
+    expect(res.headers.get("cache-control")).toBe("private, no-store");
+    const again = await readJson(await post({ seed, uid: "abcdefgh" }));
+    expect(again.body).toStrictEqual({ y: 0, n: 1, vote: "n" });
+  });
+
+  it("the POST read rejects a bad seed and uses the GET (g:) bucket, not the vote bucket", async () => {
+    expect((await readJson(await post({ seed: "nope", uid: "abcdefgh" }))).status).toBe(400);
+    exhaustRateLimit("rl:pickem:g:4.4.4.4", 60);
+    expect((await readJson(await post({ seed, uid: "abcdefgh" }, "4.4.4.4"))).status).toBe(429);
+    expect((await readJson(await post({ seed, vote: "y", uid: "abcdefgh" }, "4.4.4.4"))).status).toBe(200);
   });
 });

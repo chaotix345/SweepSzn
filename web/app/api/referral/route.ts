@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { getSession } from "@/lib/authServer";
 import { refCodeFor } from "@/lib/referralCode";
-import { UID_RE } from "@/lib/evServer";
+import { isAnonUid } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   let uid = session?.uid;
   if (!uid) {
     const body = (await req.json().catch(() => null)) as { uid?: unknown } | null;
-    if (body && typeof body.uid === "string" && UID_RE.test(body.uid)) uid = body.uid;
+    if (body && isAnonUid(body.uid)) uid = body.uid;
   }
   if (!uid) return NextResponse.json({ error: "invalid uid" }, { status: 400 });
 

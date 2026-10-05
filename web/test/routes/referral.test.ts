@@ -55,3 +55,14 @@ describe("POST /api/referral", () => {
     expect(res.status).toBe(429);
   });
 });
+
+// H3: a cookie-less caller can't mint/read a signed-in player's referral code + credits.
+describe("POST /api/referral — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less mint for a signed-in uid", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    ctx.redis!.strings.set(`ref:credits:${victim}`, "7");
+    const { status } = await readJson(await POST(req("/api/referral", { body: { uid: victim } })));
+    expect(status).toBe(400);
+  });
+});

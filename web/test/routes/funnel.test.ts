@@ -107,3 +107,22 @@ describe("GET /api/funnel", () => {
     expect((body.referralSplit as Record<string, number>).rabc123def45).toBe(5);
   });
 });
+
+// L9: a too-short AUTH_SECRET is "unconfigured" (isAuthEnabled() false — sign-in 503s), so a session
+// signed with it must not verify either: otherwise anyone who can guess/brute the weak secret mints
+// an admin cookie.
+describe("GET /api/funnel — auth unconfigured", () => {
+  it("404 for an admin-uid session signed with a too-short AUTH_SECRET", async () => {
+    const { signSession, SESSION_COOKIE } = await import("@/lib/auth");
+    const { authEnv } = await import("@/test/routeHarness");
+    authEnv();
+    process.env.AUTH_SECRET = "short";
+    try {
+      ctx.cookies.set(SESSION_COOKIE, await signSession({ uid: ADMIN, name: "Charlie" }));
+      const res = await GET(req("/api/funnel"));
+      expect(res.status).toBe(404);
+    } finally {
+      authEnv();
+    }
+  });
+});

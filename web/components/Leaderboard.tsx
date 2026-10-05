@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
 import type { DraftStep, LeaderboardView, LeaderboardRow, AggBoardView, AggLeaderboardRow } from "@/lib/types";
@@ -25,8 +25,19 @@ const hhmmss = (ms: number) => {
 // game that straddled midnight so we can warn before the submit 400s with a cryptic "stale date".
 const serverDate = dayUTC;
 
-export default function Leaderboard({ date, trace, usedHints = false, readOnly = false, onView }: { date: string; trace: DraftStep[]; usedHints?: boolean; readOnly?: boolean; onView?: (v: LeaderboardView | null) => void }) {
+// Hydration-safe "mounted" flag (the Game/ResultCard useSyncExternalStore pattern): false on the server
+// and during hydration, true after — so the time-dependent countdown can't mismatch the server HTML.
+const subscribeNoop = () => () => {};
+const getMounted = () => true;
+const getServerMounted = () => false;
+
+export default function Leaderboard({ date: dateProp, trace, usedHints = false, readOnly = false, onView }: { date?: string; trace: DraftStep[]; usedHints?: boolean; readOnly?: boolean; onView?: (v: LeaderboardView | null) => void }) {
   const { user, signOut, promptSignIn, signInNonce } = useSession();
+  // No date = today's board, resolved on the client at mount (lets /leaderboards prerender statically
+  // instead of rendering per request just to pass the date down; the date is never in the markup).
+  const [today] = useState(dayUTC);
+  const date = dateProp ?? today;
+  const mounted = useSyncExternalStore(subscribeNoop, getMounted, getServerMounted);
   const [tab, setTab] = useState<Tab>("daily");
   const [view, setView] = useState<LeaderboardView | null>(null);
 
@@ -45,7 +56,6 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
   const [countdown, setCountdown] = useState(() => msToNextUtcMidnight());
   const [reload, setReload] = useState(0);
 
-  const effectiveUid = user?.uid ?? anonUid; // who "you" is on the board
   const stale = !readOnly && date !== serverDate(); // this game's daily date rolled past UTC midnight
 
   useEffect(() => {
@@ -58,8 +68,12 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
       // submit (so quitting, going offline, or a stale-date 400 doesn't inflate the streak/history).
       if (!readOnly) setStreak(getStreak());
       try {
-        const uid = user?.uid ?? id;
-        const r = await fetch(`/api/daily/leaderboard?date=${encodeURIComponent(date)}&uid=${encodeURIComponent(uid)}`, { signal: ctl.signal });
+        // POST: the anon uid rides the body, never a URL (DESIGN.md §12); signed in, the server keys
+        // "you" off the session instead
+        const r = await fetch("/api/daily/leaderboard", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ date, uid: id }), signal: ctl.signal,
+        });
         if (r.status === 503) { setEnabled(false); return; }
         if (r.ok) { const v = await r.json(); setView(v); setSubmitted(!!v?.you); }
       } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline — leave board hidden */ }
@@ -164,7 +178,7 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
         <div className="text-sm font-bold text-zinc-200">🏆 Leaderboard</div>
         <div className="flex items-center gap-3 text-xs text-zinc-500">
           {displayStreak > 0 && <span className="rounded bg-orange-500/15 px-2 py-0.5 font-semibold text-orange-300">🔥 {displayStreak}-day streak</span>}
-          {tab === "daily" && <span>next in <span className="tabular-nums text-zinc-400">{hhmmss(countdown)}</span></span>}
+          {tab === "daily" && <span>next in <span className="tabular-nums text-zinc-400">{mounted ? hhmmss(countdown) : "--:--:--"}</span></span>}
         </div>
       </div>
 
@@ -219,9 +233,9 @@ export default function Leaderboard({ date, trace, usedHints = false, readOnly =
 
           {err && <div className="mt-2 text-xs text-red-400">{err}</div>}
 
-          {tab === "daily" && view && <Board view={view} uid={effectiveUid} />}
+          {tab === "daily" && view && <Board view={view} />}
           {tab !== "daily" && (user
-            ? <AggBoard view={agg[tab] ?? null} uid={effectiveUid} scope={tab} />
+            ? <AggBoard view={agg[tab] ?? null} scope={tab} />
             : <SignInGate scope={tab} onSignIn={promptSignIn} />)}
 
           {youCard && (
@@ -268,9 +282,10 @@ function EmptyBoard() {
   );
 }
 
-function Board({ view, uid }: { view: LeaderboardView; uid: string }) {
+// Rows carry no uid (server-stripped); the caller's own row arrives marked `me`.
+function Board({ view }: { view: LeaderboardView }) {
   const rows = view.top;
-  const youOutside = view.you && !rows.some((r) => r.uid === uid);
+  const youOutside = view.you && !rows.some((r) => r.me);
   if (!rows.length) return <EmptyBoard />;
   return (
     <div className="mt-3">
@@ -284,7 +299,7 @@ function Board({ view, uid }: { view: LeaderboardView; uid: string }) {
         <span className="w-12 shrink-0 text-right" title="Net rating — per-100 scoring margin; the tiebreak when wins are equal">Net</span>
       </div>
       <div className="max-h-[min(18rem,55dvh)] space-y-1 overflow-y-auto">
-        {rows.map((r) => <Row key={r.uid} r={r} me={r.uid === uid} />)}
+        {rows.map((r) => <Row key={r.rank} r={r} me={r.me} />)}
         {youOutside && view.you && <Row r={view.you} me />}
       </div>
     </div>
@@ -306,10 +321,10 @@ function Row({ r, me }: { r: LeaderboardRow; me?: boolean }) {
   );
 }
 
-function AggBoard({ view, uid, scope }: { view: AggBoardView | null; uid: string; scope: "week" | "alltime" }) {
+function AggBoard({ view, scope }: { view: AggBoardView | null; scope: "week" | "alltime" }) {
   if (!view) return <div className="mt-3 text-xs text-zinc-500">Loading…</div>;
   const rows = view.top;
-  const youOutside = view.you && !rows.some((r) => r.uid === uid);
+  const youOutside = view.you && !rows.some((r) => r.me);
   if (!rows.length) return <div className="mt-3 text-xs text-zinc-500">No one&apos;s on this board yet — sign in and play to start the climb.</div>;
   return (
     <div className="mt-3">
@@ -317,7 +332,7 @@ function AggBoard({ view, uid, scope }: { view: AggBoardView | null; uid: string
         <span>{scope === "week" ? "This week" : "All-time"} · top {Math.min(rows.length, 100)}</span><span>{view.total} players</span>
       </div>
       <div className="max-h-[min(18rem,55dvh)] space-y-1 overflow-y-auto">
-        {rows.map((r) => <AggRowView key={r.uid} r={r} me={r.uid === uid} />)}
+        {rows.map((r) => <AggRowView key={r.rank} r={r} me={r.me} />)}
         {youOutside && view.you && <AggRowView r={view.you} me />}
       </div>
     </div>

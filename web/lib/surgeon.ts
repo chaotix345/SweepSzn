@@ -164,5 +164,5 @@ export interface SurgeonRow {
   beforeWins: number; afterWins: number; net: number;
   card: string;        // /sg/ segment for the row's permalink
 }
-export interface SurgeonBoardRow extends SurgeonRow { rank: number }
+export interface SurgeonBoardRow extends Omit<SurgeonRow, "uid"> { rank: number; me?: true } // wire row: uid stripped, caller marked `me`
 export interface SurgeonBoardView { date: string; total: number; top: SurgeonBoardRow[]; you?: SurgeonBoardRow }
