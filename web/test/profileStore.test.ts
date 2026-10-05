@@ -85,6 +85,28 @@ describe("profileStore — syncResults concurrency + atomicity", () => {
     expect(await store.syncResults("u-atomic", [mk(3)], realIds)).toBe(1); // lock was released — no wait, no wedge
     expect(await encs("u-atomic")).toEqual(["e3", "e2", "e1"]);
   });
+
+  it("a holder that overran the lock TTL doesn't release the NEXT holder's lock", async () => {
+    const lock = "results:lock:u-stale";
+    const realLrange = ctx.redis!.lrange;
+    // mid-sync: our lock expires and another sync claims it
+    ctx.redis!.lrange = async (...a: Parameters<typeof realLrange>) => {
+      ctx.redis!.strings.set(lock, "next-holder");
+      return realLrange(...a);
+    };
+    try {
+      expect(await store.syncResults("u-stale", [mk(1)], realIds)).toBe(1);
+    } finally {
+      ctx.redis!.lrange = realLrange;
+    }
+    expect(ctx.redis!.strings.get(lock)).toBe("next-holder");
+  });
+
+  it("a lock that stays busy gives up after a bounded handful of SET NX trips", async () => {
+    ctx.redis!.strings.set("results:lock:u-busy", "other");
+    await expect(store.syncResults("u-busy", [mk(1)], realIds)).rejects.toBeInstanceOf(store.ResultsLockBusyError);
+    expect(ctx.redis!.calls.filter((c) => c.startsWith("set results:lock:u-busy")).length).toBeLessThanOrEqual(11);
+  }, 15_000);
 });
 
 describe("profileStore — redis-backed", () => {

@@ -89,3 +89,11 @@ for i = 1, #doomed do
 end
 return #doomed
 `;
+
+// Owner-checked lock release (profileStore's results:lock): DEL only while the lock still holds
+// this holder's token, so a holder that overran the TTL can't delete the NEXT holder's lock.
+// KEYS: 1=lock. ARGV: 1=token. Returns 1 when released, 0 when the lock is gone or someone else's.
+// (Pure string here for the same reason as the board scripts: the test fake keys eval() on it.)
+export const RELEASE_LOCK_LUA = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end
+`;

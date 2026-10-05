@@ -1,4 +1,4 @@
-import { KEEP_BEST_LUA, KEEP_BEST_ROW_LUA, TRIM_BOARD_LUA } from "@/lib/score";
+import { KEEP_BEST_LUA, KEEP_BEST_ROW_LUA, TRIM_BOARD_LUA, RELEASE_LOCK_LUA } from "@/lib/score";
 import { PICKEM_VOTE_LUA } from "@/lib/pickem";
 import { PUSH_SAVE_LUA } from "@/lib/notify";
 
@@ -174,6 +174,14 @@ export function createRedisFake() {
     return [claimed, stored, y, n];
   }
 
+  // RELEASE_LOCK_LUA (lib/score.ts): compare-and-delete — DEL only while the lock holds ARGV[1].
+  function releaseLock(keys: string[], args: (string | number)[]): number {
+    const [k] = keys;
+    if (strings.get(k) !== String(args[0])) return 0;
+    strings.delete(k); ttls.delete(k);
+    return 1;
+  }
+
   const fake = {
     strings, hashes, zsets, lists, sets, ttls, calls,
     get trips() { return trips; },
@@ -332,6 +340,7 @@ export function createRedisFake() {
       if (script === KEEP_BEST_ROW_LUA) return keepBestRow(keys, args);
       if (script === TRIM_BOARD_LUA) return trimBoard(keys, args);
       if (script === PUSH_SAVE_LUA) return pushSave(keys, args);
+      if (script === RELEASE_LOCK_LUA) return releaseLock(keys, args);
       throw new Error("redisFake.eval: unknown script — add its semantics here before using it in tests");
     },
 

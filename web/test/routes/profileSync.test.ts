@@ -124,4 +124,12 @@ describe("POST /api/profile/sync", () => {
     expect(inbox[0].type).toBe("badge_unlock");
     expect(inbox[0].type === "badge_unlock" && inbox[0].badge).toBe("sTier");
   });
+
+  it("answers 409 (not a 500) when another sync holds the results lock past the bounded wait", async () => {
+    await signIn({ uid: UID, name: "X" });
+    ctx.redis!.strings.set(`results:lock:${UID}`, "other-device");
+    const { status, body } = await readJson(await post({ results: [{ encoded: encodeLineup(FIVE), mode: "daily", wins: 50, losses: 32, grade: "B", ts: 100 }] }));
+    expect(status).toBe(409);
+    expect(typeof body.error).toBe("string");
+  }, 15_000);
 });

@@ -1,8 +1,10 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { redis } from "./redis";
 import { dayUTC } from "./day";
 import { decodeLineup } from "./share";
 import { decodeSurgeonCard } from "./surgeon";
+import { RELEASE_LOCK_LUA } from "./score";
 
 // Per-account persistence for signed-in players: the cross-device home for streak, result history,
 // and the editable display handle. Anonymous players keep using localStorage (lib/streak.ts,
@@ -19,6 +21,11 @@ const keyResults = (uid: string) => `results:${uid}`;
 // results:lock:{uid}  STRING  short-lived NX lock serializing syncResults' read-merge-rewrite per uid
 const keyResultsLock = (uid: string) => `results:lock:${uid}`;
 const RESULTS_LOCK_SEC = 5;
+const RESULTS_LOCK_TRIES = 10;
+// Thrown when another sync still holds the lock after the bounded wait — the route answers 409.
+export class ResultsLockBusyError extends Error {
+  constructor() { super("syncResults: lock busy"); }
+}
 // dex:{uid}  SET  every player-variant id ever fielded — UNBOUNDED (no 200-cap), so the Drafted Dex
 // never loses a player once seen, even past the results cap. Written alongside each result sync.
 const keyDex = (uid: string) => `dex:${uid}`;
@@ -177,10 +184,12 @@ export async function getResults(uid: string): Promise<ProfileResult[]> {
 export async function syncResults(uid: string, entries: ProfileResult[], realIds: (ids: string[]) => string[]): Promise<number> {
   if (!redis || !entries.length) return 0;
   const lock = keyResultsLock(uid);
-  // bounded wait, just past the lock TTL (a crashed holder's lock expires); real contention clears in ms
-  for (let i = 0; (await redis.set(lock, 1, { nx: true, ex: RESULTS_LOCK_SEC })) !== "OK"; i++) {
-    if (i >= RESULTS_LOCK_SEC * 12) throw new Error("syncResults: lock busy");
-    await new Promise((r) => setTimeout(r, 100));
+  const token = randomUUID();
+  // short bounded wait (~1.4s): real contention clears in ms. Past that, fail fast with a typed error
+  // rather than spinning dozens of Upstash trips toward the TTL — the client sync is best-effort.
+  for (let i = 0; (await redis.set(lock, token, { nx: true, ex: RESULTS_LOCK_SEC })) !== "OK"; i++) {
+    if (i >= RESULTS_LOCK_TRIES) throw new ResultsLockBusyError();
+    await new Promise((r) => setTimeout(r, 25 * (i + 1)));
   }
   try {
     const existing = (await redis.lrange<ProfileResult>(keyResults(uid), 0, -1)) ?? [];
@@ -203,7 +212,8 @@ export async function syncResults(uid: string, entries: ProfileResult[], realIds
     if (dexArr.length) await redis.sadd(keyDex(uid), dexArr[0], ...dexArr.slice(1));
     return fresh.length;
   } finally {
-    try { await redis.del(lock); } catch { /* expires on its own */ }
+    // owner-checked release: if we overran the TTL, the lock may now be another sync's
+    try { await redis.eval(RELEASE_LOCK_LUA, [lock], [token]); } catch { /* expires on its own */ }
   }
 }
 
