@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, type RefObject } from "react";
 import { SLOTS } from "@/lib/teams";
 import { getUid, getName, setName as persistName } from "@/lib/streak";
 import { writeLastResult, saveResult } from "@/lib/resultHistory";
+import { pushResult } from "@/lib/account";
 import { track } from "@vercel/analytics";
 import type { DraftCandidate, DraftStep, LineupResult, Player, Slot } from "@/lib/types";
 import type { SurgeonCandidate, SurgeonDiagnosis, SurgeonBoardView } from "@/lib/surgeon";
@@ -21,6 +22,7 @@ export function useSurgeon(
   traceRef: RefObject<DraftStep[]>,
   setLoading: (v: boolean) => void,
   setError: (e: string | null) => void,
+  signedIn: boolean,
 ) {
   // Surgeon: phase-2 replacement-pool step between "five locked" and the delta reveal.
   const [sgPool, setSgPool] = useState<SgPool | null>(null);            // dealt pool + diagnosis (dialog open)
@@ -98,14 +100,15 @@ export function useSurgeon(
       const full: SgResult = { view: d.view, delta: d.delta, card: d.card, diagnosis: d.diagnosis, before: d.before, beforePlayers: d.beforePlayers, after: d.after, afterPlayers: d.afterPlayers, outIdx };
       setSgResult(full); setSgPool(null);
       writeLastResult({ mode, seed, sg: full });
-      saveResult({ encoded: d.card, mode: "surgeon", wins: d.after.wins, losses: d.after.losses, grade: d.after.grade });
+      const saved = saveResult({ encoded: d.card, mode: "surgeon", wins: d.after.wins, losses: d.after.losses, grade: d.after.grade });
+      if (signedIn) void pushResult(saved); // signed in: mirror this game to the account history (cross-device)
       track("surgeon_submit", { delta: d.delta, rank: d.view?.you?.rank ?? 0 });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       if (ctrl.signal.aborted) return;
       setError("Network error — tap Confirm swap to retry.");
     } finally { if (!ctrl.signal.aborted) setSgBusy(false); }
-  }, [sgPool, sgInId, sgOutId, sgName, seed, mode, traceRef, sgBusy, setError]);
+  }, [sgPool, sgInId, sgOutId, sgName, seed, mode, traceRef, sgBusy, setError, signedIn]);
 
   const reset = useCallback(() => {
     sgAbortRef.current?.abort(); sgAbortRef.current = null;

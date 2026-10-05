@@ -134,7 +134,7 @@ export default function Game() {
   // the server grades whatever the submit declares, see /api/blueprint/submit).
   const { blueprint, setBlueprint, bpPick, setBpPick, bpRef, commitBlueprint, reset: resetBp } = useBlueprint();
   // Surgeon: phase-2 replacement-pool step between "five locked" and the delta reveal.
-  const { sgPool, sgInId, setSgInId, sgOutId, setSgOutId, sgResult, setSgResult, sgName, setSgName, sgBusy, sgRef, beginSurgeon, confirmSurgeon, dismissPool: dismissSgPool, reset: resetSg } = useSurgeon(seed, mode, traceRef, setLoading, setError);
+  const { sgPool, sgInId, setSgInId, sgOutId, setSgOutId, sgResult, setSgResult, sgName, setSgName, sgBusy, sgRef, beginSurgeon, confirmSurgeon, dismissPool: dismissSgPool, reset: resetSg } = useSurgeon(seed, mode, traceRef, setLoading, setError, !!user);
 
   // Spend a hint to reveal fit grades for the current pick. Charges on reveal (not on placement), so
   // there is no way to peek and then dodge the cost. No-op once the per-game budget is spent.
