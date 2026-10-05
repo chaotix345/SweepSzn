@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { X_HANDLE } from "@/lib/site";
+import { X_HANDLE, SITE_NAME } from "@/lib/site";
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { resolveSharedPickem } from "@/lib/sharedLineup";
@@ -33,7 +33,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description,
     robots: { index: false },
-    openGraph: { title, description, type: "website", url: `/pe/${card}` },
+    openGraph: { title, description, siteName: SITE_NAME, type: "website", url: `/pe/${card}` },
     twitter: { card: "summary_large_image", title, description, site: X_HANDLE, creator: X_HANDLE },
   };
 }

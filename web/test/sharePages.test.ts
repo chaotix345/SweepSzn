@@ -6,6 +6,7 @@ import { encodeSurgeonCard } from "@/lib/surgeon";
 import { encodeDexShare } from "@/lib/share";
 import { encodeRankCard } from "@/lib/rankShare";
 import { enableRedisEnv, freshFake, ctx } from "@/test/routeHarness";
+import { SITE_NAME } from "@/lib/site";
 
 // Share permalinks (/r, /pe, …) + their dynamic OG cards. Pages/OG handlers are plain async
 // functions; lib/og's element builders are spied so the OG tests can assert what gets rendered
@@ -112,4 +113,27 @@ describe("dynamic OG cards are CDN-cacheable", () => {
       expect(n).toBeLessThanOrEqual(300);
     }
   });
+});
+
+// A page-level openGraph REPLACES the root's (Next merges metadata shallowly per key), so each share
+// page must restate og:site_name or unfurls lose the "SweepSzn" attribution line.
+describe("share pages keep og:site_name", () => {
+  type GenMeta = (a: { params: Promise<Record<string, string>> }) => Promise<{ openGraph?: { siteName?: string } | null }>;
+  const pages: [string, () => Promise<{ generateMetadata: unknown }>, Record<string, string>][] = [
+    ["/r", () => import("@/app/r/[lineup]/page"), { lineup: encodeLineup(FIVE) }],
+    ["/pe", () => import("@/app/pe/[card]/page"), { card: encodePickemCard(encodeLineup(FIVE), VIEW) }],
+    ["/sg", () => import("@/app/sg/[card]/page"), { card: encodeSurgeonCard(FIVE.slice(0, 4).concat("shaquille_o_neal_lal_2000s_2001"), 4, FIVE[4]) }],
+    ["/rank", () => import("@/app/rank/[card]/page"), { card: encodeRankCard({ scope: "daily", rank: 3, total: 50, name: "Sam", wins: 60, losses: 22, net: 8.1 }) }],
+    ["/c", () => import("@/app/c/[id]/page"), { id: "abc12345" }],
+    ["/dex/s", () => import("@/app/dex/s/[card]/page"), { card: encodeDexShare(FIVE, 40, 3) }],
+    ["/compare", () => import("@/app/compare/[id1]/[id2]/page"), { id1: encodeLineup(FIVE), id2: encodeLineup(FIVE) }],
+  ];
+  for (const [name, load, p] of pages) {
+    it(`${name} sets openGraph.siteName`, async () => {
+      ctx.redis!.strings.set("chal:abc12345:info", JSON.stringify({ uid: "u-creator-1", name: "Alice", wins: 55, losses: 27, net: 7.5, grade: "B+", lineup: FIVE.join(","), seed: "h2h-abc12345" }));
+      const meta = await ((await load()).generateMetadata as GenMeta)(params(p));
+      expect(meta.openGraph, "page must render its share metadata").toBeTruthy();
+      expect(meta.openGraph!.siteName).toBe(SITE_NAME);
+    });
+  }
 });
