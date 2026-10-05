@@ -10,7 +10,7 @@ import { SLOTS } from "@/lib/teams";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
 import { buildChallengeNotification } from "@/lib/notify";
-import { enqueueNotif } from "@/lib/notifyStore";
+import { enqueueNotif, allowChallengePush } from "@/lib/notifyStore";
 import { sendPushToUid } from "@/lib/pushStore";
 import type { ChallengeMiniPlayer, ChallengeSubmitResponse } from "@/lib/types";
 import { engineDeps } from "@/lib/verifyDeps";
@@ -103,7 +103,11 @@ export async function POST(req: Request) {
       yourWins: out.creator.wins, yourLosses: out.creator.losses,
       ts: Date.now(),
     });
-    after(async () => { await enqueueNotif(creatorUid, notif); await sendPushToUid(creatorUid, notif); });
+    // push only for a FRESH inbox item (deduped per responder uid) and within the creator's hourly push
+    // cap — one trace replayed under fresh uids/names can't spam the creator's OS notifications
+    after(async () => {
+      if ((await enqueueNotif(creatorUid, notif, uid)) && (await allowChallengePush(creatorUid))) await sendPushToUid(creatorUid, notif);
+    });
   }
 
   const creatorIds = decodeLineup(out.creator.lineup);

@@ -79,9 +79,26 @@ export async function rateLimit(bucket: string, max: number, windowSec: number):
 // client, so a client can't forge it) over x-forwarded-for, whose leftmost entry a caller can
 // prepend. Fall back to the XFF leftmost, then "anon", so non-Vercel/local hosts still bucket sanely.
 export function ipOf(req: Request): string {
-  return (
+  const ip =
     req.headers.get("x-real-ip")?.trim() ||
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "anon"
-  );
+    "anon";
+  return ip.includes(":") ? v6Bucket(ip) : ip;
+}
+
+// An IPv6 client controls (at least) its whole /64, so a per-address bucket is rotatable for free —
+// bucket on the /64 instead. Expand `::` BEFORE truncating to the first 4 hextets. IPv4-mapped
+// addresses stay per-IPv4; anything unparseable passes through unchanged (same as before).
+function v6Bucket(ip: string): string {
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip);
+  if (mapped) return mapped[1];
+  const halves = ip.split("::");
+  if (halves.length > 2) return ip;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(":") : [];
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 2 ? fill < 1 : fill !== 0) return ip;
+  const groups = [...head, ...Array<string>(halves.length === 2 ? fill : 0).fill("0"), ...tail];
+  if (!groups.every((g) => /^[0-9a-f]{1,4}$/i.test(g))) return ip;
+  return `${groups.slice(0, 4).map((g) => parseInt(g, 16).toString(16)).join(":")}::/64`;
 }

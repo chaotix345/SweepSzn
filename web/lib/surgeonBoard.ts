@@ -39,9 +39,9 @@ export const SURGEON_DAILY_CAP = 10;
 export async function bumpSurgeonSubs(date: string, uid: string): Promise<number> {
   if (!redis) return 0;
   const k = `lb:surgeon:${date}:subs:${uid}`;
-  const n = await redis.incr(k);
-  await redis.expire(k, TTL);
-  return n;
+  // INCR + EXPIRE NX in one pipeline (mirrors rateLimit) — a failed 2nd trip can't orphan a no-TTL counter
+  const [n] = (await redis.pipeline().incr(k).expire(k, TTL, "nx").exec()) as [number, number];
+  return Number(n);
 }
 
 // One immutable swap lock per (uid, lineup) per day — the Factor Hunt prediction-lock pattern.

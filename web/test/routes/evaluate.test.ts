@@ -133,6 +133,21 @@ describe("POST /api/evaluate — core-pick logging (rarity)", () => {
     expect([...h!.values()][0]).toBe("2");
   });
 
+  it("caps distinct cores at CORE_PICKS_CAP: a tracked core still counts, a new one isn't stored, total always counts", async () => {
+    const { CORE_PICKS_CAP } = await import("@/lib/socialStore");
+    await post({ ids: FIVE_IDS });
+    await flushAfter();
+    const h = ctx.redis!.hashes.get("core_picks")!;
+    for (let i = 0; h.size < CORE_PICKS_CAP; i++) h.set(`seed_core_${i}`, "1");
+    await post({ ids: FIVE_IDS }); // already tracked → still counts at the cap
+    await post({ ids: [...FIVE_IDS.slice(0, 4), "wilt_chamberlain_sfw_1960s_1963"] }); // a NEW core past the cap
+    await flushAfter();
+    expect(h.size).toBe(CORE_PICKS_CAP);
+    expect(h.has("seed_core_0")).toBe(true);
+    expect([...h.values()].filter((v) => v === "2").length).toBe(1);
+    expect(Number(ctx.redis!.strings.get("core_picks:total"))).toBe(3);
+  });
+
   it("does not log a core on a 400 response", async () => {
     await post({ ids: [] });
     await flushAfter();

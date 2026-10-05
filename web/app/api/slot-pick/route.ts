@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { parseSlotPick, logSlotPick } from "@/lib/socialStore";
+import { getPersonName } from "@/lib/data";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,7 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   if (!(await rateLimit(`rl:slotpick:${ipOf(req)}`, 150, 60))) return new Response(null, { status: 204 });
   const parsed = parseSlotPick(await req.json().catch(() => null));
-  if (parsed) after(() => logSlotPick(redis, parsed));
+  // only a REAL person may mint a field — a junk id would otherwise render raw in /api/crowd
+  if (parsed && getPersonName(parsed.personId)) after(() => logSlotPick(redis, parsed));
   return new Response(null, { status: 204 });
 }

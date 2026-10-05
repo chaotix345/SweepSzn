@@ -15,6 +15,9 @@ import { decodeLineup } from "./share";
 const keyProfile = (uid: string) => `profile:${uid}`;
 const keyStreak = (uid: string) => `streak:${uid}`;
 const keyResults = (uid: string) => `results:${uid}`;
+// results:lock:{uid}  STRING  short-lived NX lock serializing syncResults' read-merge-rewrite per uid
+const keyResultsLock = (uid: string) => `results:lock:${uid}`;
+const RESULTS_LOCK_SEC = 5;
 // dex:{uid}  SET  every player-variant id ever fielded — UNBOUNDED (no 200-cap), so the Drafted Dex
 // never loses a player once seen, even past the results cap. Written alongside each result sync.
 const keyDex = (uid: string) => `dex:${uid}`;
@@ -151,27 +154,42 @@ export async function getResults(uid: string): Promise<ProfileResult[]> {
 // ts and capped. Returns how many fresh entries were actually added. Because a cross-device backfill can
 // carry games OLDER than ones already stored, we re-sort the whole list by ts (not just prepend) so the
 // cap can never evict a newer entry in favour of an older backfilled one.
-export async function syncResults(uid: string, entries: ProfileResult[]): Promise<number> {
+// Serialized per uid (results:lock NX): two devices syncing at once each read the same list, and the
+// later rewrite duplicated or dropped the other's entries. The DEL+LPUSH rewrite is one MULTI, so a
+// failure mid-rewrite can no longer wipe the stored history. `realIds` keeps only REAL player ids for the
+// dex (the sync route passes the lib/data lookup) — injected, not imported, so the auth/profile routes
+// that share this store don't pull public/data into their functions.
+export async function syncResults(uid: string, entries: ProfileResult[], realIds: (ids: string[]) => string[]): Promise<number> {
   if (!redis || !entries.length) return 0;
-  const existing = (await redis.lrange<ProfileResult>(keyResults(uid), 0, -1)) ?? [];
-  const seen = new Set(existing.map((e) => `${e.mode}:${e.encoded}`));
-  const fresh: ProfileResult[] = [];
-  for (const e of entries) {
-    const k = `${e.mode}:${e.encoded}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    fresh.push(e);
+  const lock = keyResultsLock(uid);
+  // bounded wait, just past the lock TTL (a crashed holder's lock expires); real contention clears in ms
+  for (let i = 0; (await redis.set(lock, 1, { nx: true, ex: RESULTS_LOCK_SEC })) !== "OK"; i++) {
+    if (i >= RESULTS_LOCK_SEC * 12) throw new Error("syncResults: lock busy");
+    await new Promise((r) => setTimeout(r, 100));
   }
-  if (!fresh.length) return 0;
-  const merged = [...existing, ...fresh].sort((a, b) => b.ts - a.ts).slice(0, RESULTS_CAP);
-  // Rebuild the list newest-first: lpush leaves its LAST arg at the head, so push the reverse.
-  await redis.del(keyResults(uid));
-  await redis.lpush(keyResults(uid), ...[...merged].reverse());
-  // Accumulate every fielded player into the unbounded dex set, so the collection survives past the
-  // results cap. SADD is idempotent, so re-syncing the same games never double-counts.
-  const dexArr = [...new Set(fresh.flatMap((e) => decodeLineup(e.encoded)))];
-  if (dexArr.length) await redis.sadd(keyDex(uid), dexArr[0], ...dexArr.slice(1));
-  return fresh.length;
+  try {
+    const existing = (await redis.lrange<ProfileResult>(keyResults(uid), 0, -1)) ?? [];
+    const seen = new Set(existing.map((e) => `${e.mode}:${e.encoded}`));
+    const fresh: ProfileResult[] = [];
+    for (const e of entries) {
+      const k = `${e.mode}:${e.encoded}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      fresh.push(e);
+    }
+    if (!fresh.length) return 0;
+    const merged = [...existing, ...fresh].sort((a, b) => b.ts - a.ts).slice(0, RESULTS_CAP);
+    // Rebuild the list newest-first: lpush leaves its LAST arg at the head, so push the reverse.
+    await redis.multi().del(keyResults(uid)).lpush(keyResults(uid), ...[...merged].reverse()).exec();
+    // Accumulate every fielded player into the unbounded dex set, so the collection survives past the
+    // results cap. SADD is idempotent, so re-syncing the same games never double-counts. Only REAL player
+    // ids — `encoded` is client-supplied, so a forged lineup must not inject arbitrary members.
+    const dexArr = [...new Set(realIds(fresh.flatMap((e) => decodeLineup(e.encoded))))];
+    if (dexArr.length) await redis.sadd(keyDex(uid), dexArr[0], ...dexArr.slice(1));
+    return fresh.length;
+  } finally {
+    try { await redis.del(lock); } catch { /* expires on its own */ }
+  }
 }
 
 // Every player-variant id the user has ever fielded (unbounded — survives the results cap).

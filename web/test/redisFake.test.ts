@@ -55,6 +55,31 @@ describe("eval: KEEP_BEST_LUA port", () => {
     expect(Number(await fake.zscore(az, "u2"))).toBe(60);
   });
 
+  it("with meta KEYS 4-6 it writes the daily/weekly/all-time rows only when the daily best improved", async () => {
+    const f = createRedisFake();
+    const agg = (uid: string, name: string) => JSON.stringify({ uid, name }).slice(0, -1) + ',"wins":';
+    const go = (wins: number, name: string) =>
+      f.eval(KEEP_BEST_LUA, ["d", "w", "a", "dh", "wh", "ah"], ["u", encScore(wins, 0), wins, 3600, 7200, JSON.stringify({ uid: "u", name, wins }), agg("u", name)]);
+    expect(await go(70, "B")).toEqual([1, 70, 70, 70]);
+    expect(await go(50, "A")).toEqual([0, 0, 0, 0]); // worse: no meta write
+    expect(JSON.parse(f.hashes.get("dh")!.get("u")!)).toEqual({ uid: "u", name: "B", wins: 70 });
+    expect(JSON.parse(f.hashes.get("wh")!.get("u")!)).toEqual({ uid: "u", name: "B", wins: 70 });
+    expect(JSON.parse(f.hashes.get("ah")!.get("u")!)).toEqual({ uid: "u", name: "B", wins: 70 });
+    expect(f.ttls.get("dh")).toBe(3600);
+    expect(f.ttls.get("wh")).toBe(7200);
+    expect(f.ttls.has("ah")).toBe(false); // all-time meta: persistent, never expired
+  });
+
+  it("eval PUSH_SAVE_LUA refuses a NEW field at the cap but re-stores an existing one", async () => {
+    const { PUSH_SAVE_LUA } = await import("@/lib/notify");
+    const f = createRedisFake();
+    expect(await f.eval(PUSH_SAVE_LUA, ["p"], ["a", "{}", 1, 60])).toBe(1);
+    expect(await f.eval(PUSH_SAVE_LUA, ["p"], ["b", "{}", 1, 60])).toBe(0);
+    expect(await f.eval(PUSH_SAVE_LUA, ["p"], ["a", '{"x":1}', 1, 60])).toBe(1);
+    expect(f.hashes.get("p")?.get("a")).toBe('{"x":1}');
+    expect(f.ttls.get("p")).toBe(60);
+  });
+
   it("all-time ranks by wins", async () => {
     await run("u3", 82, 10);
     const top = (await fake.zrange(az, 0, -1, { rev: true })) as string[];
@@ -191,6 +216,37 @@ describe("command surface semantics", () => {
     expect(await fake.exists("s", "nope")).toBe(1);
     expect(await fake.del("s", "nope")).toBe(1);
     expect(await fake.scard("s")).toBe(0);
+  });
+
+  it("pipeline exists returns a per-key 0/1 in order (streak-saver subscriber filter)", async () => {
+    const fake = createRedisFake();
+    await fake.hset("push:a", { f: 1 });
+    const before = fake.trips;
+    expect(await fake.pipeline().exists("push:a").exists("push:b").exec()).toEqual([1, 0]);
+    expect(fake.trips).toBe(before + 1);
+  });
+
+  it("multi() applies del+lpush as one unit in one trip, and a failed transaction applies nothing", async () => {
+    const fake = createRedisFake();
+    await fake.lpush("l", "a", "b");
+    const before = fake.trips;
+    expect(await fake.multi().del("l").lpush("l", "x", "y").exec()).toEqual([1, 2]);
+    expect(fake.trips).toBe(before + 1);
+    expect(await fake.lrange("l", 0, -1)).toEqual(["y", "x"]);
+    const realLpush = fake.lpush;
+    fake.lpush = async () => { throw new Error("boom"); };
+    await expect(fake.multi().del("l").lpush("l", "z").exec()).rejects.toThrow("boom");
+    fake.lpush = realLpush;
+    expect(await fake.lrange("l", 0, -1)).toEqual(["y", "x"]); // the DEL was rolled back too
+  });
+
+  it("pipeline hlen/hexists/scard read back in order in one trip (cap checks)", async () => {
+    const fake = createRedisFake();
+    await fake.hset("h", { a: 1, b: 2 });
+    await fake.sadd("s", "x");
+    const before = fake.trips;
+    expect(await fake.pipeline().hlen("h").hexists("h", "a").hexists("h", "z").scard("s").exec()).toEqual([2, 1, 0, 1]);
+    expect(fake.trips).toBe(before + 1);
   });
 
   it("a pipeline counts as ONE round trip regardless of op count (trips budget metric)", async () => {

@@ -3,6 +3,7 @@ import { getSession } from "@/lib/authServer";
 import { isRedisEnabled, rateLimit, ipOf } from "@/lib/redis";
 import { syncStreakDates, syncResults, getStreakCount, getStoredBadges, addStoredBadges, type ProfileResult } from "@/lib/profileStore";
 import { loadDexState } from "@/lib/dexState";
+import { getPlayersByIds } from "@/lib/data";
 import { enqueueNotif } from "@/lib/notifyStore";
 import { buildBadgeNotification } from "@/lib/notify";
 import { BADGES } from "@/lib/dex";
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
   const results = cleanResults(body.results);
 
   await syncStreakDates(session.uid, history);
-  const merged = await syncResults(session.uid, results);
+  const merged = await syncResults(session.uid, results, (ids) => getPlayersByIds(ids).map((p) => p.id));
   const streak = await getStreakCount(session.uid, Date.now());
 
   // Fire a notification when a Dex badge NEWLY unlocks (post-commit, descriptive — §12). Diffed against
