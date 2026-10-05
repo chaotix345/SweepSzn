@@ -102,6 +102,13 @@ export function getSwapOptions(team: string, decade: string, slot: Slot): DraftC
   return pool.map((p, i) => toCandidate(p, undefined, playerFeatures(p, coeff).usage, i));
 }
 
+// Every draftable card for one franchise across all its draftable decades (the union of its
+// TEAM|DECADE draft-index pools) — the /teams franchise pages' universe. Unsorted; callers order it.
+export function getFranchisePool(team: string): Player[] {
+  const { draftIndex, decadesByTeam } = load();
+  return (decadesByTeam.get(team) ?? []).flatMap((d) => draftIndex.get(`${team}|${d}`) ?? []);
+}
+
 // Top-K draftable players by peak_score — the candidate universe the projection ticker's "ceiling"
 // (best-possible completion) is chosen from. Public global pool only (never a seed's future spins),
 // so it leaks nothing. Prime draws from the all-time peak-variant pools; everything else from the

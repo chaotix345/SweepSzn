@@ -15,7 +15,7 @@ export const OG_ALT = "SweepSzn — build an all-time NBA starting five";
 
 
 // satori's default font is latin-only; strip diacritics so names like Dončić/Jokić don't tofu.
-const ascii = (s: string) => s.normalize("NFKD").replace(/[̀-ͯ]/g, "");
+export const ascii = (s: string) => s.normalize("NFKD").replace(/[̀-ͯ]/g, "");
 
 function Wordmark({ size = 40 }: { size?: number }) {
   return (
