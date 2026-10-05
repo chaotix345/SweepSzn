@@ -136,3 +136,15 @@ describe("GET /api/notifications — rate limit", () => {
     expect(status).toBe(429);
   });
 });
+
+// H3: a cookie-less caller can't read a signed-in player's inbox by naming their g-uid.
+describe("GET /api/notifications — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less read of a signed-in uid's inbox", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    await ctx.redis!.lpush(`notif:${victim}`, makeNotif(3000));
+    const { status, body } = await readJson(await get(`uid=${victim}`));
+    expect(status).toBe(400);
+    expect(body).toMatchObject({ error: "bad uid" });
+  });
+});

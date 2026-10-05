@@ -96,3 +96,16 @@ describe("POST /api/pickem", () => {
     expect((await readJson(await post({ seed, vote: "y", uid: "abcdefgh" }, "8.8.8.8"))).status).toBe(200);
   });
 });
+
+// H3: a g-uid (signed-in namespace) is not an acceptable anonymous voter id — it falls back to the
+// hashed-IP voter like any other invalid uid, so it can't cast or read a signed-in player's vote.
+describe("POST /api/pickem — Google-namespace uid", () => {
+  it("never keys a vote on a signed-in uid", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    await post({ seed, vote: "y", uid: victim });
+    const keys = [...ctx.redis!.strings.keys()].filter((k) => k.includes(":voted:"));
+    expect(keys.some((k) => k.endsWith(`:u:${victim}`))).toBe(false);
+    expect(keys.every((k) => /:voted:ip:[0-9a-f]{16}$/.test(k))).toBe(true);
+  });
+});

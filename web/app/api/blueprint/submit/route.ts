@@ -3,6 +3,7 @@ import { verifyTrace } from "@/lib/dailyVerify";
 import { bpKeyOk, bpCode, gradeBlueprint, encBpScore, type BpRow } from "@/lib/blueprint";
 import { isBpBoardEnabled, submitBpScore, removeBpEntry } from "@/lib/blueprintBoard";
 import { getSession } from "@/lib/authServer";
+import { isAnonUid } from "@/lib/auth";
 import { cleanName } from "@/lib/clean";
 import { encodeLineup } from "@/lib/share";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
@@ -19,7 +20,6 @@ export const runtime = "nodejs";
 // replay all five blueprints on one seed" — the modal commitment is gameplay psychology, not a
 // server invariant. The engine result is never modified; the multiplier lives in the board score.
 
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 
 const deps = engineDeps();
 
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     uid = session.uid;
     name = cleanName(body.name) || session.name || "Player";
   } else {
-    if (typeof body.uid !== "string" || !UID_RE.test(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+    if (!isAnonUid(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
     uid = body.uid;
     name = cleanName(body.name) || "Anonymous";
   }

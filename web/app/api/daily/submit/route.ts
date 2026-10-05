@@ -2,6 +2,7 @@ import { NextResponse, after } from "next/server";
 import { verifyDaily } from "@/lib/dailyVerify";
 import { isLeaderboardEnabled, submitScore, submitScoreAuthed, removeEntry } from "@/lib/leaderboard";
 import { getSession } from "@/lib/authServer";
+import { isAnonUid } from "@/lib/auth";
 import { recordStreakDate } from "@/lib/profileStore";
 import { encodeLineup } from "@/lib/share";
 import { cleanName } from "@/lib/clean";
@@ -12,7 +13,6 @@ import { engineDeps } from "@/lib/verifyDeps";
 
 export const runtime = "nodejs";
 
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 
 const deps = engineDeps();
 
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     uid = session.uid;
     name = cleanName(body.name) || session.name || "Player";
   } else {
-    if (typeof body.uid !== "string" || !UID_RE.test(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+    if (!isAnonUid(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
     uid = body.uid;
     name = cleanName(body.name) || "Anonymous";
   }

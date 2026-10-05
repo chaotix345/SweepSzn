@@ -6,6 +6,7 @@ import { compareResults, challengeSeed } from "@/lib/challenge";
 import { decodeLineup, encodeLineup } from "@/lib/share";
 import { cleanName } from "@/lib/clean";
 import { getSession } from "@/lib/authServer";
+import { isAnonUid } from "@/lib/auth";
 import { SLOTS } from "@/lib/teams";
 import { redis, rateLimit, ipOf } from "@/lib/redis";
 import { bump } from "@/lib/evServer";
@@ -17,7 +18,6 @@ import { engineDeps } from "@/lib/verifyDeps";
 
 export const runtime = "nodejs";
 
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 const ID_RE = /^[a-z0-9]{6,16}$/;
 // A legitimate game seed the first submitter may convert into a challenge (carrying the original
 // draft so a friend faces the SAME spins). Charset-bounded; the trace replay is the real gate.
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     uid = session.uid;
     name = cleanName(body.name) || session.name || "Player";
   } else {
-    if (typeof body.uid !== "string" || !UID_RE.test(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+    if (!isAnonUid(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
     uid = body.uid;
     name = cleanName(body.name) || "Anonymous";
   }

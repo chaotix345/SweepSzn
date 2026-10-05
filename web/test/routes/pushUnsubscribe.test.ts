@@ -127,3 +127,15 @@ describe("POST /api/push/unsubscribe", () => {
     expect(status).toBe(429);
   });
 });
+
+// H3: a cookie-less caller can't remove a signed-in player's push subscriptions.
+describe("POST /api/push/unsubscribe — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less unsubscribe for a signed-in uid and leaves their subs intact", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    ctx.redis!.hashes.set(`push:${victim}`, new Map([[hashField(ENDPOINT), JSON.stringify({ endpoint: ENDPOINT, keys: {} })]]));
+    const { status } = await readJson(await post({ uid: victim, endpoint: ENDPOINT }));
+    expect(status).toBe(400);
+    expect(ctx.redis!.hashes.get(`push:${victim}`)?.has(hashField(ENDPOINT))).toBe(true);
+  });
+});

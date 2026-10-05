@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { isRedisEnabled, rateLimit, ipOf } from "@/lib/redis";
 import { removeSubscription } from "@/lib/pushStore";
 import { getSession } from "@/lib/authServer";
+import { isAnonUid } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 
 // Drop one of the caller's push subscriptions (toggle-off / revoke). Guarded on redis (not VAPID) so a
 // user can always clean up even after push is disabled. Only ever touches the caller's own uid.
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   if (session) {
     uid = session.uid;
   } else {
-    if (typeof body?.uid !== "string" || !UID_RE.test(body.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+    if (!isAnonUid(body?.uid)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
     uid = body.uid;
   }
   const endpoint = body?.endpoint;

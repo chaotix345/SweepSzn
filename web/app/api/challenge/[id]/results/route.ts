@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { isChallengeEnabled, getChallengeOwnerView } from "@/lib/challengeStore";
 import { getSession } from "@/lib/authServer";
+import { isAnonUid } from "@/lib/auth";
 import { rateLimit, ipOf } from "@/lib/redis";
 
 export const runtime = "nodejs";
 
 const ID_RE = /^[a-z0-9]{6,16}$/;
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 
 // The creator's dashboard for a challenge they made: their five plus every responder's five + verdict.
 // Identity resolution mirrors the submit route — a signed-in session is authoritative (un-fakeable);
@@ -32,7 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const q: string = (body && typeof body === "object" && "uid" in body && typeof (body as Record<string, unknown>).uid === "string")
       ? (body as Record<string, unknown>).uid as string
       : "";
-    if (!UID_RE.test(q)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+    if (!isAnonUid(q)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
     uid = q;
   }
 

@@ -241,3 +241,17 @@ describe("POST /api/challenge/[id]/results — board with zero responders", () =
     expect((b.responders as unknown[]).length).toBe(0);
   });
 });
+
+// H3: a signed-in creator's dashboard can't be opened cookie-less by naming their g-uid.
+describe("POST /api/challenge/[id]/results — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less read claiming a signed-in creator's uid", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    seedChallenge();
+    const info = JSON.parse(ctx.redis!.strings.get(`chal:${VALID_ID}:info`)!);
+    ctx.redis!.strings.set(`chal:${VALID_ID}:info`, JSON.stringify({ ...info, uid: victim }));
+    const { status, body } = await readJson(await post(VALID_ID, victim));
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/bad uid/i);
+  });
+});

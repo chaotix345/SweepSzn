@@ -380,3 +380,16 @@ describe("POST /api/daily/submit — after() side effects", () => {
     expect(Number(ctx.redis!.hashes.get(`ev:submode:${day}`)?.get("daily"))).toBeGreaterThanOrEqual(1);
   });
 });
+
+// H3: authedUid's "g" + 31 hex also satisfies the anon uid regex — a cookie-less caller must not
+// be able to post AS a signed-in player by putting their account uid in the body.
+describe("POST /api/daily/submit — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less submit claiming a signed-in uid and writes nothing", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    const { status, body } = await readJson(await submit({ date: TODAY, trace: LEGIT_TRACE, uid: victim }));
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/bad uid/i);
+    expect(ctx.redis!.zsets.get(`lb:${TODAY}`)?.has(victim) ?? false).toBe(false);
+  });
+});

@@ -399,3 +399,15 @@ describe("POST /api/blueprint/submit — disabled board", () => {
     "returns 503 when isBpBoardEnabled() is false (Redis env absent at module import time) — cannot be exercised in this file without a full vi.resetModules() flow because the redis singleton is already bound at module eval",
   );
 });
+
+// H3: a cookie-less caller can't post under a signed-in player's g-uid.
+describe("POST /api/blueprint/submit — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less submit claiming a signed-in uid and writes nothing", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const victim = authedUid("123");
+    const { status, body } = await readJson(await submit(anonBody({ uid: victim })));
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/bad uid/i);
+    expect(ctx.redis!.zsets.get(`lb:bp:${TODAY}:all`)?.has(victim) ?? false).toBe(false);
+  });
+});

@@ -135,3 +135,13 @@ describe("POST /api/notifications/read — rate limit", () => {
     expect(status).toBe(429);
   });
 });
+
+// H3: a cookie-less caller can't move a signed-in player's read watermark.
+describe("POST /api/notifications/read — Google-namespace uid on the anon path", () => {
+  it("rejects a cookie-less mark-read for a signed-in uid", async () => {
+    const { authedUid } = await import("@/lib/auth");
+    const { status, body } = await readJson(await post({ uid: authedUid("123") }));
+    expect(status).toBe(400);
+    expect(body).toMatchObject({ error: "bad uid" });
+  });
+});

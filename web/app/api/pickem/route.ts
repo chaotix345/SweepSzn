@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { redis, rateLimit, ipOf, TTL } from "@/lib/redis";
 import { pickemSeedOk, parseVote, PICKEM_VOTE_LUA } from "@/lib/pickem";
+import { isAnonUid } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -9,14 +10,13 @@ export const runtime = "nodejs";
 // marker that makes the vote one-per-uid (IP-hash fallback when no uid). All keys carry the
 // shared ~31d TTL. Self-disabling: without Redis both verbs 503 and the client hides crowd UI.
 
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 const keyY = (s: string) => `pickems:${s}:y`;
 const keyN = (s: string) => `pickems:${s}:n`;
 const keyV = (s: string, voter: string) => `pickems:${s}:voted:${voter}`;
 
 // One vote per uid; an absent/invalid uid falls back to a hashed IP (never the raw IP).
 function voterId(uid: unknown, req: Request): string {
-  if (typeof uid === "string" && UID_RE.test(uid)) return `u:${uid.toLowerCase()}`;
+  if (isAnonUid(uid)) return `u:${uid.toLowerCase()}`;
   return `ip:${createHash("sha256").update(ipOf(req)).digest("hex").slice(0, 16)}`;
 }
 

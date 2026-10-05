@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { rateLimit, ipOf } from "@/lib/redis";
 import { isNotifyEnabled, getNotifs } from "@/lib/notifyStore";
 import { getSession } from "@/lib/authServer";
+import { isAnonUid } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
-const UID_RE = /^[a-z0-9-]{8,64}$/i;
 
 // Read the caller's notification inbox. Identity mirrors api/challenge/[id]/results: a valid session
 // is authoritative; otherwise the client's anonymous uid (which the caller must already possess — no
@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     uid = session.uid;
   } else {
     const q = new URL(req.url).searchParams.get("uid") ?? "";
-    if (!UID_RE.test(q)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
+    if (!isAnonUid(q)) return NextResponse.json({ error: "bad uid" }, { status: 400 });
     uid = q;
   }
   return NextResponse.json(await getNotifs(uid));
