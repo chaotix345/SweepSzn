@@ -30,6 +30,7 @@ const DATA_ROUTES = [
   "/api/player/**",
   "/api/result/**",
   "/api/crowd",
+  "/api/slot-pick", // validates beacon personIds against the real pool (lib/data getPersonName)
   "/api/dex",
   "/api/profile/sync",
   "/api/health",
