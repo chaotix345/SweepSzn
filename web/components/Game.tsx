@@ -64,6 +64,18 @@ function todaySeed() {
 }
 const rand = () => Math.floor(Math.random() * 1e9);
 
+// A new game (or leaving one for the picker) owns the URL — drop any restore params so a later
+// refresh won't resurrect an old screen.
+function stripRestoreParams() {
+  try {
+    const u = new URL(window.location.href);
+    if (u.searchParams.has("r") || u.searchParams.has("m") || u.searchParams.has("own") || u.searchParams.has("d") || u.searchParams.has("sg")) {
+      u.searchParams.delete("r"); u.searchParams.delete("m"); u.searchParams.delete("own"); u.searchParams.delete("d"); u.searchParams.delete("sg");
+      window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+    }
+  } catch { /* no history API */ }
+}
+
 // First-run levers tip (R6): hydration-safe "seen" read. Server snapshot is "seen" (true) so the
 // server renders nothing; the client reads the real flag and useSyncExternalStore reconciles without
 // a hydration mismatch (same pattern ResultCard uses for the Web Share capability check).
@@ -354,15 +366,14 @@ export default function Game() {
     hintsUsedRef.current = 0; setHintsUsed(0);
     resetPickem(); resetFh(); resetBp(); resetSg();
     setOwnerId(null);
-    // a new game owns the URL — drop any restore params so a later refresh won't resurrect an old screen
-    try {
-      const u = new URL(window.location.href);
-      if (u.searchParams.has("r") || u.searchParams.has("m") || u.searchParams.has("own") || u.searchParams.has("d") || u.searchParams.has("sg")) {
-        u.searchParams.delete("r"); u.searchParams.delete("m"); u.searchParams.delete("own"); u.searchParams.delete("d"); u.searchParams.delete("sg");
-        window.history.replaceState(null, "", u.pathname + u.search + u.hash);
-      }
-    } catch { /* no history API */ }
+    stripRestoreParams();
   }, [abandonInFlight, resetPickem, resetFh, resetBp, resetSg]);
+
+  // "← Modes": abandon the game like start() does (in-flight spin/simulate/FH/Surgeon work) and drop
+  // the restore params, or a refresh would resurrect the result the player just walked away from.
+  const goToModes = useCallback(() => {
+    abandonInFlight(); resetFh(); resetSg(); stripRestoreParams(); setMode(null);
+  }, [abandonInFlight, resetFh, resetSg]);
 
   // Bootstrap the view from the URL (hold-your-place restore on refresh). Priority: a joiner deep link
   // (?c=<id>) → respond mode; then a creator dashboard (?own=<id>); then a finished-result restore
@@ -608,7 +619,7 @@ export default function Game() {
   const bpView = mode === "blueprint" && blueprint && result ? gradeBlueprint(blueprint, result.result) : undefined;
   // Surgeon reveal: its own before/after layout + delta board, not the single-lineup ResultCard.
   if (mode === "surgeon" && sgResult) return (
-    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart>
+    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} onModeSelect={goToModes} showRestart>
       <SurgeonResult before={sgResult.before} after={sgResult.after} beforePlayers={sgResult.beforePlayers}
         afterPlayers={sgResult.afterPlayers} outIdx={sgResult.outIdx} diagnosis={sgResult.diagnosis}
         card={sgResult.card} onReset={() => start("surgeon")} />
@@ -618,7 +629,7 @@ export default function Game() {
     </Shell>
   );
   if (result) return (
-    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart>
+    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} onModeSelect={goToModes} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} modeKey={mode} usedHints={result.usedHints} onReset={() => start(mode)} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView}
         lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} />
       <InviteFriend />
@@ -650,7 +661,7 @@ export default function Game() {
     </Shell>
   );
   if (loading) return (
-    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart>
+    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} onModeSelect={goToModes} showRestart>
       <ResultSkeleton label={mode === "surgeon" ? "Diagnosing your lineup…" : mode === "factorhunt" ? "Building your question…" : "Running all 82 games…"} />
     </Shell>
   );
@@ -668,7 +679,7 @@ export default function Game() {
   const showUsageBar = discBar || !hideIQ;
 
   return (
-    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} onModeSelect={() => setMode(null)} showRestart={filled > 0 || !!current}>
+    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} onModeSelect={goToModes} showRestart={filled > 0 || !!current}>
       <div className="grid gap-5 lg:grid-cols-[1fr_minmax(300px,380px)]">
         {/* Desktop: the reels + controls fold into the LEFT column so the sticky court becomes a right
             rail spanning from the top (no dead space top-right). Mobile is single-column, so the DOM

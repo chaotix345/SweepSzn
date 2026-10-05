@@ -24,8 +24,13 @@ vi.mock("@/components/FhLeaderboard", () => ({ default: () => null }));
 vi.mock("@/components/GoogleOneTap", () => ({ default: () => null }));
 vi.mock("@/components/RankShareButton", () => ({ default: () => null }));
 vi.mock("@/components/game/PickemOverlay", () => ({ PickemOverlay: () => null }));
+vi.mock("@/components/ResultCard", () => ({ default: () => React.createElement("div", { "data-testid": "result-card" }) }));
+vi.mock("@/components/InviteFriend", () => ({ default: () => null }));
+vi.mock("@/components/SignInSaveNudge", () => ({ default: () => null }));
 
 import Game from "@/components/Game";
+import { encodeLineup } from "@/lib/share";
+import { writeLastResult, listResults } from "@/lib/resultHistory";
 
 // Spin fixture keyed off the seed: a Classic seed deals the BOS player, anything else (Daily) CHI —
 // so a stale Classic spin landing in a Daily game is visible by name.
@@ -39,12 +44,24 @@ const spinFor = (seed: string) => {
 
 type Deferred = { resolve: (body: unknown) => void };
 let crowd: Deferred[] = [];
+let evals: Deferred[] = [];
 let spinSeeds: string[] = [];
 
+const IDS = ["p0", "p1", "p2", "p3", "p4"];
+const makeEval = () => ({
+  result: { ortg: 110, drtg: 108, netRtg: 2, wins: 50, losses: 32, winPct: 0.61, grade: "B", label: "Playoff team", factors: [], players: [], notes: [] },
+  players: IDS.map((id) => ({ id, name: id, year: 1986, decade: "1980s", tier: "complete", team: "BOS", pos: "SF", eligible: ["SF"] })),
+});
+
 function makeFetchMock() {
-  crowd = []; spinSeeds = [];
+  crowd = []; evals = []; spinSeeds = [];
   return vi.fn(async (url: string, init?: RequestInit) => {
     const path = typeof url === "string" ? url.split("?")[0] : "";
+    if (path === "/api/evaluate") {
+      return new Promise<Response>((res) => {
+        evals.push({ resolve: (body) => res({ ok: true, json: async () => body } as Response) });
+      });
+    }
     if (path === "/api/spin") {
       const b = JSON.parse(String(init?.body));
       spinSeeds.push(b.seed);
@@ -62,6 +79,15 @@ function makeFetchMock() {
 const btn = (pred: (t: string) => boolean) => screen.getAllByRole("button").find((b) => pred(b.textContent ?? ""));
 const modeBtn = (name: RegExp) => screen.getAllByRole("button").find((b) => name.test(b.getAttribute("aria-label") ?? ""))!;
 const click = async (el: HTMLElement) => { await act(async () => { fireEvent.click(el); }); };
+async function draftFive(): Promise<void> {
+  for (const slot of ["PG", "SG", "SF", "PF", "C"]) {
+    await click(btn((t) => /^🎰 spin/i.test(t.trim()))!);
+    await act(async () => { vi.advanceTimersByTime(1200); });
+    await act(async () => {});
+    await click(screen.getAllByRole("button", { name: /^Select Player/ })[0]);
+    await click(screen.getAllByRole("button", { name: new RegExp(`^${slot} slot`) })[0]);
+  }
+}
 
 describe("Game — abandoning a game cancels its in-flight work (H4)", () => {
   beforeEach(() => {
@@ -119,5 +145,47 @@ describe("Game — abandoning a game cancels its in-flight work (H4)", () => {
     await act(async () => {});
     expect(document.querySelector("header span.capitalize")?.textContent).toBe("daily");
     expect(screen.queryByText(/of players took/i)).toBeNull();
+  });
+});
+
+describe("Game — ← Modes abandons the game and owns the URL (L20)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", makeFetchMock());
+    try { localStorage.clear(); } catch { /* */ }
+  });
+  afterEach(async () => {
+    await act(async () => {});
+    cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks();
+    window.history.replaceState({}, "", "/");
+  });
+
+  it("← Modes from a restored result strips ?r=&m= so a refresh shows the picker, not the old result", async () => {
+    const ev = makeEval();
+    writeLastResult({ mode: "classic", seed: "classic-7", result: { result: ev.result, players: ev.players, trace: [], usedHints: false } });
+    window.history.replaceState({}, "", `/play?r=${encodeLineup(IDS, false, false, null)}&m=classic`);
+    render(<Game />);
+    await act(async () => {});
+    expect(screen.queryByTestId("result-card")).toBeTruthy();
+    await click(btn((t) => t.includes("← Modes"))!);
+    const q = new URLSearchParams(window.location.search);
+    expect(["r", "m", "d", "sg", "own"].filter((k) => q.has(k))).toEqual([]);
+    cleanup();
+    render(<Game />); // the refresh
+    await act(async () => {});
+    expect(screen.queryByTestId("result-card")).toBeNull();
+    expect(screen.queryByText(/Pick your mode/i)).toBeTruthy();
+  });
+
+  it("← Modes while the season is simulating drops the late result (not saved, not restorable)", async () => {
+    render(<Game />);
+    await click(modeBtn(/^Play Classic mode/));
+    await draftFive();
+    expect(evals).toHaveLength(1);
+    await click(btn((t) => t.includes("← Modes"))!);
+    await act(async () => { evals[0].resolve(makeEval()); });
+    await act(async () => {});
+    expect(listResults()).toEqual([]);
+    expect(screen.queryByText(/Pick your mode/i)).toBeTruthy();
   });
 });
