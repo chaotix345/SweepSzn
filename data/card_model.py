@@ -23,7 +23,7 @@ POS = ["C", "PF", "SF", "SG"]
 DEF_FEATURES = ["dbpm", "dws48", "mpg", "posC", "posPF", "posSF", "posSG"]
 OFF_FEATURES = ["obpm", "mpg", "usg"]
 FIT_MIN_MINUTES = 1000
-FIRST_PBP_YEAR = 1997
+FIRST_PBP_YEAR = 1998  # first center season of a 3-year RAPM window
 
 
 @dataclass

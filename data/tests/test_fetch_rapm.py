@@ -20,3 +20,10 @@ def test_match_rate_ignores_pre_1997_seasons():
                {"name": "New Guy", "year": 2005, "g": 80, "mp": 36.0}]
     rapm = [{"name": "New Guy", "year": 2005, "o": 1.0, "d": 1.0}]
     assert match_rate(rapm, seasons) == 1.0
+
+
+def test_rows_from_windows_keys_3y_windows_to_center_season():
+    from fetch_rapm import rows_from_windows
+    w = [{"player_name": "Tim Duncan", "Latest_Year": 2001, "Year_Interval": "3Y", "Off_RAPM": 2.48, "Def_RAPM": 3.34, "Off_Poss": 30000},
+         {"player_name": "Tim Duncan", "Latest_Year": 2003, "Year_Interval": "5Y", "Off_RAPM": 9, "Def_RAPM": 9}]
+    assert rows_from_windows(w) == [{"name": "Tim Duncan", "year": 2000, "o": 2.48, "d": 3.34, "poss": 30000}]
