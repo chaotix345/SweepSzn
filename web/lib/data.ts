@@ -186,7 +186,7 @@ export function getDraftablePool(prime: boolean, topK = 250, asOf: string = isoD
   return out;
 }
 
-function toCandidate(p: Player, fit?: CandidateFit, usage?: number, rank?: number): DraftCandidate {
+export function toCandidate(p: Player, fit?: CandidateFit, usage?: number, rank?: number): DraftCandidate {
   return {
     id: p.id, person_id: p.person_id, name: p.name, year: p.year, decade: p.decade, team: p.team,
     pos: p.pos, eligible: (p.eligible && p.eligible.length ? p.eligible : [p.pos as Slot]),
@@ -207,6 +207,17 @@ function filler(i: number): Player {
 }
 const FILLERS: Player[] = [0, 1, 2, 3, 4].map(filler);
 
+// Each candidate's net-rating swing over a replacement filler, given the roster drafted so far: the
+// roster is padded to a full five with replacement fillers, and the candidate swaps one filler out.
+// Shared by computeFits (Classic hints) and the Duel Analyst bot (lib/duelBot.ts) so both read the
+// same replacement-padded marginal value.
+export function marginalNet(allDrafted: Player[], cands: Player[], c: Coefficients): Map<string, number> {
+  const drafted = allDrafted.slice(0, 4);
+  const slots = 5 - drafted.length;                          // open starting slots
+  const baseNet = quickScore([...drafted, ...FILLERS.slice(0, slots)], c).netRtg;
+  return new Map(cands.map((p) => [p.id, quickScore([...drafted, p, ...FILLERS.slice(0, slots - 1)], c).netRtg - baseNet]));
+}
+
 // "Reveal before confirm": for each candidate, their value OVER a replacement player given the
 // roster drafted so far (VORP-style net-rating swing), plus the specific need they fill. Roster-aware
 // — a rim protector scores higher precisely when the lineup lacks one. Tiers are relative to the spin.
@@ -222,14 +233,11 @@ function computeFits(allDrafted: Player[], cands: Player[], c: Coefficients): Ma
     perim: !feats.some((f) => f.perimCover >= 1),
     playmaking: !drafted.some((p) => (p.ast ?? 0) >= 6),
   };
-  const slots = 5 - drafted.length;                          // open starting slots
-  const base = [...drafted, ...FILLERS.slice(0, slots)];     // full 5 with replacement fillers
-  const baseNet = quickScore(base, c).netRtg;
+  const deltas = marginalNet(drafted, cands, c);
 
   const raw = cands.map((p) => {
     const f = playerFeatures(p, c);
-    // swap one replacement filler for this candidate, keep a full 5-man lineup
-    const delta = quickScore([...drafted, p, ...FILLERS.slice(0, slots - 1)], c).netRtg - baseNet;
+    const delta = deltas.get(p.id)!;
     const gap: string[] = [];
     if (need.rim && f.sizeCover >= 1) gap.push("Size");
     if (need.spacing && f.shoot >= 0.4) gap.push("Spacing");
@@ -335,6 +343,45 @@ export function spin(seed: string, round: number, opts: SpinOptions = {}, wantFi
   // a per-player round here could straddle the A+/A boundary the bar tells the player they hit
   const candidates = pool.map((p, i) => toCandidate(p, fits?.get(p.id), playerFeatures(p, coeff).usage, i));
   return { team, decade, candidates, era: decadeEraContext(decade) ?? undefined };
+}
+
+// --- Draft Duel: one shared Classic-style spin per round, both sides draft from it ---
+// The round's (team, decade) is drawn from (seed, round) alone, so the bot and the player see the same
+// spin whoever picks first; each side's pool drops everything already taken (by id and by person).
+// Guard: if a side has nobody eligible for any of its open slots, that side's pick is re-dealt from a
+// salted fallback spin — deterministic in (seed, round, taken, open), so the server replay matches.
+// Duel spins never carry fit grades (DESIGN.md §12).
+const eligibleSlots = (p: Player): Slot[] => (p.eligible && p.eligible.length ? p.eligible : [p.pos as Slot]);
+
+export function duelDeal(seed: string, round: number, taken: string[], open: Slot[], asOf?: string): { team: string; decade: string; pool: Player[]; fallback: boolean } {
+  const { byId } = load();
+  const day = resolveAsOf(seed, asOf);
+  const { draftIndex, draftKeys } = poolIndex(day);
+  const takenIds = new Set(taken);
+  const takenPeople = new Set(taken.map((id) => byId.get(id)?.person_id ?? id));
+  const available = (p: Player) => !takenIds.has(p.id) && !takenPeople.has(p.person_id ?? p.id);
+  const fits = (p: Player) => eligibleSlots(p).some((s) => open.includes(s));
+  const poolOf = (key: string) => (draftIndex.get(key) ?? []).filter(available).sort(compareSzn);
+
+  const base = selectSpin(seed, round, { asOf: day });
+  const basePool = poolOf(`${base.team}|${base.decade}`);
+  if (basePool.some(fits)) return { team: base.team, decade: base.decade, pool: basePool, fallback: false };
+  for (let k = 1; k <= 64; k++) {
+    const s = selectSpin(seed, round, { exclude: taken, salt: 1000 + k, asOf: day });
+    if (s.pool.some(fits)) return { team: s.team, decade: s.decade, pool: s.pool, fallback: true };
+  }
+  for (const key of [...draftKeys].sort()) {
+    const pool = poolOf(key);
+    if (pool.some(fits)) { const [team, decade] = key.split("|"); return { team, decade, pool, fallback: true }; }
+  }
+  return { team: base.team, decade: base.decade, pool: basePool, fallback: false };
+}
+
+export function duelSpin(seed: string, round: number, taken: string[], open: Slot[], asOf?: string): SpinResult & { fallback: boolean } {
+  const { coeff } = load();
+  const { team, decade, pool, fallback } = duelDeal(seed, round, taken, open, asOf);
+  const candidates = pool.map((p, i) => toCandidate(p, undefined, playerFeatures(p, coeff).usage, i));
+  return { team, decade, candidates, era: decadeEraContext(decade) ?? undefined, fallback };
 }
 
 // Pool-only spin for leaderboard verification: same (team, decade) selection, candidate ids only

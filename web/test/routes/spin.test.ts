@@ -8,12 +8,12 @@ vi.mock("next/server", async (orig) => (await import("@/test/routeHarness")).nex
 // passthrough spy so the exclude-cap test can see what the route hands to spin()
 vi.mock("@/lib/data", async (orig) => {
   const actual = await orig<typeof import("@/lib/data")>();
-  return { ...actual, spin: vi.fn(actual.spin) };
+  return { ...actual, spin: vi.fn(actual.spin), duelSpin: vi.fn(actual.duelSpin) };
 });
 
 enableRedisEnv();
 const { POST } = await import("@/app/api/spin/route");
-const { spin } = await import("@/lib/data");
+const { spin, duelSpin } = await import("@/lib/data");
 
 const post = (body: unknown, ip = "1.2.3.4") => POST(req("/api/spin", { body, ip }));
 
@@ -149,5 +149,46 @@ describe("POST /api/spin — pool date", () => {
     vi.mocked(spin).mockClear();
     await post({ seed: "classic-abc", asOf: 20261101 });
     expect(vi.mocked(spin).mock.calls[0][2]?.asOf).toBeUndefined();
+  });
+});
+
+describe("POST /api/spin — duel seed", () => {
+  it("allows up to 9 exclusions for a duel seed (both sides' picks) and caps a longer list at 9", async () => {
+    const exclude = Array.from({ length: 12 }, (_, i) => `crafted_id_${i}`);
+    const { status } = await readJson(await post({ seed: "duel-cap1", round: 4, exclude, open: ["C"] }));
+    expect(status).toBe(200);
+    const call = vi.mocked(duelSpin).mock.calls.at(-1)!;
+    expect(call[2]).toEqual(exclude.slice(0, 9));
+    expect(call[3]).toEqual(["C"]);
+  });
+
+  it("other modes keep the 4-exclusion cap", async () => {
+    const exclude = Array.from({ length: 9 }, (_, i) => `crafted_id_${i}`);
+    await post({ seed: "prime-cap1", exclude });
+    await post({ seed: "classic-cap2", exclude });
+    expect(vi.mocked(spin).mock.calls.at(-1)![2]!.exclude).toEqual(exclude.slice(0, 4));
+  });
+
+  it("never carries fit grades, even with fit:true", async () => {
+    const { body } = await readJson(await post({ seed: "duel-fit1", fit: true }));
+    const cands = body.candidates as Array<Record<string, unknown>>;
+    expect(cands.length).toBeGreaterThan(0);
+    expect(cands.every((c) => c.fit == null)).toBe(true);
+    expect(body.decade).not.toBe("PRIME");
+  });
+
+  it("guard: the side's deal always has someone for its open slots", async () => {
+    for (let r = 0; r < 5; r++) {
+      const { body } = await readJson(await post({ seed: `duel-guard${r}`, round: r, open: ["PG"] }));
+      const cands = body.candidates as Array<{ eligible: string[] }>;
+      expect(cands.some((c) => c.eligible.includes("PG"))).toBe(true);
+    }
+  });
+
+  it("drops junk from `open` and defaults to every slot", async () => {
+    await post({ seed: "duel-open1", open: ["G", 3, "C", "C"] });
+    expect(vi.mocked(duelSpin).mock.calls.at(-1)![3]).toEqual(["C"]);
+    await post({ seed: "duel-open2" });
+    expect(vi.mocked(duelSpin).mock.calls.at(-1)![3]).toEqual(["PG", "SG", "SF", "PF", "C"]);
   });
 });

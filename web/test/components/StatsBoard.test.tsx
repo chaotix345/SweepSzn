@@ -84,7 +84,7 @@ describe("StatsBoard", () => {
     const unplayed = row("Factor Hunt");
     expect(within(unplayed).getByText("0")).toBeTruthy();
     expect(within(unplayed).queryByRole("link")).toBeNull();
-    expect(screen.getAllByRole("row")).toHaveLength(1 + 8); // header + all eight modes
+    expect(screen.getAllByRole("row")).toHaveLength(1 + 9); // header + all nine modes
   });
 
   it("shows the grade distribution with text labels (not color alone)", async () => {
@@ -133,5 +133,23 @@ describe("StatsBoard", () => {
     resolve({ name: "Charlie", picture: "", streak: 0, results: [{ encoded: "x", mode: "hoopiq", wins: 60, losses: 22, grade: "B", ts: now }] });
     expect(await screen.findByRole("table")).toBeTruthy();
     expect(within(tile("Games played")).getByText("1")).toBeTruthy();
+  });
+
+  it("shows the Draft Duel W-L record vs the bot only once a duel is played", async () => {
+    seed(LOCAL);
+    render(<StatsBoard />);
+    await screen.findByRole("table");
+    expect(screen.queryByText(/draft duel vs the bot/i)).toBeNull();
+    cleanup();
+    seed([...LOCAL,
+      { encoded: "do~a,b,c,d,e.f,g,h,i,j", mode: "duel", wins: 60, losses: 22, grade: "A", ts: now - DAY, outcome: "w" },
+      { encoded: "da~a,b,c,d,e.f,g,h,i,k", mode: "duel", wins: 40, losses: 42, grade: "C", ts: now - DAY, outcome: "l" },
+      { encoded: "db~a,b,c,d,e.f,g,h,i,l", mode: "duel", wins: 50, losses: 32, grade: "B", ts: now - DAY, outcome: "w" },
+    ]);
+    render(<StatsBoard />);
+    const sec = (await screen.findByRole("heading", { name: /draft duel vs the bot/i })).parentElement as HTMLElement;
+    expect(sec.textContent).toMatch(/2–1/);
+    expect(within(sec).getByRole("link", { name: /duel again/i }).getAttribute("href")).toBe("/play?mode=duel");
+    expect(within(row("Duel")).getByText("3")).toBeTruthy();
   });
 });

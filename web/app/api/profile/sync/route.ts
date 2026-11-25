@@ -14,7 +14,7 @@ export const runtime = "nodejs";
 // both for the one-time first-sign-in claim (full local arrays) and for ongoing single-entry pushes as
 // games finish. Idempotent union merge — re-running never duplicates. Display-only data, so it's
 // lightly trusted and strictly bounded here at the trust boundary.
-const MODES = new Set(["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon"]);
+const MODES = new Set(["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon", "duel"]);
 const MAX_DATES = 400;
 const MAX_RESULTS = 50;
 
@@ -24,8 +24,9 @@ function cleanResults(input: unknown): ProfileResult[] {
   for (const e of input.slice(0, MAX_RESULTS)) {
     if (!e || typeof e !== "object") continue;
     const r = e as Record<string, unknown>;
-    if (typeof r.encoded !== "string" || !r.encoded || r.encoded.length > 256) continue;
     if (typeof r.mode !== "string" || !MODES.has(r.mode)) continue;
+    // a Duel card carries two fives (ten ids), so it gets a larger bound than a single-five segment
+    if (typeof r.encoded !== "string" || !r.encoded || r.encoded.length > (r.mode === "duel" ? 640 : 256)) continue;
     const wins = Number(r.wins), losses = Number(r.losses), ts = Number(r.ts);
     if (!Number.isFinite(wins) || !Number.isFinite(losses)) continue;
     out.push({
@@ -37,6 +38,8 @@ function cleanResults(input: unknown): ProfileResult[] {
       // clamp to now (+60s clock-skew slack) so a fabricated far-future ts can't pin an entry at the top forever
       ts: Number.isFinite(ts) && ts > 0 ? Math.min(ts, Date.now() + 60_000) : Date.now(),
       ...(typeof r.challengeId === "string" ? { challengeId: r.challengeId.slice(0, 64) } : {}),
+      // a Duel entry's result vs the bot (the /stats W-L record)
+      ...(r.mode === "duel" && (r.outcome === "w" || r.outcome === "l" || r.outcome === "t") ? { outcome: r.outcome } : {}),
     });
   }
   return out;

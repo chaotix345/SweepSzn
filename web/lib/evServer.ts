@@ -60,7 +60,7 @@ const SRC_RE = /^[a-z0-9_.-]{1,40}$/;
 // Opaque referral code (mirrors lib/referralCode.ts REF_RE). The /api/ev beacon is unauthenticated,
 // so this is the hard gate before a code is used as a Redis key / hash-field.
 const REF_RE = /^r[0-9a-f]{11}$/;
-const MODES = new Set(["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon"]);
+const MODES = new Set(["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon", "duel"]);
 
 export interface BeaconBody { ev: ClientStage; uid?: string; mode?: string; source?: string; ref?: string }
 

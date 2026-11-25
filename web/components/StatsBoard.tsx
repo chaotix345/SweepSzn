@@ -12,7 +12,7 @@ import { ButtonLink } from "@/components/ui/Button";
 // "My Stats" (/stats): the player's own progress at a glance — descriptive aggregates over their
 // finished games (DESIGN.md §12). All math lives in lib/stats; this only reads + renders.
 
-const MODE_LABEL: Record<ResultEntry["mode"], string> = { daily: "Daily", classic: "Classic", hoopiq: "HoopIQ", challenge: "Challenge", factorhunt: "Factor Hunt", prime: "Prime", blueprint: "Blueprint", surgeon: "Surgeon" };
+const MODE_LABEL: Record<ResultEntry["mode"], string> = { daily: "Daily", classic: "Classic", hoopiq: "HoopIQ", challenge: "Challenge", factorhunt: "Factor Hunt", prime: "Prime", blueprint: "Blueprint", surgeon: "Surgeon", duel: "Duel" };
 const LABEL = "text-[11px] font-bold uppercase tracking-widest text-zinc-500";
 
 const Tile = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -95,6 +95,19 @@ export default function StatsBoard() {
         <Tile label="Daily streak"><Days n={s.currentStreak} /></Tile>
         <Tile label="Best Daily streak"><Days n={s.bestStreak} /></Tile>
       </dl>
+
+      {s.duel.w + s.duel.l + s.duel.t > 0 && (
+        <section aria-labelledby="stats-duel" className="mt-8">
+          <h2 id="stats-duel" className={LABEL}>Draft Duel vs the bot</h2>
+          <div className="mt-2 flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-900 p-3">
+            <span className="font-display text-4xl leading-none tabular-nums text-zinc-100">
+              {s.duel.w}<span className="text-zinc-600">–</span>{s.duel.l}
+              {s.duel.t > 0 && <span className="ml-2 text-base text-zinc-500">{s.duel.t} {s.duel.t === 1 ? "tie" : "ties"}</span>}
+            </span>
+            <Link href="/play?mode=duel" className="shrink-0 text-sm font-bold text-orange-400 hover:underline">Duel again →</Link>
+          </div>
+        </section>
+      )}
 
       <section aria-labelledby="stats-by-mode" className="mt-8">
         <h2 id="stats-by-mode" className={LABEL}>By mode</h2>

@@ -6,7 +6,7 @@ import { streakFrom } from "./streak";
 // result history, unioned with the account's when signed in) and completed-Daily dates. No DOM, no
 // engine-internal signals — only records and grades the player already saw (DESIGN.md §12).
 
-export const STAT_MODES: readonly ResultMode[] = ["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon"];
+export const STAT_MODES: readonly ResultMode[] = ["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon", "duel"];
 export const GRADE_SCALE: readonly string[] = WIN_GRADES.map((g) => g.grade); // best → worst
 
 export interface ModeStats { mode: ResultMode; played: number; best: ResultEntry | null; avgWins: number | null }
@@ -19,6 +19,7 @@ export interface PlayerStats {
   currentStreak: number;
   bestStreak: number;
   last7Days: number;
+  duel: { w: number; l: number; t: number }; // Draft Duel record vs the bot
 }
 
 const DAY_MS = 86_400_000;
@@ -44,10 +45,11 @@ function valid(x: unknown): ResultEntry | null {
 const better = (a: ResultEntry, b: ResultEntry | null): boolean =>
   !b || a.wins > b.wins || (a.wins === b.wins && (gradeRank(a.grade) < gradeRank(b.grade) || (a.grade === b.grade && a.ts > b.ts)));
 
-// Where a past game re-opens — mirrors components/ResultsHistory.tsx (surgeon → /sg/, a created
-// challenge → its owner dashboard via Game's ?own= restore, everything else → /r/).
+// Where a past game re-opens — mirrors components/ResultsHistory.tsx (surgeon → /sg/, duel → /duel/, a
+// created challenge → its owner dashboard via Game's ?own= restore, everything else → /r/).
 export function resultHref(e: ResultEntry): string {
   if (e.mode === "challenge" && e.challengeId) return `/play?own=${e.challengeId}`;
+  if (e.mode === "duel") return `/duel/${e.encoded}`;
   return e.mode === "surgeon" ? `/sg/${e.encoded}` : `/r/${e.encoded}`;
 }
 
@@ -115,6 +117,11 @@ export function computeStats(results: unknown[], dailyDates: string[], now: numb
     currentStreak,
     bestStreak: Math.max(bestDailyStreak(dailyDates), currentStreak),
     last7Days: games.filter((g) => g.ts > now - 7 * DAY_MS).length,
+    duel: {
+      w: games.filter((g) => g.mode === "duel" && g.outcome === "w").length,
+      l: games.filter((g) => g.mode === "duel" && g.outcome === "l").length,
+      t: games.filter((g) => g.mode === "duel" && g.outcome === "t").length,
+    },
   };
 }
 
