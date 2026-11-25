@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
-import { spinPool, spin, primeSpin, getDraftablePool, getPlayersByIds, getAllPlayers, getLatestPlayers, getFranchisePool } from "@/lib/data";
+import { spinPool, spin, primeSpin, getDraftablePool, getPlayersByIds, getAllPlayers, getLatestPlayers, getFranchisePool, getPersonVariants } from "@/lib/data";
 import { verifyTrace } from "@/lib/dailyVerify";
 import { evaluateLineup } from "@/lib/engine";
 import { eligibleOf } from "@/lib/teams";
-import { POOL_RELEASES, SEASON_2026_SINCE, LEGACY_AS_OF, isoDay, isIsoDay, seedDay, resolveAsOf, releaseDate } from "@/lib/poolDate";
+import { POOL_RELEASES, SEASON_2026_SINCE, LEGACY_AS_OF, isoDay, isIsoDay, seedDay, resolveAsOf, releaseDate, legacyResultAsOf } from "@/lib/poolDate";
 import type { DraftStep, Player, Slot } from "@/lib/types";
 
 // Pool by date (W5, DESIGN.md §12): the 2025-26 release adds `since` cards and retires superseded
@@ -49,6 +49,14 @@ describe("lib/poolDate", () => {
     expect(resolveAsOf("classic-1", "2026-12-02", now)).toBe("2026-12-01"); // no peeking at future pools
     expect(resolveAsOf("classic-1", "garbage", now)).toBe("2026-12-01");
     expect(resolveAsOf("classic-1", undefined, now)).toBe("2026-12-01");
+  });
+
+  it("legacyResultAsOf: a saved result without a pool date maps to the pool it was played on", () => {
+    const now = new Date(Date.UTC(2026, 11, 3));
+    const release = Date.parse(`${SEASON_2026_SINCE}T00:00:00Z`);
+    expect(legacyResultAsOf(release - 1, now)).toBe(LEGACY_AS_OF);
+    expect(legacyResultAsOf(release, now)).toBe("2026-12-03");
+    expect(legacyResultAsOf(undefined, now)).toBe("2026-12-03");
   });
 
   it("every release key in players.json has a date", () => {
@@ -124,6 +132,36 @@ describe("draftable pool by date", () => {
     expect(a.candidates.some((c) => newIds.has(c.id))).toBe(false);
     const prime = primeSpin("prime-77", 0, { asOf: AFTER });
     expect(prime.candidates.some((c) => oldIds.has(c.id))).toBe(false);
+  });
+});
+
+describe("career journey variants follow the pool date", () => {
+  // a person who gains a brand-new bucket in 2025-26 and also has older cards
+  const fresh = NEW.find((n) => !n.until && ALL.some((p) => p.person_id === n.person_id && !p.since))!;
+  const superseded = OLD[0];
+
+  it("a 2025-26 stint is hidden before the release and shown from it", () => {
+    expect(fresh).toBeTruthy();
+    const pid = fresh.person_id!;
+    expect(getPersonVariants(pid, BEFORE).some((p) => p.id === fresh.id)).toBe(false);
+    expect(getPersonVariants(pid, BEFORE).length).toBeGreaterThan(0);
+    expect(getPersonVariants(pid, AFTER).some((p) => p.id === fresh.id)).toBe(true);
+  });
+
+  it("superseded cards drop out of the journey from the release", () => {
+    const pid = superseded.person_id!;
+    expect(getPersonVariants(pid, BEFORE).some((p) => p.id === superseded.id)).toBe(true);
+    expect(getPersonVariants(pid, AFTER).some((p) => p.id === superseded.id)).toBe(false);
+  });
+
+  it("defaults to today", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date(`${BEFORE}T12:00:00Z`));
+      expect(getPersonVariants(fresh.person_id!).some((p) => p.id === fresh.id)).toBe(false);
+      vi.setSystemTime(new Date(`${AFTER}T00:00:00Z`));
+      expect(getPersonVariants(fresh.person_id!).some((p) => p.id === fresh.id)).toBe(true);
+    } finally { vi.useRealTimers(); }
   });
 });
 

@@ -37,7 +37,7 @@ interface PoolIndex {
   top: Map<string, Player[]>; // getDraftablePool memo
 }
 
-interface Window { since: string | null; until: string | null; unknown: boolean }
+interface Window { since: string | null; until: string | null; unreleased: boolean }
 
 let _cache: {
   players: Player[];
@@ -69,7 +69,9 @@ function load() {
     if (p.since || p.until) {
       const since = p.since ? releaseDate(p.since) : null;
       const until = p.until ? releaseDate(p.until) : null;
-      windows.set(p.id, { since, until, unknown: (!!p.since && !since) || (!!p.until && !until) });
+      // a release key with no date in POOL_RELEASES never goes live: its `since` cards stay out of every
+      // pool, and its `until` cards are never retired
+      windows.set(p.id, { since, until, unreleased: !!p.since && !since });
       if (since) bounds.add(since);
       if (until) bounds.add(until);
     }
@@ -80,7 +82,7 @@ function load() {
 
 function presentOn(w: Window | undefined, asOf: string): boolean {
   if (!w) return true;
-  if (w.unknown) return false; // a release key with no date in POOL_RELEASES never goes live
+  if (w.unreleased) return false;
   return (!w.since || w.since <= asOf) && (!w.until || w.until > asOf);
 }
 
@@ -138,9 +140,10 @@ export function getPlayersByIds(ids: string[]): Player[] {
 }
 
 // All franchise/era variants of one real person — powers the dossier's career-arc strip.
-export function getPersonVariants(personId: string): Player[] {
-  const { players } = load();
-  return players.filter((p) => (p.person_id ?? p.id) === personId);
+// A person's cards present on `asOf` (released, not superseded) — the dossier's career journey.
+export function getPersonVariants(personId: string, asOf: string = isoDay()): Player[] {
+  const { players, windows } = load();
+  return players.filter((p) => (p.person_id ?? p.id) === personId && presentOn(windows.get(p.id), asOf));
 }
 
 // O(1) display-name lookup for a person_id (built once at load) — used by the crowd reveal.
