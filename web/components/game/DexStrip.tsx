@@ -11,8 +11,9 @@ import { fetchDex } from "@/lib/dexClient";
 const STRIP =
   "mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950/60 px-3 py-2.5 text-center text-sm font-semibold text-zinc-400 transition hover:border-orange-600/60 hover:text-orange-300";
 
-// lineupIds = the five just fielded. We union them into the count so the strip is accurate even before
-// the result lands in local history / the account sync — otherwise the count could lag by up to 5.
+// lineupIds = the five on this card. The Dex already includes this device's local history (Game saves the
+// result before this mounts), so the five being in it means this player fielded them: "joined". On
+// someone else's shared permalink they aren't, so the strip stays neutral and never counts them.
 export function DexStrip({ lineupIds = [] }: { lineupIds?: string[] }) {
   const [ids, setIds] = useState<string[] | null>(null);
   useEffect(() => {
@@ -22,10 +23,19 @@ export function DexStrip({ lineupIds = [] }: { lineupIds?: string[] }) {
   }, []);
 
   if (!ids) return null;
-  const count = new Set([...ids, ...lineupIds]).size;
+  const have = new Set(ids);
+  const joined = lineupIds.length > 0 && lineupIds.every((id) => have.has(id));
+  const count = have.size;
+  const plural = count === 1 ? "" : "s";
   return (
     <Link href="/dex" className={STRIP}>
-      🗂️ Your five joined the Dex — <strong className="text-zinc-200">{count}</strong> player{count === 1 ? "" : "s"} collected · View →
+      {joined ? (
+        <>🗂️ Your five joined the Dex — <strong className="text-zinc-200">{count}</strong> player{plural} collected · View →</>
+      ) : count > 0 ? (
+        <>🗂️ Your Drafted Dex — <strong className="text-zinc-200">{count}</strong> player{plural} collected · View →</>
+      ) : (
+        <>🗂️ Start your Drafted Dex — every player you field is saved · View →</>
+      )}
     </Link>
   );
 }

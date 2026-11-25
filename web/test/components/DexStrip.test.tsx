@@ -33,14 +33,31 @@ describe("DexStrip — post-reveal collection strip", () => {
     expect(container.textContent).toMatch(/Dex/i);
   });
 
-  it("unions the current game's five into the count so it's accurate before the sync lands", async () => {
-    // collection (pre-sync) has p0..p11; this game added one brand-new id → 13 distinct
+  it("says the five joined only when they're in this device's Dex", async () => {
     mockFetch(async () => ({
       ok: true, status: 200,
       json: async () => ({ players: dexPlayers(12), total: 8, badges: [] }),
     }));
-    const { container } = render(<DexStrip lineupIds={["p3", "brand_new_id", "p7", "p1", "p9"]} />);
-    await waitFor(() => expect(container.textContent).toMatch(/\b13\b/));
+    const { container } = render(<DexStrip lineupIds={["p3", "p4", "p7", "p1", "p9"]} />);
+    await waitFor(() => expect(container.textContent).toMatch(/joined the Dex/));
+    expect(container.textContent).toMatch(/\b12\b/);
+  });
+
+  it("on someone else's shared permalink it stays neutral and doesn't count their five", async () => {
+    mockFetch(async () => ({
+      ok: true, status: 200,
+      json: async () => ({ players: dexPlayers(3), total: 1, badges: [], signedIn: false }),
+    }));
+    const { container } = render(<DexStrip lineupIds={["x1", "x2", "x3", "x4", "x5"]} />);
+    await waitFor(() => expect(container.querySelector('a[href="/dex"]')).toBeTruthy());
+    expect(container.textContent).not.toMatch(/joined/);
+    expect(container.textContent).toMatch(/\b3\b/);
+  });
+
+  it("invites a brand-new visitor to start a Dex when they have none", async () => {
+    mockFetch(async () => ({ ok: true, status: 200, json: async () => ({ players: [], total: 0, badges: [], signedIn: false }) }));
+    const { container } = render(<DexStrip lineupIds={["x1", "x2", "x3", "x4", "x5"]} />);
+    await waitFor(() => expect(container.textContent).toMatch(/Start your Drafted Dex/));
   });
 
   it("is local-first: posts this device's result history and shows the count signed out (no 401 path)", async () => {
