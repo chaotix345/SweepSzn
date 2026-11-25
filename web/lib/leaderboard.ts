@@ -32,6 +32,14 @@ export async function getLeaderboard(date: string, uid?: string): Promise<Leader
   return { date, total, top, you };
 }
 
+// The viewer's own row on a Daily board, or null. A row only lands there through the replay-verified
+// submit, so its presence is the server's proof of "has a verified submission" for that day (D1).
+export async function getDailyRow(date: string, uid: string): Promise<StoredRow | null> {
+  if (!redis) return null;
+  const row = await redis.hget<StoredRow>(keyH(date), uid);
+  return row && typeof row === "object" && typeof row.wins === "number" ? row : null;
+}
+
 export async function submitScore(date: string, row: StoredRow, result: LineupResult): Promise<LeaderboardView | null> {
   if (!redis) return null;
   const score = encScore(result.wins, result.netRtg);

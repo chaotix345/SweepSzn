@@ -1,6 +1,7 @@
 import type { LineupResult, Player } from "./types";
 import { SLOTS, teamColors, initials, eraLabel, displayName } from "./teams";
 import { headline, historyAnchor } from "./explain";
+import { historyPercentileText } from "./historyPercentile";
 import type { RankCard } from "./rankShare";
 import { pickemVerdict, type PickemView } from "./pickem";
 import { GRADE_HEX } from "./grades";
@@ -122,8 +123,12 @@ export function resultOgElement(result: LineupResult, players: Player[], hinted 
             Net {net} · ORtg {result.ortg.toFixed(1)} · DRtg {result.drtg.toFixed(1)}
           </div>
           {/* no fontStyle:italic — satori has no italic variant loaded and would silently upright it */}
+          {/* W2 history line: the percentile vs every real team since 1985, beside the closest famous team */}
+          <div style={{ display: "flex", marginTop: 8, fontSize: 24, fontWeight: 700, color: "#fafafa" }}>
+            {historyPercentileText(result.wins)}
+          </div>
           {anchor && (
-            <div style={{ display: "flex", marginTop: 8, fontSize: 24, color: "#d4d4d8" }}>
+            <div style={{ display: "flex", marginTop: 4, fontSize: 22, color: "#a1a1aa" }}>
               comparable to the {anchor.record} {anchor.team} ({anchor.season})
             </div>
           )}

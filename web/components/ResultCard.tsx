@@ -13,6 +13,7 @@ import { factorViews, lineupRoles, headline, historyAnchor, scoutingAnchor, fmtN
 import { WIN_GRADES, weakestSlot } from "@/lib/engine";
 import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
 import { GRADE_COLOR, isEliteGrade } from "@/lib/grades";
+import { historyPercentileText } from "@/lib/historyPercentile";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { WhatIfLab } from "@/components/game/WhatIfLab";
 import { RarityBadge } from "@/components/game/RarityBadge";
@@ -28,6 +29,8 @@ type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: stri
 type FactorHuntProp = { prediction: string; answer: string; correct: boolean };
 // Daily leaderboard standing at submit time (rank/total from the submit response) — context only.
 type LbRankProp = { rank: number; total: number };
+// Today's Daily ceiling record (W2), passed only after the server confirmed a verified submit.
+type CeilingProp = { wins: number; losses: number };
 
 // The strongest SLOT-LEGAL five search_best.ts has ever found (verified through evaluateLineup)
 // — the ceiling a player can actually draft, which is what the elite-result copy cites. Since
@@ -51,8 +54,8 @@ const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1))
 // writing an image Blob (desktop) — the X-compose paste flow; download works everywhere.
 export function SaveCardImage({ path }: { path: string }) {
   const [state, setState] = useState<"idle" | "busy" | "saved" | "copied" | "error">("idle");
-  const canCopyImage =
-    typeof window !== "undefined" && typeof ClipboardItem !== "undefined" && typeof navigator !== "undefined" && !!navigator.clipboard?.write;
+  // hydration-safe: false on the server and first client render, then the real capability
+  const canCopyImage = useSyncExternalStore(subscribeNoop, getCanCopyImage, getServerCanNative);
   const flash = (s: "saved" | "copied" | "error") => { setState(s); setTimeout(() => setState("idle"), 2000); };
   const fetchCard = async (): Promise<Blob> => {
     const res = await fetch(new URL(cardImageUrl(path), window.location.origin).toString());
@@ -98,9 +101,9 @@ export function SaveCardImage({ path }: { path: string }) {
 }
 
 export default function ResultCard({
-  result, players, slots, mode, modeKey, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint, lbRank,
+  result, players, slots, mode, modeKey, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint, lbRank, ceiling,
 }: {
-  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; modeKey?: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean; blueprint?: BlueprintView; lbRank?: LbRankProp | null;
+  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; modeKey?: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean; blueprint?: BlueprintView; lbRank?: LbRankProp | null; ceiling?: CeilingProp | null;
 }) {
   const factors = factorViews(result);
   // split by the value's sign (what actually helped/hurt), not the engine's fixed label —
@@ -181,6 +184,7 @@ export default function ResultCard({
             {pct <= 50 ? <>🏆 Top {pct}% today</> : <>#{lbRank.rank} of {lbRank.total} today</>}
           </div>
         )}
+        {ceiling && <CeilingGap wins={result.wins} ceiling={ceiling} />}
         <div className="mx-auto mt-4 max-w-md text-left">
           <FiveStrip title={shared ? "Starting five" : "Your starting five"} five={players.map((p, i) => ({ id: p.id, name: p.name, team: p.team, decade: p.decade, slot: slots[i] }))} />
         </div>
@@ -205,11 +209,14 @@ export default function ResultCard({
 
       {/* how it stacks up: real-history anchor, league-average baseline, verified ceiling, grade ladder */}
       <div className="border-t border-zinc-800 px-6 py-4 text-center">
-        {anchor && (
-          <p className="text-xs italic text-zinc-400">
-            Comparable to the {anchor.record} {anchor.team} ({anchor.season}) — {anchor.hook}.
-          </p>
-        )}
+        {/* one history line (D7): where this record sits among every real team since 1985, beside
+            the closest famous team */}
+        <p className="text-xs text-zinc-400">
+          <span className="font-semibold text-zinc-200">{historyPercentileText(result.wins)}</span>
+          {anchor
+            ? <span className="italic"> · comparable to the {anchor.record} {anchor.team} ({anchor.season}) — {anchor.hook}.</span>
+            : "."}
+        </p>
         <p className="mt-1 text-[11px] text-zinc-500">
           {winsDelta >= 1
             ? `+${winsDelta} win${winsDelta === 1 ? "" : "s"} above the 41-win NBA average`
@@ -329,6 +336,7 @@ export default function ResultCard({
 const subscribeNoop = () => () => {};
 const getCanNative = () => typeof navigator !== "undefined" && "share" in navigator;
 const getServerCanNative = () => false;
+const getCanCopyImage = () => typeof ClipboardItem !== "undefined" && typeof navigator !== "undefined" && !!navigator.clipboard?.write;
 // The share URL is the bare path on the server and absolute + the sharer's own ?ref= on the client.
 // Read through useSyncExternalStore (server snapshot = path) so hydration re-renders with the client
 // value — React 19 never patches a mismatched href, so the SSR'd X/Bluesky links would keep the server's.
@@ -428,6 +436,22 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
         </div>
       )}
     </div>
+  );
+}
+
+// The Daily's gap to "the best five from today's spins" (W2). Re-spins can land a five outside the
+// base spins, so a run can beat the ceiling; that reads as such rather than as a negative gap.
+function CeilingGap({ wins, ceiling }: { wins: number; ceiling: CeilingProp }) {
+  const gap = ceiling.wins - wins;
+  const rec = `${ceiling.wins}-${ceiling.losses}`;
+  const text = gap > 0
+    ? `You're ${gap} win${gap === 1 ? "" : "s"} off today's perfect five (${rec})`
+    : gap === 0 ? `You matched today's perfect five (${rec})` : `Your re-spins beat today's perfect five (${rec})`;
+  return (
+    <p className="mx-auto mt-2 max-w-md text-xs font-medium text-zinc-300" data-testid="ceiling-gap"
+      title="The best five from today's spins (one per spin, re-spins aside). It's revealed after the Daily rolls over at 00:00 UTC.">
+      🎯 {text}
+    </p>
   );
 }
 

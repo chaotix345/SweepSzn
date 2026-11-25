@@ -35,6 +35,7 @@ const DATA_ROUTES = [
   "/api/profile/sync",
   "/api/health",
   "/api/daily/submit",
+  "/api/daily/ceiling",
   "/api/blueprint/submit",
   "/api/factorhunt/submit",
   "/api/factorhunt/choices",
