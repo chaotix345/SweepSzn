@@ -60,6 +60,10 @@ export interface Player {
   per?: number | null;
   ows?: number | null;
   dws?: number | null;
+  // v4 card ratings (data/rate_cards.py): multi-season, minutes-aware impact on the BPM scale,
+  // before era strength. The engine prefers these over the single-season obpm/dbpm.
+  off_rating?: number | null;
+  def_rating?: number | null;
   z?: ZScores;
   defense_estimated?: boolean;
   peak_score?: number;

@@ -63,13 +63,16 @@ export function eraStrength(year: number, c: Coefficients): number {
 // real OBPM/DBPM when available (1974+), otherwise the fitted z-model prediction, then scaled by era depth.
 function offValue(p: Player, c: Coefficients): number {
   let v: number;
-  if (p.obpm != null && !Number.isNaN(p.obpm)) v = p.obpm;
+  if (p.off_rating != null && !Number.isNaN(p.off_rating)) v = p.off_rating;
+  else if (p.obpm != null && !Number.isNaN(p.obpm)) v = p.obpm;
   else v = c.offModel.intercept + c.offModel.pts * zcap(p, "pts", c) + c.offModel.ast * zcap(p, "ast", c) + c.offModel.ts * zcap(p, "ts", c);
   return v * eraStrength(p.year, c);
 }
 function defValue(p: Player, c: Coefficients): number {
   let v: number;
-  if (p.dbpm != null && !Number.isNaN(p.dbpm)) {
+  if (p.def_rating != null && !Number.isNaN(p.def_rating)) {
+    v = p.def_rating;
+  } else if (p.dbpm != null && !Number.isNaN(p.dbpm)) {
     v = p.dbpm;
   } else {
     // pre-1974 (no STL/BLK): shrink DWS-per-game toward the league mean, map through defModelEst, cap.

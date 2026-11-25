@@ -38,3 +38,15 @@ describe("v4 acceptance: spread", () => {
     if (!Number.isNaN(SPREAD_BASELINE)) expect(sd).toBeGreaterThanOrEqual(SPREAD_BASELINE);
   });
 });
+
+describe("v4 acceptance: card identity and ratings", () => {
+  it("card id set is unchanged from v3", async () => {
+    const v3: string[] = (await import("./fixtures/card_ids_v3.json")).default;
+    expect([...PLAYERS.map((p) => p.id)].sort()).toEqual(v3);
+  });
+
+  it("every card has finite off_rating and def_rating", () => {
+    const bad = PLAYERS.filter((p) => !Number.isFinite(p.off_rating) || !Number.isFinite(p.def_rating));
+    expect(bad.map((p) => p.id).slice(0, 5)).toEqual([]);
+  });
+});

@@ -228,3 +228,19 @@ describe("per-player role scores on the breakdown", () => {
     expect(c.perimScore).toBe(0);
   });
 });
+
+describe("v4 card ratings", () => {
+  it("off_rating/def_rating take precedence over obpm/dbpm", () => {
+    const p = mk({ name: "Rated", obpm: 9, dbpm: 4, off_rating: 5, def_rating: 1 });
+    const f = playerFeatures(p);
+    expect(f.off).toBe(5);
+    expect(f.def).toBe(1);
+  });
+
+  it("missing off_rating falls back to the current path", () => {
+    const p = mk({ name: "Unrated", obpm: 9, dbpm: 4 });
+    const f = playerFeatures(p);
+    expect(f.off).toBe(9);
+    expect(f.def).toBe(4);
+  });
+});
