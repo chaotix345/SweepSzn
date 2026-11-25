@@ -183,7 +183,7 @@ Each workstream is one branch and one reviewable unit. Sizes are rough.
   - W3, on W2;
   - W6's share-framing part, on W2 because it needs the percentile;
   - W7 UI/UX fixes, last, on top of everything.
-- **Integration:** branch `feat/brainstorm-app-upgrades`. Each workstream branch is reviewed, then merged in. One umbrella PR goes to `main` with per-workstream commits and a written verification record. Merging to `main` and deploying to production wait for the owner's go-ahead.
+- **Integration:** each workstream is its own PR to `main`. It is merged once CI is green and an independent review is done; merging deploys to production. Production is verified read-only after each merge. Dependent work starts from the updated `main`. The owner delegated every decision, including merge and deploy, on 2026-11-25.
 
 ## Calls made (owner may override)
 
@@ -192,8 +192,71 @@ Each workstream is one branch and one reviewable unit. Sizes are rough.
 - W5 uses upgrade-with-aliases rather than strict append-only.
 - The Daily ceiling uses base spins only.
 - Duel has 3 personas and no "perfect play" tier. The pick clock is off by default.
-- New 2025-26 cards are draftable in all modes, Classic included. 82-0 parity is frozen, and `DESIGN.md` §12 says we owe it nothing.
-- Integration is one umbrella PR rather than 7 stacked PRs.
+- New 2025-26 cards are draftable in all modes, Classic included. This needs an explicit `DESIGN.md` §12 amendment (D5).
+- Integration is one PR per workstream, merged and deployed as each one passes.
+
+## Decisions after the builder check (binding; these override the workstream text above where they differ)
+
+**D1. A completed Daily is submitted automatically (W1).**
+- When a Daily finishes, the client submits it through the existing `/api/daily/submit`: keep-best, server replay, the viewer's current display name, and the existing anonymous fallback label.
+- The streak is credited on that submit. The manual button becomes "Update name" or goes away. Builder's call.
+- "Has played today's Daily" means "has a verified submission for today" on the server.
+- Without Redis, submit returns 503 and every submit-gated feature quietly hides; nothing breaks.
+
+**D2. Anti-spoiler covers every surface (W1).**
+- The public `GET /api/daily/leaderboard` is CDN-cached, so it omits today's lineups for everyone.
+- The per-viewer POST returns today's lineups only to a viewer with a verified submission for today.
+- `TodaysBest.tsx:35` (the landing page) must not link today's leader's lineup until the Daily rolls over.
+- Past days are unaffected.
+
+**D3. W5 keeps superseded cards (replaces the alias map).**
+- When a same-team 2025-26 season beats an existing 2020s card, the old card stays in `players.json` with its original id, stats and ratings, and gets an `until` date.
+- The new card gets a `since` date.
+- Every id-based surface (`/r/`, compare, rank, Dex, boards, stored results) keeps resolving old ids with their original numbers. No alias map and no drift.
+- Dex: owned legacy cards stay owned and visible.
+
+**D4. The pool is chosen by date, so old seeds replay correctly (W5).**
+- Spin selection takes an `asOf` date. The draftable index for `asOf` is cards with `since <= asOf` and (`until` absent or `until > asOf`). Cards without a `since` date count as always present.
+- Daily seeds and archive days use the seed date.
+- Challenges use their stored creation date. Add a creation date to new challenge records; old records with none fall back to "before W5".
+- Every other mode uses "now".
+- `verifyTrace` replays with the same `asOf`.
+- The Daily ceiling (W2) and archive (W3) are computed with the seed date's pool, so past days show the pool players actually saw.
+- `since` for the new cards is the deploy date, set to the next UTC midnight, so today's Daily never changes mid-day.
+
+**D5. §12 is amended in this work (W5): the roster freeze ends, the rules stay.**
+- Classic keeps 82-0's *rules*: current franchises, 1960s–2020s decades, multi-position eligibility.
+- The roster freeze is retired so the 2025-26 season can join one shared pool.
+- Edit `DESIGN.md` §12 to say this explicitly.
+- New cards get position eligibility from `enrich_players.mjs`'s existing fallback (adjacency from the engine `pos`), because the 82-0 meta has no entry for them.
+
+**D6. "Beat this" is a Challenge (W6b).**
+- The share flow on Classic and Prime results creates a Challenge (`/c/`): fit-locked seed, creator's five hidden until the friend plays, existing infra.
+- The share text is the challenge-framed copy.
+- Daily shares link to `/play?mode=daily` with the spoiler-free emoji grid.
+- HoopIQ, Factor Hunt, Blueprint, Surgeon and Duel keep their current `/r/` or mode share.
+- If Redis is unavailable, fall back to today's `/r/` share.
+
+**D7. Percentile details (W2).**
+- Filter `team_lookup.json` to 1985–2025 rows that have a `w` value (1,170 rows).
+- Convert each team to an 82-game pace: `w/(w+l)*82`.
+- Compare against the lineup's projected wins, counting ties as half.
+- Floor the displayed percentage. When the lineup beats every team, show "Better than every real team since 1985" instead of "100%".
+- Show it inside the existing Scouting Anchor block (`lib/explain.ts` `historyAnchor`) as one history line, with the closest famous team next to it, rather than as a second widget.
+- Also show it on the `/r/` OG card.
+- `lib/teamLookup.ts` already reads the file and `test/nextConfig.test.ts` already lists it. Wire it into the app path that needs it.
+
+**D8. Draft Duel details (W4).**
+- The player chooses the persona before the draft. Default is Old Head; the choice is remembered per viewer.
+- No re-spins in Duel.
+- Uses Classic's team-and-decade spins with stats shown and NO fit grades or per-candidate deltas.
+- The Duel W-L record follows the existing `/stats` pattern (local history plus signed-in sync, if `/stats` already syncs).
+
+**D9. W3 countdown.** A next-Daily countdown already exists (`Leaderboard.tsx:110-112,190`). Reuse it and promote it on the Daily result screen; don't rebuild it.
+
+**D10. Copy fixes ride with W1.** Fix `ResultCard.tsx:553-559` and the matching "S unreachable" text in `DESIGN.md` §13.
+
+**D11. The W7 audit is already running** (a Gemini 4 Neon reviewer orchestrated by the facilitator). The W7 builder receives its report as input.
 
 ## Left to the builder
 
