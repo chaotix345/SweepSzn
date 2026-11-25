@@ -27,6 +27,7 @@ export function DraftView(p: {
   spinning: boolean;
   blueprint: BlueprintKey | null;
   projAllowed: boolean;
+  prime?: boolean; // Prime Draft, or a challenge replaying a Prime seed
   projection: RosterProjection | null;
   skips: { team: boolean; era: boolean };
   selPlayer: DraftCandidate | null;
@@ -48,6 +49,7 @@ export function DraftView(p: {
   onCancelSelection: () => void;
 }) {
   const { mode, roster, current, reel, lockedReel, spinning, blueprint, skips, selPlayer, selSlot } = p;
+  const prime = mode === "prime" || !!p.prime;
   const sheetRef = useRef<HTMLDivElement>(null); // mobile "choose position" dialog
   // move keyboard focus into the mobile position sheet when it opens, and restore it to the
   // triggering element when it closes (paired with the Tab trap in the sheet's onKeyDown below)
@@ -82,8 +84,8 @@ export function DraftView(p: {
             {/* reels */}
             <div className="flex flex-wrap items-center justify-center gap-3">
               <Reel kind="TEAM" value={reel.team} sub={teamName(reel.team)} color="orange" locked={lockedReel === "team"} masked={reelMasked(lockedReel === "team")} spinning={spinning || !current} />
-              <Reel kind="ERA" value={reel.era} sub={mode === "prime" ? "peak form" : "decade"} color="violet" prime={mode === "prime"}
-                locked={mode !== "prime" && lockedReel === "era"} masked={reelMasked(lockedReel === "era")} spinning={mode !== "prime" && (spinning || !current)} />
+              <Reel kind="ERA" value={reel.era} sub={prime ? "peak form" : "decade"} color="violet" prime={prime}
+                locked={!prime && lockedReel === "era"} masked={reelMasked(lockedReel === "era")} spinning={!prime && (spinning || !current)} />
               {!current && (
                 <button onClick={p.onSpin} disabled={spinning}
                   className="rounded-xl bg-orange-500 px-7 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400 disabled:opacity-50">
@@ -94,7 +96,7 @@ export function DraftView(p: {
             {hideIQ && (
               <p className="mt-2 text-center text-[11px] text-zinc-500">🧠 Team &amp; era hidden — draft by recognizing the players.</p>
             )}
-            {mode === "prime" && (
+            {prime && (
               <p className="mt-2 text-center text-[11px] text-zinc-500">⚡ Fantasy simulation, not historical — every legend at his peak, any era.</p>
             )}
             {mode === "blueprint" && blueprint && (
@@ -114,7 +116,7 @@ export function DraftView(p: {
               <div className="mt-2 flex justify-center gap-2 text-xs">
                 <SkipBtn label="↻ Re-spin Team" used={skips.team} onClick={p.onReSpinTeam} disabled={spinning} />
                 {/* the era reel is hard-locked to PRIME in Prime Draft — no era re-spin to offer */}
-                {mode !== "prime" && <SkipBtn label="↻ Re-spin Era" used={skips.era} onClick={p.onReSpinEra} disabled={spinning} />}
+                {!prime && <SkipBtn label="↻ Re-spin Era" used={skips.era} onClick={p.onReSpinEra} disabled={spinning} />}
               </div>
             )}
           </div>
@@ -155,7 +157,7 @@ export function DraftView(p: {
               {/* a plain spin is deterministic in (seed, round, salt) — it would deal this same dead end —
                   so offer what can change it: an unused re-spin, else a restart */}
               {!skips.team ? <button onClick={p.onReSpinTeam} className="font-bold underline">Re-spin the team</button>
-                : mode !== "prime" && !skips.era ? <button onClick={p.onReSpinEra} className="font-bold underline">Re-spin the era</button>
+                : !prime && !skips.era ? <button onClick={p.onReSpinEra} className="font-bold underline">Re-spin the era</button>
                 : <>Out of re-spins — <button onClick={p.onRestart} className="font-bold underline">restart</button></>}
             </div>
           )}

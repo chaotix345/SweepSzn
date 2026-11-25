@@ -21,6 +21,12 @@ export function newChallengeId(): string {
   return out;
 }
 
+// Free-play seeds a challenge can carry: once one is shared its seed is public, so fit grades and the
+// live projection are locked on it (lib/challengeStore isFitLockedSeed). Classic and Prime free-play.
+export function isFitLockableSeed(seed: string): boolean {
+  return seed.startsWith("classic-") || (seed.startsWith("prime-") && !seed.startsWith("prime-daily-"));
+}
+
 export function challengeSeed(id: string): string {
   return `h2h-${id}`;
 }

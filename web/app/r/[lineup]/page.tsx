@@ -4,6 +4,7 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import { resolveSharedLineup } from "@/lib/sharedLineup";
 import { SLOTS, displayName } from "@/lib/teams";
+import { claimText } from "@/lib/shareText";
 import ResultCard from "@/components/ResultCard";
 import Beacon from "@/components/Beacon";
 import ShareHeader from "@/components/ShareHeader";
@@ -22,13 +23,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!data) return { title: "SweepSzn — all-time NBA lineup", robots: { index: false } };
   const { result, players, prime, blueprint } = data;
   const names = players.map((p) => displayName(p.name)).join(", ");
-  const net = `${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`;
   const title = `${result.wins}-${result.losses} (${result.grade}) — ${names} · SweepSzn${prime ? " Prime" : blueprint ? " Blueprint" : ""}`;
   const description = blueprint
     ? `${names} went ${blueprint.label} — ${result.wins}-${result.losses} (${result.label}) with ${blueprint.grade} blueprint execution. Can you out-execute them?`
     : prime
-      ? `${names} — a cross-era PRIME five (every legend at his peak) projecting ${result.wins}-${result.losses} (${result.label}) — Net ${net}. Fantasy simulation. Can you build a better one?`
-      : `${names} project to ${result.wins}-${result.losses} (${result.label}) — Net ${net}. Can you build a better all-time five?`;
+      ? `${claimText({ wins: result.wins, losses: result.losses, names: players.map((p) => displayName(p.name)), prime: true }).replace(/ →$/, ".")} A fantasy simulation: every legend at his peak.`
+      : claimText({ wins: result.wins, losses: result.losses, names: players.map((p) => displayName(p.name)) }).replace(/ →$/, ".");
   return {
     title,
     description,

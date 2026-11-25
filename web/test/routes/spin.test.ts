@@ -76,6 +76,14 @@ describe("POST /api/spin — fit-lock guard", () => {
     expect(cands.every((c) => c.fit == null)).toBe(true);
   });
 
+  it("suppresses fit grades when a Prime seed has been fit-locked (a Prime result shared as a challenge)", async () => {
+    ctx.redis!.strings.set("chal:fitlock:prime-locked-seed-001", "1");
+    const { body } = await readJson(await post({ seed: "prime-locked-seed-001", fit: true }));
+    const cands = body.candidates as Array<Record<string, unknown>>;
+    expect(body.decade).toBe("PRIME");
+    expect(cands.every((c) => c.fit == null)).toBe(true);
+  });
+
   it("serves fit grades for an unlocked classic seed", async () => {
     const seed = "classic-unlocked-seed-002";
     const { body } = await readJson(await post({ seed, fit: true }));

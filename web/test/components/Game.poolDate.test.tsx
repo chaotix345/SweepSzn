@@ -6,6 +6,7 @@ import React from "react";
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
 const challengeProps: Record<string, unknown>[] = [];
+const cardProps: Record<string, unknown>[] = [];
 vi.mock("next/link", () => ({
   default: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) =>
     React.createElement("a", { href, className }, children),
@@ -25,7 +26,7 @@ vi.mock("@/components/FhLeaderboard", () => ({ default: () => null }));
 vi.mock("@/components/GoogleOneTap", () => ({ default: () => null }));
 vi.mock("@/components/RankShareButton", () => ({ default: () => null }));
 vi.mock("@/components/game/PickemOverlay", () => ({ PickemOverlay: () => null }));
-vi.mock("@/components/ResultCard", () => ({ default: () => React.createElement("div", { "data-testid": "result-card" }) }));
+vi.mock("@/components/ResultCard", () => ({ default: (p: Record<string, unknown>) => { cardProps.push(p); return React.createElement("div", { "data-testid": "result-card" }); } }));
 vi.mock("@/components/InviteFriend", () => ({ default: () => null }));
 
 import Game from "@/components/Game";
@@ -42,6 +43,7 @@ const evalBody = () => ({
   result: { ortg: 110, drtg: 108, netRtg: 2, wins: 50, losses: 32, winPct: 0.61, grade: "B", label: "Playoff team", factors: [], players: [], notes: [] },
   players: IDS.map((id) => ({ id, name: id, year: 1986, decade: "1980s", tier: "complete", team: "BOS", pos: "SF", eligible: ["SF"] })),
 });
+const TRACE = IDS.map((pickedId, i) => ({ slot: ["PG", "SG", "SF", "PF", "C"][i], pickedId, respins: [] }));
 const RELEASE = Date.parse(`${SEASON_2026_SINCE}T00:00:00Z`);
 const NOW = RELEASE + 5 * 86_400_000; // 2026-12-02
 const TODAY = "2026-12-02";
@@ -65,20 +67,23 @@ function fetchMock() {
 const click = async (el: HTMLElement) => { await act(async () => { fireEvent.click(el); }); };
 const btn = (pred: (t: string) => boolean) => screen.getAllByRole("button").find((b) => pred(b.textContent ?? ""))!;
 
+// D6: a Classic result's Share creates the challenge — drive the card's challengeShare.create().
 async function restoreAndConvert(): Promise<unknown> {
   window.history.replaceState({}, "", `/play?r=${ENC}&m=classic`);
   render(<Game />);
   await act(async () => {});
   expect(screen.queryByTestId("result-card")).toBeTruthy();
-  await click(btn((t) => t.includes("Challenge a friend to beat this")));
-  return challengeProps.at(-1)?.asOf;
+  const share = cardProps.at(-1)?.challengeShare as { create: () => Promise<string | null> } | undefined;
+  expect(share, "a Classic result shares as a challenge").toBeTruthy();
+  await act(async () => { await share!.create(); });
+  return bodies.find((b) => b.path === "/api/challenge/submit")?.body.asOf;
 }
 
 describe("Game — a converted Classic result carries its pool date", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(NOW);
     vi.stubGlobal("fetch", fetchMock());
-    challengeProps.length = 0;
+    challengeProps.length = 0; cardProps.length = 0;
     try { localStorage.clear(); } catch { /* */ }
   });
   afterEach(async () => {
@@ -89,7 +94,7 @@ describe("Game — a converted Classic result carries its pool date", () => {
 
   const saved = (asOf?: string) => {
     const ev = evalBody();
-    writeLastResult({ mode: "classic", seed: "classic-7", ...(asOf ? { asOf } : {}), result: { result: ev.result, players: ev.players, trace: [], usedHints: false } });
+    writeLastResult({ mode: "classic", seed: "classic-7", ...(asOf ? { asOf } : {}), result: { result: ev.result, players: ev.players, trace: TRACE, usedHints: false } });
   };
 
   it("a restored result converts with its stored pool date", async () => {

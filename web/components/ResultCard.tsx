@@ -14,6 +14,7 @@ import { WIN_GRADES, weakestSlot } from "@/lib/engine";
 import { pickemVerdict, pickemShareLine, encodePickemCard } from "@/lib/pickem";
 import { GRADE_COLOR, isEliteGrade } from "@/lib/grades";
 import { historyPercentileText } from "@/lib/historyPercentile";
+import { claimText, dailyShareText, type ShareVariant } from "@/lib/shareText";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { WhatIfLab } from "@/components/game/WhatIfLab";
 import { RarityBadge } from "@/components/game/RarityBadge";
@@ -27,6 +28,11 @@ import FiveStrip from "@/components/FiveStrip";
 type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
 // Factor Hunt verdict: the locked pre-reveal prediction vs. the engine's actual top factor.
 type FactorHuntProp = { prediction: string; answer: string; correct: boolean };
+// D6: a Classic/Prime result's Share creates a Challenge (/c/); `create` resolves to its path or null.
+// `path` is a challenge this result already created (persisted), so Share reuses it instead of creating another.
+type ChallengeShareProp = { create: () => Promise<string | null>; path?: string | null };
+// Daily share: spoiler-free grid while that Daily is live (names only after the rollover).
+type DailyShareProp = { date: string; live: boolean };
 // Daily leaderboard standing at submit time (rank/total from the submit response) — context only.
 type LbRankProp = { rank: number; total: number };
 // Today's Daily ceiling record (W2), passed only after the server confirmed a verified submit.
@@ -38,8 +44,12 @@ type CeilingProp = { wins: number; losses: number };
 // change; golden tests pin both numbers.
 const BEST_DRAFTABLE_RECORD = "80-2";
 
-// Grade-aware nudge above the share/replay row — frames sharing as a social act, not a chore.
-function shareNudge(result: LineupResult): string {
+// Grade-aware nudge above the share/replay row — frames sharing as a social act, not a chore. On a
+// challenge or Daily share it says what the friend will get instead.
+function shareNudge(result: LineupResult, kind: "challenge" | "daily" | "shared" | null): string {
+  if (kind === "shared") return "Think you'd draft better? The engine scores yours the same way.";
+  if (kind === "challenge") return "Share sends your exact spins. Your five stays hidden until they've played.";
+  if (kind === "daily") return "Share posts a spoiler-free grid. No names until tomorrow's Daily.";
   if (isEliteGrade(result.grade)) return "All-time tier. Show it off →";
   if (result.grade === "A") return "Strong five — worth sharing.";
   if (result.wins >= 41) return "Think a friend can beat it? Share the challenge.";
@@ -52,7 +62,7 @@ const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1))
 // fetches it so a user (or the launch content workflow) can attach the card as a native image
 // instead of relying on a link unfurl. Copy-to-clipboard appears only where the browser supports
 // writing an image Blob (desktop) — the X-compose paste flow; download works everywhere.
-export function SaveCardImage({ path }: { path: string }) {
+export function SaveCardImage({ path, inline }: { path: string; inline?: boolean }) {
   const [state, setState] = useState<"idle" | "busy" | "saved" | "copied" | "error">("idle");
   // hydration-safe: false on the server and first client render, then the real capability
   const canCopyImage = useSyncExternalStore(subscribeNoop, getCanCopyImage, getServerCanNative);
@@ -83,7 +93,20 @@ export function SaveCardImage({ path }: { path: string }) {
       flash("copied");
     } catch { flash("error"); }
   };
-  const label = state === "busy" ? "Preparing…" : state === "saved" ? "Saved ✓" : state === "error" ? "Try again" : "Save card image";
+  const label = state === "busy" ? "Preparing…" : state === "saved" ? "Saved ✓" : state === "error" ? "Try again" : inline ? "Save image" : "Save card image";
+  if (inline) {
+    // one cell group in the result card's secondary share row (F02): same 44px height as X / Bluesky
+    return (
+      <>
+        <button onClick={save} aria-label="Save card image" className={`${ROW_BTN} flex-[1.6] whitespace-nowrap`}>↓ {label}</button>
+        {canCopyImage && (
+          <button onClick={copy} aria-label="Copy card image to clipboard" className={`${ROW_BTN} flex-1 whitespace-nowrap`}>
+            {state === "copied" ? "Copied ✓" : "Copy"}
+          </button>
+        )}
+      </>
+    );
+  }
   return (
     <div className="mt-2.5 flex gap-2">
       <button onClick={save} aria-label="Save card image"
@@ -101,9 +124,9 @@ export function SaveCardImage({ path }: { path: string }) {
 }
 
 export default function ResultCard({
-  result, players, slots, mode, modeKey, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint, lbRank, ceiling, afterActions,
+  result, players, slots, mode, modeKey, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint, lbRank, ceiling, challengeShare, daily, afterActions,
 }: {
-  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; modeKey?: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean; blueprint?: BlueprintView; lbRank?: LbRankProp | null; ceiling?: CeilingProp | null;
+  result: LineupResult; players: Player[]; slots: Slot[]; mode: string; modeKey?: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean; blueprint?: BlueprintView; lbRank?: LbRankProp | null; ceiling?: CeilingProp | null; challengeShare?: ChallengeShareProp; daily?: DailyShareProp;
   afterActions?: ReactNode; // rendered right under Share / Build Another (W3's Daily come-back block)
 }) {
   const factors = factorViews(result);
@@ -133,6 +156,7 @@ export default function ResultCard({
   const names = players.map((p) => displayName(p.name));
 
   const elite = isEliteGrade(result.grade);
+  const [challengeDown, setChallengeDown] = useState(false); // the challenge share fell back to /r/
   // one roster row's dossier open at a time (tap ⓘ) — reuses the draft-board Dossier, post-commit
   const [openRosterId, setOpenRosterId] = useState<string | null>(null);
   // teaser for the collapsed "Dig deeper" zone (What-If Lab is gated off Prime — see below)
@@ -156,7 +180,7 @@ export default function ResultCard({
         </div>
         {usedHints && (
           <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300/90"
-            title="You used the engine's fit hints while drafting this five">💡 Hints used</div>
+            title={shared ? "Drafted with the engine's fit hints" : "You used the engine's fit hints while drafting this five"}>💡 Hints used</div>
         )}
         {factorHunt && (
           <div className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
@@ -192,20 +216,19 @@ export default function ResultCard({
       </div>
 
       <div className="px-6 pb-5">
-        <p className="mb-2.5 text-center text-xs font-medium text-zinc-400">{shareNudge(result)}</p>
-        {/* stacked on phones so the primary Share keeps a full-width hit area; side by side from sm up */}
-        <div className="grid gap-2 sm:flex sm:gap-3">
-          {/* On a shared permalink the cold viewer's "build your own" is the conversion that matters,
-              so it takes the primary orange and Share drops to secondary. In-game it's the reverse —
-              Share is the sharer's growth action. (DESIGN.md: exactly one orange CTA per row.) */}
-          <ShareButton primary={!shared} result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint} />
-          {shared ? (
-            <ButtonLink href="/play?mode=daily" variant="primary" className="flex-1">Build your own five →</ButtonLink>
+        <p className="mb-2.5 text-center text-xs font-medium text-zinc-400">{shareNudge(result, shared ? "shared" : challengeShare && !challengeDown ? "challenge" : daily ? "daily" : null)}</p>
+        {/* F02: one primary pair (Share + Build Another, stacked on phones) and one secondary row
+            (X · Bluesky · Save image). On a shared permalink the cold viewer's "build your own" is
+            the conversion that matters, so it takes the orange and Share drops to secondary.
+            (DESIGN.md: exactly one orange CTA per row.) */}
+        {/* an archive replay's one orange CTA is "Play today's Daily" under the card, so Share stays secondary */}
+        <ShareButton primary={!shared && modeKey !== "archive"} result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint}
+          challenge={shared ? undefined : challengeShare} daily={shared ? undefined : daily} cardPath={sharePath} onChallengeFallback={() => setChallengeDown(true)}
+          companion={shared ? (
+            <ButtonLink href="/play?mode=daily" variant="primary" className="w-full">Build your own five →</ButtonLink>
           ) : (
-            <Button variant="secondary" onClick={onReset} className="flex-1">Build Another</Button>
-          )}
-        </div>
-        <SaveCardImage path={sharePath} />
+            <Button variant="secondary" onClick={onReset} className="w-full">Build Another</Button>
+          )} />
         {afterActions}
       </div>
 
@@ -231,7 +254,7 @@ export default function ResultCard({
             The best draftable five projects {BEST_DRAFTABLE_RECORD} — nobody has gone 82-0.
           </p>
         )}
-        <GradeLadder wins={result.wins} grade={result.grade} />
+        <GradeLadder wins={result.wins} grade={result.grade} shared={shared} />
         <div className="mt-4 flex justify-center gap-2 text-sm">
           <Metric label="ORtg" value={result.ortg.toFixed(1)} title="Offensive Rating — points scored per 100 possessions" />
           <Metric label="DRtg" value={result.drtg.toFixed(1)} title="Defensive Rating — points allowed per 100 possessions" />
@@ -261,14 +284,15 @@ export default function ResultCard({
         {weakSlot && (
           <p className="mt-3 flex gap-2 text-xs text-zinc-500">
             <span aria-hidden>🔎</span>
-            <span>Lowest-value pick: your <strong className="text-zinc-300">{weakSlot}</strong> added the least to this five — something to rethink next run.</span>
+            <span>Lowest-value pick: {shared ? "the" : "your"} <strong className="text-zinc-300">{weakSlot}</strong> added the least to this five{shared ? "." : " — something to rethink next run."}</span>
           </p>
         )}
         <RarityBadge ids={players.map((p) => p.person_id ?? p.id).join(",")} />
       </div>
 
-      {/* an unranked archive replay (W3) never feeds the Dex, so don't promise it does */}
-      {modeKey !== "archive" && <div className="px-6 pb-2"><DexStrip lineupIds={players.map((p) => p.id)} /></div>}
+      {/* F13: the Dex strip counts the VIEWER's collection (meaningless on someone else's permalink);
+          an unranked archive replay (W3) never feeds the Dex, so don't promise it does */}
+      {!shared && modeKey !== "archive" && <div className="px-6 pb-2"><DexStrip lineupIds={players.map((p) => p.id)} /></div>}
 
       {/* "Dig deeper": the full roster with dossiers, the scouting report, the What-If Lab and Compare.
           Collapsed + lazy-mounted (a cold permalink viewer never fires their /api fetches); the
@@ -323,7 +347,7 @@ export default function ResultCard({
             </div>
           </div>
         </div>
-        <ScoutingAnchor result={result} />
+        <ScoutingAnchor result={result} shared={shared} />
         {/* What-If Lab: post-commit swap sandbox. Gated off Prime — a candidate's decade there is
             his peak, not the spun era, so the slot pool wouldn't match. Re-scores via /api/evaluate. */}
         {!prime && (
@@ -350,37 +374,87 @@ const getClientShareUrl = (path: string) => {
   return u.toString();
 };
 
+// 44px secondary-row cell (F02): X, Bluesky and Save image share one height and one look.
+const ROW_BTN =
+  "grid min-h-11 min-w-0 place-items-center rounded-xl border border-zinc-700 px-2 text-xs font-semibold text-zinc-300 transition hover:border-zinc-500 hover:text-white";
+
+const intentLinks = (text: string, url: string): [string, string][] => {
+  const t = encodeURIComponent(text), u = encodeURIComponent(url);
+  return [
+    // No hashtags — the @SweepSeason account posts without them, so user shares stay on-voice.
+    ["X", `https://twitter.com/intent/tweet?text=${t}&url=${u}`],
+    ["Bluesky", `https://bsky.app/intent/compose?text=${t}%20${u}`],
+    ["WhatsApp", `https://wa.me/?text=${t}%20${u}`],
+    ["Reddit", `https://www.reddit.com/submit?title=${t}&url=${u}`],
+    ["Telegram", `https://t.me/share/url?url=${u}&text=${t}`],
+    ["Facebook", `https://www.facebook.com/sharer/sharer.php?u=${u}`],
+  ];
+};
+
 // Exported so modes with their own result layout (Surgeon) reuse the exact share affordance
 // (native share / popover / copy / per-platform links). Pass `text` to override the auto-generated
-// copy (the @SweepSeason credit is still appended to every share).
-export function ShareButton({ result, path, names, usedHints, pickem, prime, blueprint, text: textOverride, primary }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp; prime?: boolean; blueprint?: BlueprintView; text?: string; primary?: boolean }) {
+// copy (the @SweepSeason credit is still appended to every share). With `companion` it lays out the
+// result card's F02 rows: [Share | companion] then [X · Bluesky · Save image (cardPath)].
+// `challenge` (Classic/Prime, D6): the first share creates a Challenge and every target shares /c/;
+// if that fails (no Redis, offline) the share falls back to the /r/ permalink. `daily`: the
+// spoiler-free grid, linking to /play?mode=daily.
+export function ShareButton({ result, path, names, usedHints, pickem, prime, blueprint, text: textOverride, primary, challenge, daily, companion, cardPath, onChallengeFallback }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp; prime?: boolean; blueprint?: BlueprintView; text?: string; primary?: boolean; challenge?: ChallengeShareProp; daily?: DailyShareProp; companion?: ReactNode; cardPath?: string; onChallengeFallback?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyErr, setCopyErr] = useState(false);
+  const [chalPath, setChalPath] = useState<string | null>(challenge?.path ?? null); // the created /c/<id>
+  const [chalFailed, setChalFailed] = useState(false);           // fell back to /r/
+  const [creating, setCreating] = useState(false);
+  const [tapAgain, setTapAgain] = useState(false);               // the sheet needs a fresh tap after the async create
+  const pending = useRef<Promise<string | null> | null>(null);
   const canNative = useSyncExternalStore(subscribeNoop, getCanNative, getServerCanNative);
-  // Defying the crowd is the share-worthy Pick'Em moment — it rewrites the share copy (spec).
-  const defyLine = pickem ? pickemShareLine(result.wins, result.losses, pickem, pickem.subject) : null;
-  // a real-team comparison gives a recipient with zero context proof the number is basketball,
-  // not a random simulator — the highest-leverage moment to pre-frame the engine (B-R verified).
-  const shareAnchor = historyAnchor(result.wins);
-  const anchorBit = shareAnchor
-    ? ` — comparable to the ${shareAnchor.record} ${shareAnchor.team}`
-    : ` — Net ${result.netRtg > 0 ? "+" : ""}${result.netRtg.toFixed(1)}`;
-  const baseText = textOverride
-    ? textOverride
-    : defyLine
-    ? `${defyLine} Can you beat the crowd on SweepSzn?`
-    : blueprint
+
+  // Everything a share target needs, for a given challenge path (null = not created / fell back).
+  const compose = (cp: string | null): { text: string; sharePath: string; variant: ShareVariant } => {
+    let base: string, sharePath = path, variant: ShareVariant = "mode";
+    // Defying the crowd is the share-worthy Pick'Em moment — it rewrites the share copy (spec).
+    // Not on the Daily: the defy line names today's first spin.
+    const defyLine = pickem && !daily ? pickemShareLine(result.wins, result.losses, pickem, pickem.subject) : null;
+    if (daily) {
+      base = dailyShareText({ date: daily.date, wins: result.wins, losses: result.losses, grade: result.grade, players: result.players, names, live: daily.live });
+      sharePath = "/play?mode=daily"; variant = "daily";
+    } else if (textOverride) base = textOverride;
+    else if (defyLine) base = `${defyLine} Can you beat the crowd on SweepSzn?`;
+    else if (blueprint) {
       // the committed objective is the identity-rich share hook (spec: "I went SPACING BOMB…")
-      ? `I went ${blueprint.label} on SweepSzn — ${result.wins}-${result.losses} (${result.label}) with ${blueprint.grade} blueprint execution${usedHints ? " (with hints)" : ""}, board score ${blueprint.score % 1 === 0 ? blueprint.score : blueprint.score.toFixed(1)}. Can you out-execute me?`
-      : `My ${prime ? "PRIME cross-era five" : "all-time five"} (${names.join(" · ")}) went ${result.wins}-${result.losses} (${result.label}) on SweepSzn${usedHints ? " (with hints)" : ""}${anchorBit}. Can you build a better one?`;
-  // Credit @SweepSeason on every share — a cold viewer who sees a shared result can find the source.
-  const text = `${baseText} via ${X_HANDLE}`;
+      base = `I went ${blueprint.label} on SweepSzn — ${result.wins}-${result.losses} (${result.label}) with ${blueprint.grade} blueprint execution${usedHints ? " (with hints)" : ""}, board score ${blueprint.score % 1 === 0 ? blueprint.score : blueprint.score.toFixed(1)}. Can you out-execute me?`;
+    } else {
+      base = claimText({ wins: result.wins, losses: result.losses, names, prime, usedHints, challenge: !!cp });
+      if (cp) sharePath = cp;
+      variant = cp ? "challenge" : challenge ? "fallback" : "result";
+    }
+    // Credit @SweepSeason on every share — a cold viewer who sees a shared result can find the source.
+    return { text: base.includes("\n") ? `${base}\nvia ${X_HANDLE}` : `${base} via ${X_HANDLE}`, sharePath, variant };
+  };
+  const cur = compose(chalPath);
   // Every share doubles as a referral: append the sharer's own code (if minted) so a cold viewer's
   // first_play is credited back to them. Canonical/OG are bare-path, so the query has no SEO impact.
-  const url = useSyncExternalStore(subscribeNoop, () => getClientShareUrl(path), () => path);
-  const t = encodeURIComponent(text), u = encodeURIComponent(url);
+  const url = useSyncExternalStore(subscribeNoop, () => getClientShareUrl(cur.sharePath), () => cur.sharePath);
+  const links = intentLinks(cur.text, url);
+
+  const beacon = (target: string, variant: ShareVariant) => { track("share", { target, variant }); ev("share", { uid: getUid() }); };
+
+  // Create the challenge once (concurrent taps share the request); null = use the /r/ fallback.
+  const ensureChallenge = async (): Promise<string | null> => {
+    if (!challenge || chalFailed) return null;
+    if (chalPath) return chalPath;
+    setCreating(true);
+    pending.current ??= challenge.create();
+    const got = await pending.current;
+    setCreating(false);
+    if (got) setChalPath(got);
+    else { setChalFailed(true); pending.current = null; onChallengeFallback?.(); }
+    return got;
+  };
+  const needsCreate = !!challenge && !chalPath && !chalFailed;
+  // the card image shows the five: never while the Daily is live, nor on a challenge (hidden until the friend plays)
+  const canSaveImage = !daily?.live && !(challenge && !chalFailed);
 
   // close the popover on outside-click or Escape (keyboard + mouse dismissal)
   useEffect(() => {
@@ -393,51 +467,91 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
   }, [open]);
 
   const copy = async () => {
-    try { await navigator.clipboard?.writeText(`${text} ${url}`); setCopied(true); track("share", { target: "copy" }); ev("share", { uid: getUid() }); setOpen(false); setTimeout(() => setCopied(false), 1500); }
+    try { await navigator.clipboard?.writeText(`${cur.text} ${url}`); setCopied(true); beacon("copy", cur.variant); setOpen(false); setTimeout(() => setCopied(false), 1500); }
     catch { setCopyErr(true); setTimeout(() => setCopyErr(false), 2500); }
   };
-  const native = async () => {
-    try { await (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }).share?.({ title: "SweepSzn", text, url }); track("share", { target: "native" }); ev("share", { uid: getUid() }); } catch { /* dismissed */ }
+  const native = async (c: ReturnType<typeof compose>) => {
+    try {
+      await (navigator as Navigator & { share?: (d: ShareData) => Promise<void> }).share?.({ title: "SweepSzn", text: c.text, url: getClientShareUrl(c.sharePath) });
+      setTapAgain(false);
+      beacon("native", c.variant);
+    } catch (e) {
+      // Safari drops the tap's user activation across the create request: keep the link, ask for one more tap
+      if (e instanceof DOMException && e.name === "NotAllowedError") setTapAgain(true);
+    }
   };
-  const links: [string, string][] = [
-    // No hashtags — the @SweepSeason account posts without them, so user shares stay on-voice.
-    ["X", `https://twitter.com/intent/tweet?text=${t}&url=${u}`],
-    ["Bluesky", `https://bsky.app/intent/compose?text=${t}%20${u}`],
-    ["WhatsApp", `https://wa.me/?text=${t}%20${u}`],
-    ["Reddit", `https://www.reddit.com/submit?title=${t}&url=${u}`],
-    ["Telegram", `https://t.me/share/url?url=${u}&text=${t}`],
-    ["Facebook", `https://www.facebook.com/sharer/sharer.php?u=${u}`],
-  ];
+  const onShare = async () => {
+    if (creating) return;
+    const cp = needsCreate ? await ensureChallenge() : chalPath;
+    if (canNative) await native(compose(cp));
+    else setOpen((o) => !o);
+  };
+  // X / Bluesky before the challenge exists: open the tab inside the tap (popup blockers), then point it
+  // at the intent once the link is ready.
+  const onIntent = async (i: 0 | 1, e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!needsCreate) { beacon(links[i][0], cur.variant); return; }
+    e.preventDefault();
+    const w = window.open("about:blank", "_blank");
+    if (w) w.opener = null;
+    const c = compose(await ensureChallenge());
+    const href = intentLinks(c.text, getClientShareUrl(c.sharePath))[i][1];
+    beacon(links[i][0], c.variant);
+    if (w) w.location.href = href; else window.location.href = href;
+  };
 
+  const label = creating ? "Creating link…" : tapAgain ? "Link ready · Share" : copied ? "Copied!" : copyErr ? "Copy failed" : "Share";
+  const aria = { "aria-busy": creating || undefined, "aria-haspopup": !canNative, "aria-expanded": !canNative ? open : undefined, "aria-controls": !canNative ? "result-share-panel" : undefined };
+  const mainBtn = companion ? (
+    <Button variant={primary ? "primary" : "secondary"} onClick={onShare} {...aria} className="h-full w-full">{label}</Button>
+  ) : (
+    <button onClick={onShare} {...aria}
+      className={`min-h-11 min-w-0 flex-1 rounded-xl py-2.5 text-sm transition ${primary ? "bg-orange-500 font-bold text-black hover:bg-orange-400" : "border border-zinc-700 font-semibold hover:border-zinc-500"}`}>
+      {label}
+    </button>
+  );
+  const xLink = (
+    <a href={links[0][1]} target="_blank" rel="noreferrer" onClick={(e) => onIntent(0, e)} aria-label="Post to X" title="Post to X"
+      className={companion ? `${ROW_BTN} flex-1 text-sm font-black` : "grid min-h-11 w-11 shrink-0 place-items-center rounded-xl border border-zinc-700 text-sm font-black hover:border-zinc-500"}>X</a>
+  );
+  const bskyLink = (
+    <a href={links[1][1]} target="_blank" rel="noreferrer" onClick={(e) => onIntent(1, e)} aria-label="Post to Bluesky" title="Post to Bluesky"
+      className={companion ? `${ROW_BTN} flex-1` : "grid min-h-11 w-11 shrink-0 place-items-center rounded-xl border border-zinc-700 text-[11px] font-bold hover:border-zinc-500"}>{companion ? "Bluesky" : "Bsky"}</a>
+  );
+  const panel = open && !canNative && (
+    <div id="result-share-panel" role="menu" className="fixed inset-x-0 bottom-0 z-50 max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-zinc-700 bg-zinc-900 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl sm:absolute sm:inset-x-auto sm:bottom-full sm:left-0 sm:z-10 sm:mb-2 sm:w-full sm:rounded-xl sm:border sm:p-2 sm:pb-2 sm:shadow-xl">
+      {/* grab handle — signals the sheet is a dismissable bottom sheet on mobile */}
+      <div aria-hidden className="mx-auto mb-2 h-1 w-10 rounded-full bg-zinc-600 sm:hidden" />
+      <button onClick={copy} role="menuitem" className="mb-1 min-h-11 w-full rounded-lg bg-zinc-800 py-2 text-xs font-semibold hover:bg-zinc-700">
+        {copied ? "Copied to clipboard!" : copyErr ? "Copy failed — use a link below" : cur.variant === "challenge" ? "Copy challenge link" : "Copy result"}
+      </button>
+      <div className="grid grid-cols-3 gap-1">
+        {links.map(([name, href]) => (
+          <a key={name} href={href} target="_blank" rel="noreferrer" role="menuitem" onClick={() => { beacon(name, cur.variant); setOpen(false); }}
+            className="grid min-h-11 place-items-center rounded-lg bg-zinc-800 text-center text-[11px] font-semibold text-zinc-300 hover:bg-zinc-700 hover:text-white">{name}</a>
+        ))}
+      </div>
+    </div>
+  );
+
+  if (companion) {
+    return (
+      <div>
+        {/* auto-rows-fr: Share and Build Another keep one height (the outlined button's border would add 2px) */}
+        <div className="grid auto-rows-fr grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
+          <div className="relative" ref={ref}>{mainBtn}{panel}</div>
+          {companion}
+        </div>
+        <div className="mt-2 flex gap-2">
+          {xLink}{bskyLink}
+          {cardPath && canSaveImage && <SaveCardImage path={cardPath} inline />}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="relative flex-1" ref={ref}>
-      <div className="flex gap-1.5">
-        <button onClick={() => (canNative ? native() : setOpen((o) => !o))} aria-haspopup={!canNative} aria-expanded={!canNative ? open : undefined} aria-controls={!canNative ? "result-share-panel" : undefined}
-          className={`min-w-0 flex-1 rounded-xl py-2.5 text-sm transition ${primary ? "bg-orange-500 font-bold text-black hover:bg-orange-400" : "border border-zinc-700 font-semibold hover:border-zinc-500"}`}>
-          {copied ? "Copied!" : copyErr ? "Copy failed" : "Share"}
-        </button>
-        <a href={links[0][1]} target="_blank" rel="noreferrer" onClick={() => { track("share", { target: "X" }); ev("share", { uid: getUid() }); }}
-          aria-label="Post to X" title="Post to X"
-          className="grid w-11 shrink-0 place-items-center rounded-xl border border-zinc-700 text-sm font-black hover:border-zinc-500">X</a>
-        <a href={links[1][1]} target="_blank" rel="noreferrer" onClick={() => { track("share", { target: "Bluesky" }); ev("share", { uid: getUid() }); }}
-          aria-label="Post to Bluesky" title="Post to Bluesky"
-          className="grid w-11 shrink-0 place-items-center rounded-xl border border-zinc-700 text-[11px] font-bold hover:border-zinc-500">Bsky</a>
-      </div>
-      {open && !canNative && (
-        <div id="result-share-panel" role="menu" className="fixed inset-x-0 bottom-0 z-50 max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-zinc-700 bg-zinc-900 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-2xl sm:absolute sm:inset-x-auto sm:bottom-full sm:left-0 sm:z-10 sm:mb-2 sm:w-full sm:rounded-xl sm:border sm:p-2 sm:pb-2 sm:shadow-xl">
-          {/* grab handle — signals the sheet is a dismissable bottom sheet on mobile */}
-          <div aria-hidden className="mx-auto mb-2 h-1 w-10 rounded-full bg-zinc-600 sm:hidden" />
-          <button onClick={copy} role="menuitem" className="mb-1 w-full rounded-lg bg-zinc-800 py-2 text-xs font-semibold hover:bg-zinc-700">
-            {copied ? "Copied to clipboard!" : copyErr ? "Copy failed — use a link below" : "Copy result"}
-          </button>
-          <div className="grid grid-cols-3 gap-1">
-            {links.map(([name, href]) => (
-              <a key={name} href={href} target="_blank" rel="noreferrer" role="menuitem" onClick={() => { track("share", { target: name }); ev("share", { uid: getUid() }); setOpen(false); }}
-                className="rounded-lg bg-zinc-800 py-1.5 text-center text-[11px] font-semibold text-zinc-300 hover:bg-zinc-700 hover:text-white">{name}</a>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="flex gap-1.5">{mainBtn}{xLink}{bskyLink}</div>
+      {panel}
     </div>
   );
 }
@@ -528,11 +642,11 @@ function BlueprintStrip({ result, bp }: { result: LineupResult; bp: BlueprintVie
 // Post-commit scouting report: your five's projected ORtg/DRtg/Net beside a comparable real team's
 // actual ratings (from the win-band anchor). Descriptive — the round is already scored, so juxtaposing
 // the engine's own numbers (already shown above) with a real yardstick is fair (DESIGN.md §12).
-function ScoutingAnchor({ result }: { result: LineupResult }) {
+function ScoutingAnchor({ result, shared }: { result: LineupResult; shared?: boolean }) {
   const s = scoutingAnchor(result);
   if (!s) return null;
   const rows = [
-    { label: "Your five (projected)", ortg: s.est.ortg, drtg: s.est.drtg, net: s.est.netRtg, you: true },
+    { label: shared ? "This five (projected)" : "Your five (projected)", ortg: s.est.ortg, drtg: s.est.drtg, net: s.est.netRtg, you: true },
     { label: `${s.anchor.record} ${s.anchor.team} (${s.anchor.season})`, ortg: s.anchor.ortg, drtg: s.anchor.drtg, net: s.anchor.nrtg, you: false },
   ];
   return (
@@ -555,7 +669,7 @@ function ScoutingAnchor({ result }: { result: LineupResult }) {
         ))}
       </div>
       <p className="mt-2 text-[10px] leading-snug text-zinc-600">
-        Your five&apos;s engine projection beside {s.anchor.team}&apos;s actual {s.anchor.season} ratings — a real-history yardstick, not a fit score.
+        {shared ? "This" : "Your"} five&apos;s engine projection beside {s.anchor.team}&apos;s actual {s.anchor.season} ratings — a real-history yardstick, not a fit score.
       </p>
     </div>
   );
@@ -571,7 +685,7 @@ function Metric({ label, value, color = "text-zinc-200", title }: { label: strin
 
 // Compact grade scale (F → S) with the current tier highlighted and a "2 wins from B" nudge
 // when the next boundary is close. Boundaries come from the engine's WIN_GRADES — never redefined.
-function GradeLadder({ wins, grade }: { wins: number; grade: string }) {
+function GradeLadder({ wins, grade, shared }: { wins: number; grade: string; shared?: boolean }) {
   const asc = [...WIN_GRADES].reverse(); // F → S
   const next = asc.find((g) => g.min > wins);
   return (
@@ -580,7 +694,7 @@ function GradeLadder({ wins, grade }: { wins: number; grade: string }) {
         {asc.map((g) => (
           <span key={g.grade} role="listitem" aria-current={g.grade === grade ? "true" : undefined}
             title={`${g.label} — ${g.min}+ wins`}
-            aria-label={g.grade === grade ? `${g.grade} — ${g.label}, your grade` : `${g.grade} — ${g.label}`}
+            aria-label={g.grade === grade ? `${g.grade} — ${g.label}, ${shared ? "this five's" : "your"} grade` : `${g.grade} — ${g.label}`}
             className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
               g.grade === grade ? `${GRADE_COLOR[g.grade] ?? "text-zinc-200"} bg-zinc-800` : "text-zinc-600"}`}>
             {g.grade}

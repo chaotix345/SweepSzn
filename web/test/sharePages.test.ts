@@ -169,3 +169,40 @@ describe("/duel/[card] — Draft Duel permalink", () => {
     expect(og.brandOgElement).toHaveBeenCalled();
   });
 });
+
+// W6: the share surfaces read as a claim the viewer can dispute, with the W2 percentile as proof.
+describe("share framing — OG cards and metadata read as a claim", () => {
+  const INFO = { uid: "u-creator-1", name: "Alice", wins: 58, losses: 24, net: 7.5, grade: "A-", lineup: FIVE.join(","), seed: "classic-123" };
+
+  it("/r OG card: the footer dares the viewer and the percentile line stays", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { getPlayersByIds } = await import("@/lib/data");
+    const { evaluateLineup } = await import("@/lib/engine");
+    const five = getPlayersByIds(FIVE);
+    const html = renderToStaticMarkup(og.resultOgElement(evaluateLineup(five), five));
+    expect(html).toContain("Wrong? Beat this five →");
+    expect(html).toMatch(/Beats \d+% of real NBA teams since 1985|every real team since 1985/);
+  });
+
+  it("/r metadata description is the claim", async () => {
+    const { generateMetadata } = await import("@/app/r/[lineup]/page");
+    const meta = await generateMetadata(params({ lineup: encodeLineup(FIVE) }));
+    expect(String(meta.description)).toMatch(/^Engine says .+ go \d+-\d+\. .+ since 1985\. Wrong\? Beat this five\.$/);
+  });
+
+  it("/c OG card: the bar, the percentile, a dare — and still no player tokens", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const html = renderToStaticMarkup(og.challengeOgElement("Alice", { wins: 58, losses: 24, net: 7.5, grade: "A-" }));
+    expect(html).toMatch(/Beats \d+% of real NBA teams since 1985/);
+    expect(html).toContain("Beat this five →");
+    expect(html).not.toContain("Jordan");
+  });
+
+  it("/c metadata: engine claim, same spins, no names from the five", async () => {
+    ctx.redis!.strings.set("chal:abc12345:info", JSON.stringify(INFO));
+    const { generateMetadata } = await import("@/app/c/[id]/page");
+    const meta = await generateMetadata(params({ id: "abc12345" }));
+    expect(String(meta.description)).toMatch(/^Engine says Alice's five goes 58-24\. Beats \d+% of real NBA teams since 1985\. Wrong\? Same spins, your draft\.$/);
+    expect(String(meta.description)).not.toContain("Jordan");
+  });
+});

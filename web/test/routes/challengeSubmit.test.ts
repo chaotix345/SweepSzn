@@ -247,6 +247,18 @@ describe("POST /api/challenge/submit — creator path", () => {
     expect(ctx.redis!.strings.has("chal:fitlock:classic-abc123")).toBe(true);
   });
 
+  it("a free-play Prime seed is accepted from the creator and fit-locked (D6: Prime share is a challenge)", async () => {
+    const { status } = await readJson(await post({ id: VALID_ID, uid: anonUid, trace: LEGIT_TRACE, seed: "prime-123456" }));
+    expect(status).toBe(200);
+    expect(JSON.parse(ctx.redis!.strings.get(`chal:${VALID_ID}:info`)!).seed).toBe("prime-123456");
+    expect(ctx.redis!.strings.has("chal:fitlock:prime-123456")).toBe(true);
+  });
+
+  it("a prime-daily- seed is NOT accepted (no shared-seed Prime competition to convert)", async () => {
+    await post({ id: VALID_ID, uid: anonUid, trace: LEGIT_TRACE, seed: "prime-daily-2026-6-10" });
+    expect(JSON.parse(ctx.redis!.strings.get(`chal:${VALID_ID}:info`)!).seed).toBe(`h2h-${VALID_ID}`);
+  });
+
   it("non-classic seed does NOT set fit-lock key", async () => {
     await post({ id: VALID_ID, uid: anonUid, trace: LEGIT_TRACE, seed: "daily-2026-6-10" });
     const lockKeys = [...ctx.redis!.strings.keys()].filter((k) => k.startsWith("chal:fitlock:"));
