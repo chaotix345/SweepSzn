@@ -20,6 +20,7 @@ vi.mock("@/components/DuelResult", () => ({
 
 import { DuelGame } from "@/components/game/DuelGame";
 import { pushResult } from "@/lib/account";
+import { ev } from "@/lib/ev";
 
 const SLOTS = ["PG", "SG", "SF", "PF", "C"];
 type Call = { url: string; body: Record<string, unknown> };
@@ -74,7 +75,7 @@ const pickIn = async (name: RegExp) => {
 describe("DuelGame — setup", () => {
   it("defaults to Old Head, explains snake order, and remembers the chosen persona and clock", async () => {
     render(<DuelGame onModeSelect={() => {}} />);
-    expect(screen.getByRole("radio", { name: /old head/i }).getAttribute("aria-checked")).toBe("true");
+    expect((screen.getByRole("radio", { name: /old head/i }) as HTMLInputElement).checked).toBe(true);
     expect(screen.getByText(/snake order/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: /the analyst/i }));
     expect(localStorage.getItem("szn_duel_persona")).toBe("analyst");
@@ -82,7 +83,7 @@ describe("DuelGame — setup", () => {
     expect(localStorage.getItem("szn_duel_clock")).toBe("1");
     cleanup();
     render(<DuelGame onModeSelect={() => {}} />);
-    await waitFor(() => expect(screen.getByRole("radio", { name: /the analyst/i }).getAttribute("aria-checked")).toBe("true"));
+    await waitFor(() => expect((screen.getByRole("radio", { name: /the analyst/i }) as HTMLInputElement).checked).toBe(true));
     expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
   });
 
@@ -91,7 +92,7 @@ describe("DuelGame — setup", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("denied"); });
     render(<DuelGame onModeSelect={() => {}} />);
     fireEvent.click(screen.getByRole("radio", { name: /box-score bro/i }));
-    expect(screen.getByRole("radio", { name: /box-score bro/i }).getAttribute("aria-checked")).toBe("true");
+    expect((screen.getByRole("radio", { name: /box-score bro/i }) as HTMLInputElement).checked).toBe(true);
     vi.restoreAllMocks();
   });
 });
@@ -116,6 +117,37 @@ describe("DuelGame — draft", () => {
     const saved = JSON.parse(localStorage.getItem("82-0:results")!)[0];
     expect(saved).toMatchObject({ mode: "duel", outcome: "w", wins: 60, encoded: "do~a,b,c,d,e.f,g,h,i,j" });
     expect(pushResult).not.toHaveBeenCalled(); // signed out: local only
+  });
+
+  it("pins the pool date at begin and sends it on every spin, bot-pick and result call", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-26T23:59:30Z")); // the day before a release
+    render(<DuelGame onModeSelect={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /duel old head/i }));
+    await pickIn(/Select Player lo0/);
+    vi.setSystemTime(new Date("2026-11-27T00:00:30Z")); // crossed midnight mid-duel
+    for (let r = 1; r < 5; r++) await pickIn(new RegExp(`Select Player lo${r}`));
+    expect(await screen.findByTestId("duel-result")).toBeTruthy();
+    expect(new Set(calls.map((c) => c.url))).toEqual(new Set(["/api/spin", "/api/duel/bot-pick", "/api/duel/result"]));
+    expect(calls.every((c) => c.body.asOf === "2026-11-26")).toBe(true);
+  });
+
+  it("counts a play for every duel it starts after the first (rematch, change opponent, restart)", async () => {
+    vi.mocked(ev).mockClear();
+    render(<DuelGame onModeSelect={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /duel old head/i }));
+    expect(ev).not.toHaveBeenCalled(); // Game.start() already counted the duel that opened this screen
+    for (let r = 0; r < 5; r++) await pickIn(new RegExp(`Select Player lo${r}`));
+    fireEvent.click(await screen.findByRole("button", { name: "Change opponent" }));
+    fireEvent.click(screen.getByRole("button", { name: /duel old head/i }));
+    expect(ev).toHaveBeenCalledTimes(1);
+    await pickIn(/Select Player lo0/);
+    fireEvent.click(await screen.findByRole("button", { name: /restart/i }));
+    expect(ev).toHaveBeenCalledTimes(2);
+    for (let r = 0; r < 5; r++) await pickIn(new RegExp(`Select Player lo${r}`));
+    fireEvent.click(await screen.findByRole("button", { name: "Rematch" }));
+    expect(ev).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(ev).mock.calls.every(([name, p]) => name === "play" && (p as { mode: string }).mode === "duel")).toBe(true);
   });
 
   it("shows the bot's picks as they happen", async () => {

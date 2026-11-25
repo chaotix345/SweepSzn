@@ -108,9 +108,10 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
   const [history, setHistory] = useState<ResultEntry[] | null>(null);
   // read after mount (hydration-safe, like ResultsHistory). null until then → no returning-user UI on SSR.
   useEffect(() => { (async () => { try { setHistory(listResults()); } catch { /* private mode */ } })(); }, []);
-  // Returning-user fast path: most recent SOLO game's mode (daily is featured above; challenge has its own).
-  const lastReplay = history?.find((e) => e.mode !== "daily" && e.mode !== "challenge");
-  const lastReplayMode = lastReplay?.mode === "duel" ? { id: "duel" as Mode, title: "Draft Duel" } : MODES.find((m) => m.id === lastReplay?.mode);
+  // Returning-user fast path: most recent SOLO game's mode (daily and duel have their own cards right
+  // above it; challenge has its own).
+  const lastReplay = history?.find((e) => e.mode !== "daily" && e.mode !== "challenge" && e.mode !== "duel");
+  const lastReplayMode = MODES.find((m) => m.id === lastReplay?.mode);
   // Daily already played today? Deep-link to its result instead of re-drafting the already-scored board.
   const dailyToday = history?.find((e) => e.mode === "daily" && dayUTC(new Date(e.ts)) === dayUTC());
 

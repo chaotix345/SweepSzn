@@ -9,7 +9,8 @@
 // than the record) are left as they were: finished competitions that expire within 31 days.
 import { encScore, RELEASE_LOCK_LUA } from "./score";
 import { decodeLineup } from "./share";
-import { decodeDuelCard } from "./duel";
+import { decodeDuelCard, outcomeFromWinner } from "./duel";
+import { compareResults } from "./challenge";
 import { decodeSurgeonCard } from "./surgeon";
 import type { LineupResult } from "./types";
 
@@ -47,6 +48,12 @@ function idsFor(mode: string, encoded: string): string[] | null {
   return card ? card.afterIds : null; // a Surgeon result records the after-swap five
 }
 
+function duelOutcome(encoded: string, you: LineupResult, evaluate: Evaluate) {
+  const botIds = decodeDuelCard(encoded)?.botIds;
+  const bot = botIds && botIds.length === 5 ? evaluate(botIds) : null;
+  return bot ? outcomeFromWinner(compareResults(you, bot).winner) : undefined;
+}
+
 // Same protocol as profileStore.syncResults: hold results:lock:{uid} (NX + token, owner-checked
 // release) so a concurrent /api/profile/sync can't interleave, and rewrite the list in ONE MULTI so a
 // failure mid-rewrite can never leave the no-TTL history deleted. Returns -1 if the lock stays busy.
@@ -66,9 +73,12 @@ export async function rescoreProfileResults(redis: RescoreRedis, uid: string, ev
       const e: ProfileEntry = typeof v === "string" ? JSON.parse(v) : v;
       const ids = idsFor(e.mode, e.encoded);
       const r = ids && ids.length === 5 ? evaluate(ids) : null;
-      if (!r || (r.wins === e.wins && r.losses === e.losses && r.grade === e.grade)) return e;
+      if (!r) return e;
+      // a duel's outcome depends on both fives, so a rescore re-decides it against the bot's five too
+      const outcome = e.mode === "duel" ? duelOutcome(e.encoded, r, evaluate) : undefined;
+      if (r.wins === e.wins && r.losses === e.losses && r.grade === e.grade && (outcome === undefined || outcome === e.outcome)) return e;
       changed++;
-      return { ...e, wins: r.wins, losses: r.losses, grade: r.grade };
+      return { ...e, wins: r.wins, losses: r.losses, grade: r.grade, ...(outcome !== undefined && { outcome }) };
     });
     // lpush leaves its LAST arg at the head, so push the reverse to keep newest-first
     if (changed) await redis.multi().del(key).lpush(key, ...[...next].reverse()).exec();

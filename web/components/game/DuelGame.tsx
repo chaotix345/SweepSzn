@@ -7,6 +7,7 @@ import { DEFAULT_PERSONA, DUEL_TURNS, PERSONAS, isPersona, newDuelSeed, personaI
 import { saveResult } from "@/lib/resultHistory";
 import { pushResult } from "@/lib/account";
 import { ev } from "@/lib/ev";
+import { isoDay } from "@/lib/poolDate";
 import { getUid } from "@/lib/streak";
 import { scrollToTop } from "@/lib/scroll";
 import { useSessionContext } from "@/components/SessionProvider";
@@ -68,6 +69,11 @@ export function DuelGame({ onModeSelect }: { onModeSelect: () => void }) {
   const [final, setFinal] = useState<Final | null>(null);
   const [left, setLeft] = useState(CLOCK_SECS);
   const genRef = useRef(0);
+  // pool date pinned at begin() (Game.tsx's isoDay convention): every spin, bot-pick and result call
+  // sends it, so a duel that crosses a release midnight uses one pool end to end
+  const asOfRef = useRef("");
+  // Game.start() already counted the duel the player opened; every later begin() counts its own play
+  const playCountedRef = useRef(true);
   // retry closures call through this ref, so no callback has to reference itself (react-hooks/immutability)
   const retryRef = useRef<{ score: (s: string, ps: Persona, pk: { id: string; slot: Slot }[]) => void; spin: (s: string, t: number, yr: Roster, bp: BotPick[]) => void; advance: (s: string, ps: Persona, pk: { id: string; slot: Slot }[], yr: Roster) => void } | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -86,7 +92,7 @@ export function DuelGame({ onModeSelect }: { onModeSelect: () => void }) {
     const gen = genRef.current;
     setBusy("score"); setError(null);
     try {
-      const r = await postJson("/api/duel/result", { seed: s, persona: ps, picks: pk });
+      const r = await postJson("/api/duel/result", { seed: s, persona: ps, picks: pk, asOf: asOfRef.current });
       if (!r.ok) throw new Error("score failed");
       const d = (await r.json()) as Final;
       if (gen !== genRef.current) return;
@@ -107,7 +113,7 @@ export function DuelGame({ onModeSelect }: { onModeSelect: () => void }) {
     setSpinning(true); setCurrent(null); setSelPlayer(null); setError(null); setTurn(t);
     try {
       const exclude = [...SLOTS.map((x) => yr[x]?.id).filter(Boolean), ...bp.map((b) => b.player.id)];
-      const [r] = await Promise.all([postJson("/api/spin", { seed: s, round: t >> 1, exclude, open: openOf(yr) }), wait(700)]);
+      const [r] = await Promise.all([postJson("/api/spin", { seed: s, round: t >> 1, exclude, open: openOf(yr), asOf: asOfRef.current }), wait(700)]);
       if (!r.ok) throw new Error("spin failed");
       const d = (await r.json()) as DuelSpin;
       if (gen !== genRef.current) return;
@@ -124,7 +130,7 @@ export function DuelGame({ onModeSelect }: { onModeSelect: () => void }) {
     const gen = genRef.current;
     setBusy("bot"); setError(null);
     try {
-      const r = await postJson("/api/duel/bot-pick", { seed: s, persona: ps, picks: pk });
+      const r = await postJson("/api/duel/bot-pick", { seed: s, persona: ps, picks: pk, asOf: asOfRef.current });
       if (!r.ok) throw new Error("bot failed");
       const d = (await r.json()) as { bot: BotPick[]; next: number | null };
       await wait(650); // a beat for the bot "on the clock"
@@ -141,16 +147,14 @@ export function DuelGame({ onModeSelect }: { onModeSelect: () => void }) {
 
   const begin = useCallback(() => {
     genRef.current += 1;
+    if (!playCountedRef.current) ev("play", { uid: getUid(), mode: "duel" });
+    playCountedRef.current = false;
+    asOfRef.current = isoDay();
     const s = newDuelSeed();
     setSeed(s); setYou(EMPTY); setPicks([]); setBot([]); setFinal(null); setSelPlayer(null); setBusy(null);
     setPhase("draft");
     void loadSpin(s, 0, EMPTY, []);
   }, [loadSpin]);
-
-  const rematch = useCallback(() => {
-    ev("play", { uid: getUid(), mode: "duel" });
-    begin();
-  }, [begin]);
 
   const placeWith = useCallback((c: DraftCandidate, slot: Slot) => {
     if (!current || busy || you[slot] || !c.eligible.includes(slot)) return;
@@ -197,19 +201,20 @@ export function DuelGame({ onModeSelect }: { onModeSelect: () => void }) {
       </p>
       <fieldset className="mt-6">
         <legend className="text-xs font-bold uppercase tracking-widest text-zinc-500">Pick your opponent</legend>
-        <div role="radiogroup" aria-label="Opponent" className="mt-2 grid gap-3 sm:grid-cols-3">
+        <div className="mt-2 grid gap-3 sm:grid-cols-3">
           {PERSONAS.map((p) => {
             const on = p.key === persona;
             return (
-              <button key={p.key} role="radio" aria-checked={on} onClick={() => choosePersona(p.key)}
-                className={`flex flex-col rounded-2xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${
+              <label key={p.key}
+                className={`flex cursor-pointer flex-col rounded-2xl border p-4 text-left transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-orange-500 ${
                   on ? "border-orange-500 bg-orange-500/10" : "border-zinc-800 bg-zinc-900 hover:border-zinc-600"}`}>
+                <input type="radio" name="duel-persona" value={p.key} checked={on} onChange={() => choosePersona(p.key)} className="sr-only" />
                 <span className="flex items-center justify-between gap-2">
                   <span className="font-bold text-zinc-100">{p.name}</span>
                   <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-300">{p.level}</span>
                 </span>
                 <span className="mt-1 text-sm text-zinc-400">{p.blurb}</span>
-              </button>
+              </label>
             );
           })}
         </div>
@@ -232,7 +237,7 @@ export function DuelGame({ onModeSelect }: { onModeSelect: () => void }) {
     <div className="mx-auto max-w-3xl px-4 py-6">
       <button onClick={onModeSelect} className="mb-3 text-xs text-zinc-400 transition hover:text-zinc-200">← Modes</button>
       <DuelResult persona={final.persona} outcome={final.outcome} you={final.you} bot={final.bot} card={final.card}
-        onRematch={rematch} onChangePersona={() => { genRef.current += 1; setPhase("setup"); }} />
+        onRematch={begin} onChangePersona={() => { genRef.current += 1; setPhase("setup"); }} />
     </div>
   );
 

@@ -13,6 +13,7 @@ import { compareHeadline } from "./challenge";
 
 export const OG_SIZE = { width: 1200, height: 630 };
 export const OG_ALT = "SweepSzn — build an all-time NBA starting five";
+export const DUEL_OG_ALT = "SweepSzn Draft Duel result: a player's all-time NBA starting five against a bot's, with both 82-game records";
 // ImageResponse defaults to `max-age=0, must-revalidate`, so every unfurl re-rendered (cold start +
 // players.json parse + satori). URL-determined share cards (/r /pe /sg /dex/s /rank, brand fallback
 // included) depend only on the URL + deployed data → long CDN TTL; /c reads live Redis → short.
@@ -421,13 +422,15 @@ export function compareOgElement(a: { result: LineupResult; players: Player[] },
   );
 }
 
-// Draft Duel card: you vs the bot persona, both records + both fives (post-commit — both are locked,
-// so showing the lineups leaks nothing; DESIGN.md §12). The verdict color follows win/loss semantics.
+// Draft Duel card: the player vs the bot persona, both records + both fives (post-commit — both are
+// locked, so showing the lineups leaks nothing; DESIGN.md §12). Labels are neutral ("Player"), like the
+// shared /duel/ page, since whoever opens the link isn't the one who drafted. The verdict color follows
+// win/loss semantics.
 export function duelOgElement(
   personaName: string, outcome: "w" | "l" | "t",
   you: { result: LineupResult; players: Player[] }, bot: { result: LineupResult; players: Player[] },
 ) {
-  const verdict = outcome === "w" ? `Beat ${personaName}` : outcome === "l" ? `${personaName} wins` : "Dead even";
+  const verdict = outcome === "w" ? `Player beat ${personaName}` : outcome === "l" ? `${personaName} wins` : "Dead even";
   const vColor = outcome === "w" ? "#34d399" : outcome === "l" ? "#f87171" : "#e4e4e7";
   const side = (label: string, s: { result: LineupResult; players: Player[] }, dot: string) => {
     const g = GRADE_HEX[s.result.grade] ?? "#e4e4e7";
@@ -468,7 +471,7 @@ export function duelOgElement(
       </div>
       <span style={{ display: "flex", marginTop: 28, fontSize: 64, fontWeight: 900, color: vColor }}>{ascii(verdict)}</span>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: "auto" }}>
-        {side("You", you, "#ff6a00")}
+        {side("Player", you, "#ff6a00")}
         {side(personaName, bot, "#38bdf8")}
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 26 }}>

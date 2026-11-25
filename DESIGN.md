@@ -220,6 +220,11 @@ change that. The defenses we DO maintain, and that every new mode must keep:
 3. **One identity, keep-best, rate-limited.** Anti-grind comes from per-uid keep-best, daily caps,
    and per-IP rate limits — not from trying to hide the math.
 
+Draft Duel posts to no board, streak or Redis key: `/api/duel/result` replays and scores the duel,
+and the Duel W-L on `/stats` is tallied from the player's own result history. That record is
+display-only and client-trusted (a crafted history entry can inflate it), the same trust level as the
+other local stats. Nothing competitive reads it.
+
 Corollary: anonymous identity is a **bearer token** (`crypto.randomUUID()` in localStorage,
 `lib/streak.ts`). Unguessable, but anyone who obtains the value IS that player. Accepted: friction-free
 anon play is the funnel; signed-in (Google) identity is the upgrade path for anyone who cares about
@@ -240,7 +245,8 @@ and OG cards keep resolving it exactly as before. The release key maps to a go-l
 in `web/lib/poolDate.ts`, the one place that date is set. A spin draws from the pool of its date:
 dated seeds (Daily, Factor Hunt, Blueprint, Surgeon) use the seed's day, a challenge uses the day it
 was created (records from before pool dating use the day before the first release), and other modes
-pin the day the game started. `verifyTrace` replays with the same date, so a five drafted before a
+pin the day the game started (Draft Duel sends its start day on every spin, bot-pick and result call,
+so the server replay of a duel that crosses a release midnight uses one pool end to end). `verifyTrace` replays with the same date, so a five drafted before a
 release still verifies after it and today's Daily never changes mid-day. Reference pages (`/teams`,
 receipts) show the newest pool.
 

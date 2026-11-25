@@ -1,10 +1,10 @@
 import { ImageResponse } from "next/og";
 import { resolveDuelCard } from "@/lib/duelBot";
 import { personaInfo } from "@/lib/duel";
-import { duelOgElement, brandOgElement, OG_SIZE, OG_ALT, OG_CACHE } from "@/lib/og";
+import { duelOgElement, brandOgElement, OG_SIZE, DUEL_OG_ALT, OG_CACHE } from "@/lib/og";
 
 export const runtime = "nodejs";
-export const alt = OG_ALT;
+export const alt = DUEL_OG_ALT;
 export const size = OG_SIZE;
 export const contentType = "image/png";
 
