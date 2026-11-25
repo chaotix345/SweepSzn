@@ -26,7 +26,7 @@ import { dayUTC, shortDay } from "@/lib/day";
 import { canShareAsChallenge, createShareChallenge } from "@/lib/challengeShare";
 import { getUid, getName } from "@/lib/streak";
 import { encodeLineup } from "@/lib/share";
-import { saveResult } from "@/lib/resultHistory";
+import { saveResult, readLastResult, writeLastResult } from "@/lib/resultHistory";
 import { pushResult } from "@/lib/account";
 import { useSessionContext } from "@/components/SessionProvider";
 import { track } from "@vercel/analytics";
@@ -57,16 +57,24 @@ export function GameResultView({ mode, seed, asOf, result, roundNum, onRestart, 
   const [lbView, setLbView] = useState<LeaderboardView | null>(null); // daily standing for the result-card pill
   const { user } = useSessionContext();
   const [convertedId, setConvertedId] = useState<string | null>(null); // challenge minted from a finished game
-  const [sharedChallengeId, setSharedChallengeId] = useState<string | null>(null); // created by Share (D6)
+  // created by Share (D6). Kept on lastResult for this seed, so a refresh/remount reuses it: one result, one challenge.
+  const [sharedChallengeId, setSharedChallengeId] = useState<string | null>(() => {
+    const last = readLastResult<{ seed?: string; shareChallengeId?: string }>();
+    return last?.seed === seed && last.shareChallengeId ? last.shareChallengeId : null;
+  });
   // D6: a Classic/Prime result's Share creates a Challenge on the same seed (fit-locked server-side).
   // Remembered under "Your results" like a converted challenge, so the creator can reopen the dashboard.
   // (a challenge RESPONDER replays the creator's classic/prime seed — their share stays the /r/ claim)
   const challengeShare = (mode === "classic" || mode === "prime") && canShareAsChallenge(seed, result.trace) ? {
+    path: sharedChallengeId ? `/c/${sharedChallengeId}` : null,
     create: async () => {
+      if (sharedChallengeId) return `/c/${sharedChallengeId}`;
       const id = await createShareChallenge({ seed, asOf, trace: result.trace, usedHints: result.usedHints }, { uid: user?.uid ?? getUid(), name: getName() });
       if (!id) return null;
       const saved = saveResult({ encoded: encodeLineup(result.players.map((p) => p.id), result.usedHints), mode: "challenge", wins: result.result.wins, losses: result.result.losses, grade: result.result.grade, challengeId: id });
       if (user) void pushResult(saved);
+      const last = readLastResult<{ seed?: string }>();
+      if (last?.seed === seed) writeLastResult({ ...last, shareChallengeId: id });
       track("challenge_submit", { role: "creator" });
       setSharedChallengeId(id);
       return `/c/${id}`;
@@ -153,7 +161,7 @@ export function ArchiveResultView({ date, result, onRestart, onModeSelect, onPla
           <p className="mt-3 text-center text-xs text-zinc-400" data-testid="archive-unranked">Unranked replay: no leaderboard, streak or weekly credit.</p>
           <CeilingReveal date={date} yourWins={result.result.wins} />
         </>} />
-      <div className="mt-4 grid gap-2 sm:flex sm:gap-3">
+      <div className="mt-4 grid auto-rows-fr gap-2 sm:flex sm:gap-3">
         <ButtonLink href="/archive" variant="secondary" className="flex-1">← All past Dailies</ButtonLink>
         <Button variant="primary" onClick={onPlayToday} className="flex-1">Play today&apos;s Daily →</Button>
       </div>

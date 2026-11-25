@@ -29,7 +29,8 @@ type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: stri
 // Factor Hunt verdict: the locked pre-reveal prediction vs. the engine's actual top factor.
 type FactorHuntProp = { prediction: string; answer: string; correct: boolean };
 // D6: a Classic/Prime result's Share creates a Challenge (/c/); `create` resolves to its path or null.
-type ChallengeShareProp = { create: () => Promise<string | null> };
+// `path` is a challenge this result already created (persisted), so Share reuses it instead of creating another.
+type ChallengeShareProp = { create: () => Promise<string | null>; path?: string | null };
 // Daily share: spoiler-free grid while that Daily is live (names only after the rollover).
 type DailyShareProp = { date: string; live: boolean };
 // Daily leaderboard standing at submit time (rank/total from the submit response) — context only.
@@ -97,9 +98,9 @@ export function SaveCardImage({ path, inline }: { path: string; inline?: boolean
     // one cell group in the result card's secondary share row (F02): same 44px height as X / Bluesky
     return (
       <>
-        <button onClick={save} aria-label="Save card image" className={`${ROW_BTN} flex-[1.6]`}>↓ {label}</button>
+        <button onClick={save} aria-label="Save card image" className={`${ROW_BTN} flex-[1.6] whitespace-nowrap`}>↓ {label}</button>
         {canCopyImage && (
-          <button onClick={copy} aria-label="Copy card image to clipboard" className={`${ROW_BTN} flex-1`}>
+          <button onClick={copy} aria-label="Copy card image to clipboard" className={`${ROW_BTN} flex-1 whitespace-nowrap`}>
             {state === "copied" ? "Copied ✓" : "Copy"}
           </button>
         )}
@@ -220,7 +221,8 @@ export default function ResultCard({
             (X · Bluesky · Save image). On a shared permalink the cold viewer's "build your own" is
             the conversion that matters, so it takes the orange and Share drops to secondary.
             (DESIGN.md: exactly one orange CTA per row.) */}
-        <ShareButton primary={!shared} result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint}
+        {/* an archive replay's one orange CTA is "Play today's Daily" under the card, so Share stays secondary */}
+        <ShareButton primary={!shared && modeKey !== "archive"} result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint}
           challenge={shared ? undefined : challengeShare} daily={shared ? undefined : daily} cardPath={sharePath} onChallengeFallback={() => setChallengeDown(true)}
           companion={shared ? (
             <ButtonLink href="/play?mode=daily" variant="primary" className="w-full">Build your own five →</ButtonLink>
@@ -401,7 +403,7 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copyErr, setCopyErr] = useState(false);
-  const [chalPath, setChalPath] = useState<string | null>(null); // the created /c/<id>
+  const [chalPath, setChalPath] = useState<string | null>(challenge?.path ?? null); // the created /c/<id>
   const [chalFailed, setChalFailed] = useState(false);           // fell back to /r/
   const [creating, setCreating] = useState(false);
   const [tapAgain, setTapAgain] = useState(false);               // the sheet needs a fresh tap after the async create
@@ -451,6 +453,8 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
     return got;
   };
   const needsCreate = !!challenge && !chalPath && !chalFailed;
+  // the card image shows the five: never while the Daily is live, nor on a challenge (hidden until the friend plays)
+  const canSaveImage = !daily?.live && !(challenge && !chalFailed);
 
   // close the popover on outside-click or Escape (keyboard + mouse dismissal)
   useEffect(() => {
@@ -498,7 +502,7 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
   const label = creating ? "Creating link…" : tapAgain ? "Link ready · Share" : copied ? "Copied!" : copyErr ? "Copy failed" : "Share";
   const aria = { "aria-busy": creating || undefined, "aria-haspopup": !canNative, "aria-expanded": !canNative ? open : undefined, "aria-controls": !canNative ? "result-share-panel" : undefined };
   const mainBtn = companion ? (
-    <Button variant={primary ? "primary" : "secondary"} onClick={onShare} {...aria} className="w-full">{label}</Button>
+    <Button variant={primary ? "primary" : "secondary"} onClick={onShare} {...aria} className="h-full w-full">{label}</Button>
   ) : (
     <button onClick={onShare} {...aria}
       className={`min-h-11 min-w-0 flex-1 rounded-xl py-2.5 text-sm transition ${primary ? "bg-orange-500 font-bold text-black hover:bg-orange-400" : "border border-zinc-700 font-semibold hover:border-zinc-500"}`}>
@@ -532,13 +536,14 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
   if (companion) {
     return (
       <div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
+        {/* auto-rows-fr: Share and Build Another keep one height (the outlined button's border would add 2px) */}
+        <div className="grid auto-rows-fr grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
           <div className="relative" ref={ref}>{mainBtn}{panel}</div>
           {companion}
         </div>
         <div className="mt-2 flex gap-2">
           {xLink}{bskyLink}
-          {cardPath && <SaveCardImage path={cardPath} inline />}
+          {cardPath && canSaveImage && <SaveCardImage path={cardPath} inline />}
         </div>
       </div>
     );

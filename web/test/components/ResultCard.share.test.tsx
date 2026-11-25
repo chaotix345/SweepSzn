@@ -164,6 +164,55 @@ describe("F02 — one primary pair, one secondary row, 44px targets", () => {
   });
 });
 
+describe("Save image never spoils the five", () => {
+  const saveBtn = (c: HTMLElement) => c.querySelector('button[aria-label="Save card image"]');
+  it("is hidden while the Daily is live, back after the rollover", () => {
+    expect(saveBtn(renderCard({ daily: { date: "2026-11-26", live: true } }).container)).toBeNull();
+    cleanup();
+    expect(saveBtn(renderCard({ daily: { date: "2026-11-25", live: false } }).container)).toBeTruthy();
+  });
+
+  it("is hidden on a Classic/Prime challenge share, and returns only if it fell back to /r/", async () => {
+    const { container } = renderCard({ challengeShare: { create: async () => "/c/abc12345" } });
+    expect(saveBtn(container)).toBeNull();
+    await act(async () => { fireEvent.click(shareBtn(container)); });
+    expect(saveBtn(container)).toBeNull();
+    cleanup();
+    const fb = renderCard({ challengeShare: { create: async () => null } }).container;
+    expect(saveBtn(fb)).toBeNull();
+    await act(async () => { fireEvent.click(shareBtn(fb)); });
+    expect(saveBtn(fb)).toBeTruthy();
+  });
+
+  it("does not wrap in the 390px row", () => {
+    expect(saveBtn(renderCard().container)!.className).toContain("whitespace-nowrap");
+  });
+});
+
+describe("one orange primary per view", () => {
+  it("an archive replay demotes Share (the orange CTA is \"Play today's Daily\" below the card)", () => {
+    const { container } = renderCard({ modeKey: "archive" });
+    expect(shareBtn(container).className).not.toContain("bg-orange-500");
+    cleanup();
+    expect(shareBtn(renderCard().container).className).toContain("bg-orange-500");
+  });
+
+  it("Share and Build Another share one row height", () => {
+    const { container } = renderCard();
+    const share = shareBtn(container);
+    expect(share.className).toContain("h-full");
+    expect(share.parentElement!.parentElement!.className).toContain("auto-rows-fr");
+  });
+
+  it("a persisted challenge path is reused: Share never creates a second one", async () => {
+    const create = vi.fn(async () => "/c/zzz99999");
+    const { container } = renderCard({ challengeShare: { create, path: "/c/abc12345" } });
+    await act(async () => { fireEvent.click(shareBtn(container)); });
+    expect(create).not.toHaveBeenCalled();
+    expect(xHref(container)).toContain("/c/abc12345");
+  });
+});
+
 describe("F13 — a shared permalink speaks about 'this five', not 'your five'", () => {
   it("hides the viewer's Dex strip and branches the second-person copy", () => {
     const { container, queryByTestId } = renderCard({ shared: true, mode: "shared", usedHints: true });

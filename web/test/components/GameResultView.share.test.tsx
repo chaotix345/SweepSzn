@@ -23,7 +23,7 @@ vi.mock("@/components/game/useDailyCeiling", () => ({ useDailyCeiling: () => nul
 
 import { GameResultView } from "@/components/game/GameResultView";
 import { todaySeed, type GameResult } from "@/components/game/gameState";
-import { listResults } from "@/lib/resultHistory";
+import { listResults, writeLastResult, readLastResult } from "@/lib/resultHistory";
 import type { Mode } from "@/components/game/types";
 
 const IDS = ["p0", "p1", "p2", "p3", "p4"];
@@ -38,7 +38,7 @@ const view = (mode: Mode, seed: string, result: GameResult = RESULT) => render(
   <GameResultView mode={mode} seed={seed} asOf="2026-11-26" result={result} roundNum={5} onRestart={() => {}} onModeSelect={() => {}} onCreateChallenge={() => {}}
     pickem={{ vote: null, crowd: null, subject: null }} fhPrediction={null} blueprint={null} challengeId={null} challengeRole={null} />,
 );
-const card = () => cardProps.at(-1) as { challengeShare?: { create: () => Promise<string | null> }; daily?: { date: string; live: boolean }; prime?: boolean };
+const card = () => cardProps.at(-1) as { challengeShare?: { create: () => Promise<string | null>; path?: string | null }; daily?: { date: string; live: boolean }; prime?: boolean };
 const convertBtn = () => screen.queryByRole("button", { name: /challenge a friend to beat this/i });
 
 let bodies: Record<string, unknown>[] = [];
@@ -66,6 +66,27 @@ describe("GameResultView — D6 share wiring", () => {
     const id = path!.slice(3);
     expect(screen.getByText(/your challenge is live/i).closest("a")?.getAttribute("href")).toBe(`/play?own=${id}`);
     expect(listResults()[0]).toMatchObject({ mode: "challenge", challengeId: id });
+  });
+
+  it("one result, one challenge: after a remount Share reuses the persisted /c/ id (no second submit)", async () => {
+    writeLastResult({ mode: "classic", seed: "classic-42", asOf: "2026-11-26", result: RESULT });
+    const first = view("classic", "classic-42");
+    let path: string | null = null;
+    await act(async () => { path = await card().challengeShare!.create(); });
+    expect(bodies).toHaveLength(1);
+    expect(readLastResult<{ shareChallengeId?: string }>()?.shareChallengeId).toBe(path!.slice(3));
+    first.unmount();
+    view("classic", "classic-42");
+    expect(card().challengeShare!.path).toBe(path);
+    let again: string | null = null;
+    await act(async () => { again = await card().challengeShare!.create(); });
+    expect(again).toBe(path);
+    expect(bodies).toHaveLength(1);
+    expect(screen.getByText(/your challenge is live/i)).toBeTruthy();
+    // a different game (new seed) still gets its own challenge
+    cleanup();
+    view("classic", "classic-43");
+    expect(card().challengeShare!.path).toBeNull();
   });
 
   it("Prime: shares as a challenge and keeps the PRIME stamp", () => {

@@ -1,4 +1,4 @@
-import { newChallengeId } from "./challenge";
+import { newChallengeId, isFitLockableSeed } from "./challenge";
 import type { DraftStep } from "./types";
 
 // D6 "beat this": a Classic or Prime free-play result shares as a Challenge. Sharing submits the
@@ -8,8 +8,7 @@ import type { DraftStep } from "./types";
 export type ChallengeDraft = { seed: string; asOf: string; trace: DraftStep[]; usedHints: boolean };
 
 export function canShareAsChallenge(seed: string, trace: DraftStep[]): boolean {
-  const freePlay = seed.startsWith("classic-") || (seed.startsWith("prime-") && !seed.startsWith("prime-daily-"));
-  return freePlay && trace.length === 5;
+  return isFitLockableSeed(seed) && trace.length === 5; // the same seeds the server fit-locks
 }
 
 // Creates the challenge and returns its id, or null when challenges are unavailable (no Redis → 503),

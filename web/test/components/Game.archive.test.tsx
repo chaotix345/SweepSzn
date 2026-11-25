@@ -148,6 +148,38 @@ describe("Game — Daily archive (W3)", () => {
     expect(listArchiveRuns()).toEqual({});
   });
 
+  it("\"Play today's Daily\" from an archive result reopens today's result when already played", async () => {
+    window.history.replaceState({}, "", "/play?mode=daily");
+    const today = render(<Game />);
+    await act(async () => {});
+    await draftFive();
+    today.unmount();
+    window.history.replaceState({}, "", `/play?mode=daily&date=${PAST}`);
+    render(<Game />);
+    await act(async () => {});
+    await draftFive();
+    expect(screen.getByTestId("result-card").getAttribute("data-mode")).toBe("Archive · Nov 19");
+    const spins = bodies.filter((b) => b.path === "/api/spin").length;
+    await click(btn((t) => /Play today's Daily/.test(t)));
+    await act(async () => {});
+    expect(screen.getByTestId("result-card").getAttribute("data-mode")).not.toMatch(/Archive/);
+    expect(screen.getByTestId("result-card").querySelector('[data-testid="daily-comeback"]')).not.toBeNull();
+    expect(boards.at(-1)).toMatchObject({ date: TODAY });
+    expect(bodies.filter((b) => b.path === "/api/spin")).toHaveLength(spins); // no re-draft
+  });
+
+  it("\"Play today's Daily\" starts today's Daily when it hasn't been played", async () => {
+    window.history.replaceState({}, "", `/play?mode=daily&date=${PAST}`);
+    render(<Game />);
+    await act(async () => {});
+    await draftFive();
+    await click(btn((t) => /Play today's Daily/.test(t)));
+    expect(screen.queryByTestId("result-card")).toBeNull();
+    expect(screen.queryByText(/Archive ·/)).toBeNull();
+    await click(btn((t) => /^🎰 spin/i.test(t.trim())));
+    expect(bodies.filter((b) => b.path === "/api/spin").at(-1)?.body.seed).toBe(`daily-${TODAY}`);
+  });
+
   it("Restart on an archive day restarts the same archive day", async () => {
     window.history.replaceState({}, "", `/play?mode=daily&date=${PAST}`);
     render(<Game />);

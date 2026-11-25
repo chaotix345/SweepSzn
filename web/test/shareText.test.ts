@@ -28,6 +28,8 @@ describe("claimText — the share reads as a claim (W6)", () => {
   it("labels Prime and hinted fives", () => {
     expect(claimText({ wins: 70, losses: 12, prime: true, challenge: true })).toMatch(/^Engine says my PRIME five goes 70-12\./);
     expect(claimText({ wins: 50, losses: 32, usedHints: true, challenge: true })).toMatch(/^Engine says 50-32 \(drafted with hints\)\./);
+    // a named (fallback /r/) Prime share keeps the PRIME label
+    expect(claimText({ wins: 70, losses: 12, prime: true, names: ["Jordan", "Shaq"] })).toMatch(/^Engine says my PRIME cross-era five \(Jordan · Shaq\) goes 70-12\./);
   });
 
   it("says 'every real team' at the extremes instead of a percentage", () => {

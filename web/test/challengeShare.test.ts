@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { canShareAsChallenge, createShareChallenge, type ChallengeDraft } from "@/lib/challengeShare";
+import { isFitLockableSeed } from "@/lib/challenge";
 import type { DraftStep } from "@/lib/types";
 
 const TRACE: DraftStep[] = ["PG", "SG", "SF", "PF", "C"].map((slot, i) => ({ slot: slot as DraftStep["slot"], pickedId: `p${i}`, respins: [] }));
@@ -19,6 +20,13 @@ describe("canShareAsChallenge — Classic and Prime free-play only (D6)", () => 
       expect(canShareAsChallenge(s, TRACE)).toBe(false);
     }
     expect(canShareAsChallenge("classic-123", [])).toBe(false);
+  });
+
+  it("matches the seeds the server fit-locks (same prefixes, incl. \"classic-\")", () => {
+    for (const s of ["classic-123", "prime-123", "classicx", "classic", "prime-daily-2026-11-26", "daily-2026-11-26", "h2h-abc12345"]) {
+      expect(canShareAsChallenge(s, TRACE)).toBe(isFitLockableSeed(s));
+    }
+    expect(isFitLockableSeed("classicx")).toBe(false);
   });
 });
 

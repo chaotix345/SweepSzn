@@ -32,7 +32,7 @@ import { getUid } from "@/lib/streak";
 import ChallengeOwner from "@/components/ChallengeOwner";
 import { newChallengeId, challengeSeed } from "@/lib/challenge";
 import { encodeLineup } from "@/lib/share";
-import { saveResult, writeLastResult, readLastResult } from "@/lib/resultHistory";
+import { saveResult, writeLastResult, readLastResult, listResults } from "@/lib/resultHistory";
 import { useSessionContext } from "@/components/SessionProvider";
 import { pushResult } from "@/lib/account";
 import { pickemSeedOk, getPickemSkip, getLocalVote } from "@/lib/pickem";
@@ -41,7 +41,7 @@ import { applySwapToTrace } from "@/lib/trace";
 import { projectionAllowed, type RosterProjection } from "@/lib/projection";
 import { isoDay, seedDay } from "@/lib/poolDate";
 import { saveArchiveRun } from "@/lib/archiveHistory";
-import { shortDay } from "@/lib/day";
+import { dayUTC, shortDay } from "@/lib/day";
 
 const rand = () => Math.floor(Math.random() * 1e9);
 
@@ -224,7 +224,6 @@ export default function Game() {
   }, [abandonInFlight, resetPickem, resetFh, resetBp, resetSg, setReel, setLockedReel]);
 
   const restart = useCallback(() => { if (mode) start(mode, undefined, archiveDate ?? undefined); }, [mode, archiveDate, start]);
-  const playToday = useCallback(() => start("daily"), [start]);
 
   // "← Modes": abandon the game like start() does (in-flight spin/simulate/FH/Surgeon work) and drop
   // the restore params, or a refresh would resurrect the result the player just walked away from.
@@ -244,6 +243,13 @@ export default function Game() {
     } catch { /* no history API */ }
     setRestoreNonce((n) => n + 1);
   }, []);
+  // "Play today's Daily" from an archive replay: already played today? Reopen that result (the picker's
+  // F15 path) instead of re-drafting the already-scored board.
+  const playToday = useCallback(() => {
+    const today = listResults().find((e) => e.mode === "daily" && dayUTC(new Date(e.ts)) === dayUTC());
+    if (today) viewDailyResult(today.encoded); // the restore resets archiveDate itself
+    else start("daily");
+  }, [start, viewDailyResult]);
   useRestoreFromUrl(start, setOwnerId, setRestoring, setMode, setSeed, setAsOf, setResult, setFhPrediction, setBlueprint, setSgResult, setArchiveDate, restoreNonce);
 
   // Mode fork at "five locked": Factor Hunt detours through the prediction step; Surgeon detours

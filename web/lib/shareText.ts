@@ -12,7 +12,9 @@ export function claimText({ wins, losses, names, prime, usedHints, challenge }: 
 }): string {
   const rec = `${wins}-${losses}${usedHints ? " (drafted with hints)" : ""}`;
   // a challenge hides the creator's five until the friend has played (D6), so its copy never names it
-  const who = !challenge && names?.length ? `${names.join(" · ")} go ${rec}` : prime ? `my PRIME five goes ${rec}` : rec;
+  const named = !challenge && !!names?.length;
+  const who = named && prime ? `my PRIME cross-era five (${names!.join(" · ")}) goes ${rec}`
+    : named ? `${names!.join(" · ")} go ${rec}` : prime ? `my PRIME five goes ${rec}` : rec;
   const dare = challenge ? "Same spins, your draft. Beat this five →" : "Beat this five →";
   return `Engine says ${who}. ${historyPercentileText(wins)}. Wrong? ${dare}`;
 }

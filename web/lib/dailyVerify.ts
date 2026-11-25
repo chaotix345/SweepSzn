@@ -38,7 +38,10 @@ export function verifyTrace(seed: string, trace: DraftStep[], deps: VerifyDeps, 
     for (const rs of step.respins) {
       const salt = ++totalRespins; // global sequential salt — matches the client's saltRef
       if (rs === "team") { teamRespins++; cur = deps.spinPool(seed, r, { exclude, lockedDecade: cur.decade, excludeTeam: cur.team, salt, asOf }); }
-      else if (rs === "era") { eraRespins++; cur = deps.spinPool(seed, r, { exclude, lockedTeam: cur.team, excludeDecade: cur.decade, salt, asOf }); }
+      else if (rs === "era") {
+        // Prime spins are team-only (the era is locked to PRIME): an era re-spin would be a free extra team reroll
+        if (seed.startsWith("prime-") || cur.decade === "PRIME") return { ok: false, error: `no era re-spin in Prime ${r}` };
+        eraRespins++; cur = deps.spinPool(seed, r, { exclude, lockedTeam: cur.team, excludeDecade: cur.decade, salt, asOf }); }
       else return { ok: false, error: `bad respin ${r}` };
       if (teamRespins > 1 || eraRespins > 1) return { ok: false, error: "too many re-spins" };
     }
