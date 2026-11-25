@@ -116,8 +116,14 @@ async function spinAndWait(): Promise<void> {
   await act(async () => {});
 }
 
-// Reach the Pick'Em overlay: pick Daily, spin once.
+// F04: Pick'Em only asks players who have finished a game — seed one finished game on this device.
+function seedFinishedGame() {
+  localStorage.setItem("82-0:results", JSON.stringify([{ encoded: "x", mode: "classic", wins: 40, losses: 42, grade: "C", ts: 1 }]));
+}
+
+// Reach the Pick'Em overlay: a returning player picks Daily and spins once.
 async function reachPickemDialog(): Promise<void> {
+  seedFinishedGame();
   await act(async () => { fireEvent.click(findDailyModeBtn()); });
   await spinAndWait();
 }
@@ -183,6 +189,15 @@ describe("Game — Pick'Em overlay focus trap", () => {
 
     const dialog = screen.queryByRole("dialog", { name: /Pick'Em crowd vote/i });
     expect(dialog).toBeTruthy();
+  });
+
+  it("F04: a first-time player (no finished game) is never asked", async () => {
+    renderGame();
+    await act(async () => { fireEvent.click(findDailyModeBtn()); });
+    await spinAndWait();
+
+    expect(screen.queryByRole("dialog", { name: /Pick'Em crowd vote/i })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /Select Michael Jordan/i }).length).toBeGreaterThan(0);
   });
 
   it("Pick'Em: Tab from last focusable wraps to first (forward containment)", async () => {

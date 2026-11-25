@@ -42,6 +42,7 @@ import { projectionAllowed, type RosterProjection } from "@/lib/projection";
 import { isoDay, seedDay } from "@/lib/poolDate";
 import { saveArchiveRun } from "@/lib/archiveHistory";
 import { dayUTC, shortDay } from "@/lib/day";
+import { onlyOpenSlot } from "@/lib/placement";
 
 const rand = () => Math.floor(Math.random() * 1e9);
 
@@ -260,10 +261,11 @@ export default function Game() {
     else simulate(r);
   }, [mode, beginFhPrediction, beginSurgeon, simulate]);
 
-  const place = useCallback((slot: Slot) => {
-    if (!selPlayer || roster[slot] || !selPlayer.eligible.includes(slot)) return;
+  // `c` defaults to the selected player; the one-tap path (onlyOpenSlot) passes it directly.
+  const place = useCallback((slot: Slot, c: DraftCandidate | null = selPlayer) => {
+    if (!c || roster[slot] || !c.eligible.includes(slot)) return;
     setCrowdNote(null); // clear any prior slot's reveal before this lock's fetch resolves
-    traceRef.current.push({ slot, pickedId: selPlayer.id, respins: [...roundRespinsRef.current] });
+    traceRef.current.push({ slot, pickedId: c.id, respins: [...roundRespinsRef.current] });
     roundRespinsRef.current = [];
     // Silent crowd-signal beacon: count this pick for the (mode, spin) config. Fired AFTER the slot
     // is committed, so it can never act as a pre-commit hint (DESIGN.md §12). Best-effort, ignored on error.
@@ -272,7 +274,7 @@ export default function Game() {
       if (!archiveDate) try {
         void fetch("/api/slot-pick", {
           method: "POST", headers: { "content-type": "application/json" }, keepalive: true,
-          body: JSON.stringify({ mode, spinKey: `${current.team}|${current.decade}`, slot, personId: selPlayer.person_id ?? selPlayer.id }),
+          body: JSON.stringify({ mode, spinKey: `${current.team}|${current.decade}`, slot, personId: c.person_id ?? c.id }),
         }).catch(() => {});
       } catch { /* beacon is best-effort */ }
       // Post-lock crowd reveal: how others played THIS slot for this spin. Volume-gated server-side
@@ -287,7 +289,7 @@ export default function Game() {
           .catch(() => {});
       }
     }
-    const next = { ...roster, [slot]: selPlayer };
+    const next = { ...roster, [slot]: c };
     setRoster(next); setSelPlayer(null); setCurrent(null); setLockedReel(null);
     if (SLOTS.every((s) => next[s])) finishDraft(next);
     // Placing a pick collapses the tall candidate browser (the next pick needs a fresh spin), so the
@@ -323,6 +325,15 @@ export default function Game() {
     if (roster[slot]) setSelSlot(slot); // pick up to move/swap
   }, [selPlayer, selSlot, roster, place, canSwap]);
 
+  // F25: tapping a player with exactly one open slot he can play places him there in one tap; with
+  // two or more open fits the tap selects and the slot is chosen next (unchanged).
+  const selectCandidate = useCallback((c: DraftCandidate) => {
+    setSelSlot(null);
+    const fits = onlyOpenSlot(c, roster);
+    if (fits) { place(fits, c); return; }
+    setSelPlayer((p) => (p?.id === c.id ? null : c));
+  }, [roster, place]);
+
   // is `slot` a valid target for the current selection? (drives the orange glow)
   const slotTarget = useCallback((slot: Slot): boolean => {
     if (selPlayer) return !roster[slot] && selPlayer.eligible.includes(slot);
@@ -333,9 +344,10 @@ export default function Game() {
   // Pick'Em overlay gate: first reels settled, nothing drafted yet, a votable seed, not yet
   // voted/skipped (this game, this seed via localStorage, or for good via the skip preference).
   // Suppressed in HoopIQ: the roster is hidden there, so "will the best five win 60+?" is a blind
-  // guess with nothing to reason about.
+  // guess with nothing to reason about. F04: also suppressed until the player has finished a game —
+  // a first-timer has no idea what 60 wins means yet, and the modal buried their first draft.
   const showPickem = !!current && filled === 0 && mode !== "challenge" && mode !== "hoopiq" && mode !== null && !archiveDate &&
-    !pickemDismissed && !pickemVote && pickemSeedOk(seed) && !getPickemSkip() && !getLocalVote(seed);
+    !pickemDismissed && !pickemVote && pickemSeedOk(seed) && !getPickemSkip() && !getLocalVote(seed) && listResults().length > 0;
   const showBpModal = mode === "blueprint" && !blueprint && !restoring;
 
   // Focus management for the vote overlay, the Factor Hunt prediction, the Blueprint commit and the
@@ -372,7 +384,7 @@ export default function Game() {
       fhPrediction={fhPrediction} blueprint={blueprint} challengeId={challengeId} challengeRole={challengeRole} />
   );
   if (loading) return (
-    <Shell roundNum={5} mode={mode} label={archiveLabel} onRestart={restart} onModeSelect={goToModes} showRestart>
+    <Shell roundNum={5} complete mode={mode} label={archiveLabel} onRestart={restart} onModeSelect={goToModes} showRestart>
       <ResultSkeleton label={mode === "surgeon" ? "Diagnosing your lineup…" : mode === "factorhunt" ? "Building your question…" : "Running all 82 games…"} />
     </Shell>
   );
@@ -383,7 +395,7 @@ export default function Game() {
         projAllowed={projAllowed} prime={seed.startsWith("prime-")} projection={projection} skips={skips} selPlayer={selPlayer} selSlot={selSlot} hintsUsed={hintsUsed}
         crowdNote={crowdNote} error={error} loading={loading} fhFetching={fhFetching}
         onSpin={spin} onReSpinTeam={reSpinTeam} onReSpinEra={reSpinEra} onRevealHint={revealHint}
-        onSelectCandidate={(c) => { setSelSlot(null); setSelPlayer((p) => (p?.id === c.id ? null : c)); }}
+        onSelectCandidate={selectCandidate}
         onFinish={() => finishDraft(roster)} onRestart={restart} onSlot={clickSlot} slotTarget={slotTarget}
         onCancelSelection={() => { setSelPlayer(null); setSelSlot(null); }} />
 

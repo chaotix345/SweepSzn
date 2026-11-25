@@ -69,7 +69,7 @@ async function draftFive() {
     await act(async () => { vi.advanceTimersByTime(1200); });
     await act(async () => {});
     await click(screen.getAllByRole("button", { name: /^Select Player/ })[0]);
-    await click(screen.getAllByRole("button", { name: new RegExp(`^${slot} slot`) })[0]);
+    { const s = screen.queryAllByRole("button", { name: new RegExp(`^${slot} slot`) })[0]; if (s) await click(s); } // the last open slot places on the tap (F25)
   }
   await act(async () => {});
 }

@@ -65,9 +65,12 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); localStorage.clear(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
+// Two or more open slots: the tap opens the position sheet. One open slot left (round 5): the tap
+// places him directly (F25), so there is no sheet to answer.
 const pickIn = async (name: RegExp) => {
   fireEvent.click(await screen.findByRole("button", { name }));
-  const sheet = await screen.findByRole("dialog", { name: /choose a position/i });
+  const sheet = screen.queryByRole("dialog", { name: /choose a position/i });
+  if (!sheet) return;
   const open = within(sheet).getAllByRole("button").find((b) => SLOTS.includes(b.textContent ?? "") && !(b as HTMLButtonElement).disabled)!;
   fireEvent.click(open);
 };
@@ -98,6 +101,16 @@ describe("DuelGame — setup", () => {
 });
 
 describe("DuelGame — draft", () => {
+  it("F25: with one open slot left, tapping a player places him without the position sheet", async () => {
+    render(<DuelGame onModeSelect={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /duel old head/i }));
+    for (let r = 0; r < 4; r++) await pickIn(new RegExp(`Select Player lo${r}`));
+    fireEvent.click(await screen.findByRole("button", { name: /Select Player lo4/ }));
+    expect(screen.queryByRole("dialog", { name: /choose a position/i })).toBeNull();
+    expect(await screen.findByTestId("duel-result")).toBeTruthy();
+    expect(calls.filter((c) => c.url === "/api/duel/bot-pick").at(-1)!.body.picks).toHaveLength(5);
+  });
+
   it("plays a full duel: spins with every taken id excluded, never asks for fit, scores, saves the W-L", async () => {
     render(<DuelGame onModeSelect={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /duel old head/i }));
