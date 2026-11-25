@@ -12,6 +12,7 @@ disableRedisEnv();
 // Dynamically import every route handler after the Redis env is cleared.
 const { GET: dailyLeaderboardGET } = await import("@/app/api/daily/leaderboard/route");
 const { POST: dailySubmitPOST } = await import("@/app/api/daily/submit/route");
+const { GET: dailyCeilingGET, POST: dailyCeilingPOST } = await import("@/app/api/daily/ceiling/route");
 const { GET: challengeGetGET } = await import("@/app/api/challenge/[id]/route");
 const { POST: challengeSubmitPOST } = await import("@/app/api/challenge/submit/route");
 const { POST: challengeResultsPOST } = await import("@/app/api/challenge/[id]/results/route");
@@ -49,6 +50,17 @@ describe("self-disable 503: redis-gated routes return 503 when Redis env is abse
     );
     expect(status).toBe(503);
     expect(body).toMatchObject({ error: "leaderboard not configured" });
+  });
+
+  // W2: today's ceiling needs a verified submit, so it hides with the board; past days still compute
+  it("POST /api/daily/ceiling (today) → 503, past days still served", async () => {
+    const now = new Date();
+    const today = `${now.getUTCFullYear()}-${now.getUTCMonth() + 1}-${now.getUTCDate()}`;
+    const t = await readJson(await dailyCeilingPOST(req("/api/daily/ceiling", { body: { date: today, uid: "anon-uid-12345678" } })));
+    expect(t.status).toBe(503);
+    expect(t.body.ceiling).toBeUndefined();
+    const past = await readJson(await dailyCeilingGET(req("/api/daily/ceiling?date=2026-6-10")));
+    expect(past.status).toBe(200);
   });
 
   it("POST /api/daily/submit → 503", async () => {
