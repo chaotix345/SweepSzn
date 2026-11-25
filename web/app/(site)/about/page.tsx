@@ -19,7 +19,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "How accurate is the engine?",
-    a: "Every coefficient is fit to 1,170 real NBA team-seasons (1985–2025) across 24,687 player-seasons, with out-of-sample accuracy of about 5.6 wins RMSE against luck-adjusted Pythagorean win totals in year-grouped cross-validation (6.1 against raw win totals, which carry roughly 2.4 wins of close-game luck). Wins come from a Pythagorean expectation. It is calibrated to history, not hand-tuned.",
+    a: "The core model is fit to 1,170 real NBA team-seasons (1985–2025) across 24,687 player-seasons. Out-of-sample, it misses real teams by about 5.6 wins on average against luck-adjusted win totals (6.1 against raw records, which carry roughly 2.4 wins of close-game luck). The penalties for lineups real teams never field, like five point guards or five non-scorers, can't be fitted from real data, so they are reasoned and labeled that way. The How it works page shows the receipts: famous teams predicted cold, gimmick-lineup stress tests, and which parts are fitted versus reasoned.",
   },
   {
     q: "Why is it different from other lineup tools?",

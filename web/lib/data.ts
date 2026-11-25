@@ -75,6 +75,10 @@ export function getCoefficients(): Coefficients {
   return load().coeff;
 }
 
+export function getAllPlayers(): Player[] {
+  return load().players;
+}
+
 export function getPlayersByIds(ids: string[]): Player[] {
   const { byId } = load();
   return ids.map((id) => byId.get(id)).filter((p): p is Player => !!p);

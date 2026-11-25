@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ButtonLink } from "@/components/ui/Button";
 import ResultPreview from "@/components/ResultPreview";
+import EngineReceipts from "@/components/EngineReceipts";
+import { getEngineMeta } from "@/lib/receipts";
 import { baseUrl } from "@/lib/site";
 import { marketingMetadata } from "@/lib/marketingMeta";
 
@@ -20,6 +22,7 @@ const breadcrumb = {
 const breadcrumbHtml = JSON.stringify(breadcrumb).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
 
 export default function HowItWorks() {
+  const meta = getEngineMeta();
   return (
     <div className="mx-auto max-w-3xl px-5 py-12 sm:py-16">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumbHtml }} />
@@ -133,9 +136,17 @@ export default function HowItWorks() {
             Not enough outside shooting clogs the paint and drags down the whole offense, no matter who is on the floor.
             The engine fits a continuous spacing term from real data.
           </Principle>
+          <Principle term="Shot creation">
+            The flip side of finite possessions: five role players who never create a shot still have to take the hard
+            ones. A lineup with too little usage between them pays for it.
+          </Principle>
           <Principle term="Fit and redundancy">
             Five creators, no rim protection, or no shooting each show up in the math. A lineup is more — and sometimes
             less — than the sum of its box scores.
+          </Principle>
+          <Principle term="Starters, not single seasons">
+            Each card is rated from the seasons around it, weighted by minutes, so one lucky year or a 24-minute specialist
+            role doesn&apos;t pass for all-time greatness.
           </Principle>
         </div>
       </section>
@@ -144,20 +155,22 @@ export default function HowItWorks() {
       <section className="mt-14 rounded-2xl border border-zinc-800 border-t-2 border-t-orange-500/50 bg-zinc-900 p-6">
         <h2 className="font-display text-2xl tracking-tight">Calibrated, not guessed</h2>
         <p className="mt-3 text-sm text-zinc-400">
-          Every coefficient is fit to real history — <strong className="text-zinc-200">1,170 NBA team-seasons</strong> (1985–2025)
-          across <strong className="text-zinc-200">24,687 player-seasons</strong> — not hand-tuned. Out-of-sample accuracy is
-          <strong className="text-zinc-200"> 5.6 wins RMSE</strong> against luck-adjusted Pythagorean win totals in year-grouped
-          cross-validation (6.1 against raw win totals, which carry ~2.4 wins of close-game luck), and wins come from a
-          Pythagorean expectation (exponent k ≈ 14). The proof it&apos;s honest: stack five ball-dominant scorers and a box-score
-          adder calls them historic at 74-8; SweepSzn knows one ball can&apos;t feed them all.
+          The core of the model is fit to real history: <strong className="text-zinc-200">{meta.team_seasons.toLocaleString()} NBA
+          team-seasons</strong> (1985–2025) across <strong className="text-zinc-200">24,687 player-seasons</strong>. Out-of-sample,
+          it misses real teams by <strong className="text-zinc-200">{meta.cv_wins_rmse.toFixed(1)} wins</strong> on average
+          against luck-adjusted win totals ({meta.cv_wins_rmse_vs_actual.toFixed(1)} against raw records, which carry about 2.4
+          wins of close-game luck). The penalties for lineups real teams never field are reasoned rather than fitted, and the
+          receipts below say exactly which is which.
         </p>
         <div className="mt-5 grid grid-cols-2 gap-3 border-t border-zinc-800 pt-5 sm:grid-cols-4">
-          <Stat n="1,170" label="real NBA team-seasons" />
+          <Stat n={meta.team_seasons.toLocaleString()} label="real NBA team-seasons" />
           <Stat n="24,687" label="player-seasons" />
-          <Stat n="5.6" label="win RMSE, out-of-sample" />
-          <Stat n="k ≈ 14" label="Pythagorean exponent" />
+          <Stat n={meta.cv_wins_rmse.toFixed(1)} label="win RMSE, out-of-sample" />
+          <Stat n={`k ≈ ${Math.round(meta.pythK ?? 14)}`} label="Pythagorean exponent" />
         </div>
       </section>
+
+      <EngineReceipts />
 
       <div className="mt-12 border-t border-zinc-800 pt-10 text-center">
         <h2 className="font-display text-3xl tracking-tight sm:text-4xl">

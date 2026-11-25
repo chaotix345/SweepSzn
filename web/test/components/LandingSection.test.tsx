@@ -53,3 +53,10 @@ describe("LandingSection — top-of-funnel hero", () => {
     expect(resultPreviewProps[0].reveal).toBeFalsy();
   });
 });
+
+describe("LandingSection — honest calibration copy", () => {
+  it("does not claim the whole engine is fitted", () => {
+    const { container } = render(<LandingSection />);
+    expect(container.textContent).not.toMatch(/not hand-tuned/);
+  });
+});

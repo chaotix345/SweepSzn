@@ -211,7 +211,10 @@ export default function ResultCard({
 
       {/* why this record */}
       <div className="border-t border-zinc-800 px-6 py-5">
-        <div className="mb-3 text-xs font-bold uppercase tracking-wide text-zinc-500">Why this record</div>
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <div className="text-xs font-bold uppercase tracking-wide text-zinc-500">Why this record</div>
+          <a href="/how-it-works#receipts" className="text-[11px] text-zinc-600 hover:text-zinc-400">How accurate is this?</a>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <FactorColumn title="What's helping" items={helps} kind="good" contrib={contrib} />
           <FactorColumn title="What's hurting" items={hurts} kind="bad" contrib={contrib} />

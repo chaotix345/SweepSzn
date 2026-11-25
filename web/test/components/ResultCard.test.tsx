@@ -572,3 +572,11 @@ describe("ShareButton — the client share URL wins after hydration (SSR'd /r/, 
     await act(async () => { root?.unmount(); });
   });
 });
+
+describe("ResultCard — accuracy receipts link", () => {
+  it("links quietly to the public receipts", () => {
+    renderCard();
+    const a = screen.getByText("How accurate is this?").closest("a");
+    expect(a?.getAttribute("href")).toBe("/how-it-works#receipts");
+  });
+});
