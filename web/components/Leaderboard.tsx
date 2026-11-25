@@ -4,7 +4,7 @@ import Link from "next/link";
 import { track } from "@vercel/analytics";
 import type { DraftStep, LeaderboardView, DailyBoardRow, AggBoardView, AggLeaderboardRow } from "@/lib/types";
 import type { RankCard } from "@/lib/rankShare";
-import { getUid, getName, recordDailyDone, getStreak } from "@/lib/streak";
+import { getUid, getName, setName as persistName, recordDailyDone, getStreak } from "@/lib/streak";
 import { useNextDailyCountdown } from "@/components/useNextDaily";
 import { useSession } from "@/lib/useSession";
 import RankShareButton from "@/components/RankShareButton";
@@ -15,6 +15,8 @@ import { AUTH_ENABLED } from "@/lib/authClient";
 
 type Tab = "daily" | "week" | "alltime";
 const TABS: [Tab, string][] = [["daily", "Daily"], ["week", "Weekly"], ["alltime", "All-time"]];
+// F24: Weekly / All-time are sign-in boards; with auth off there's nothing to show, so no tabs at all
+const SHOW_TABS = AUTH_ENABLED;
 
 // the server's notion of "today" (UTC, same format as the daily seed/key) — used to detect a
 // game that straddled midnight so we can warn before the submit 400s with a cryptic "stale date".
@@ -192,17 +194,19 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
 
       {enabled ? (
         <>
-          <div role="tablist" aria-label="Leaderboard scope" className="mt-3 flex gap-1 rounded-lg bg-zinc-950/60 p-1 text-xs font-semibold">
-            {TABS.map(([k, label]) => (
-              <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-                className={`flex-1 rounded-md py-1.5 ${tab === k ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>{label}</button>
-            ))}
-          </div>
+          {SHOW_TABS && (
+            <div role="tablist" aria-label="Leaderboard scope" className="mt-3 flex gap-1 rounded-lg bg-zinc-950/60 p-1 text-xs font-semibold">
+              {TABS.map(([k, label]) => (
+                <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+                  className={`min-h-11 flex-1 rounded-md py-1.5 sm:min-h-9 ${tab === k ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}>{label}</button>
+              ))}
+            </div>
+          )}
 
           {tab === "daily" && stale && !submitted && (
             <div className="mt-3 rounded-lg border border-amber-600/40 bg-amber-500/10 p-3 text-xs text-amber-300">
               Today&apos;s daily just reset — this game was for an earlier day, so it can&apos;t be posted.{" "}
-              <a href="/play?mode=daily" className="font-bold underline hover:text-amber-200">Play today&apos;s daily →</a>
+              <Link href="/play?mode=daily" className="font-bold underline hover:text-amber-200">Play today&apos;s daily →</Link>
             </div>
           )}
 
@@ -232,6 +236,10 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
           {err && <div className="mt-2 text-xs text-red-400">{err}</div>}
 
           {tab === "daily" && view && <Board view={view} />}
+
+          {/* Anonymous players post as "Anonymous" unless this device has a name: an optional,
+              local-only board name, sent with the next Daily submit (keep-best leaves today's row as is) */}
+          {tab === "daily" && !user && <BoardName />}
           {tab !== "daily" && (user
             ? <AggBoard view={agg[tab] ?? null} scope={tab} />
             : <SignInGate scope={tab} onSignIn={promptSignIn} />)}
@@ -246,10 +254,39 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
       ) : (
         <div className="mt-3 rounded-lg border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-500">
           Leaderboards are warming up.{" "}
-          <a href="/play?mode=daily" className="font-semibold text-orange-400 hover:text-orange-300">Play the Daily →</a>
+          <Link href="/play?mode=daily" className="font-semibold text-orange-400 hover:text-orange-300">Play the Daily →</Link>
         </div>
       )}
     </div>
+  );
+}
+
+function BoardName() {
+  const [name, setName] = useState("");
+  const [saved, setSaved] = useState<string | null>(null);
+  // after mount: the saved name lives in localStorage (async IIFE = the repo's set-state-in-effect idiom)
+  useEffect(() => { (async () => { const n = getName(); setName(n); setSaved(n); })(); }, []);
+  if (saved === null) return null;
+  const clean = name.trim().slice(0, 24);
+  const dirty = clean !== saved;
+  const save = () => { persistName(clean); setName(clean); setSaved(clean); track("board_name_set", { cleared: !clean }); };
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); if (dirty) save(); }} className="mt-3 border-t border-zinc-800 pt-3">
+      <label htmlFor="board-name" className="block text-[11px] text-zinc-400">
+        Your board name <span className="text-zinc-500">· optional, kept on this device</span>
+      </label>
+      <div className="mt-1 flex gap-2">
+        <input id="board-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="Anonymous" autoComplete="nickname"
+          className="min-h-11 min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none placeholder:text-zinc-500 focus:border-zinc-500" />
+        <button type="submit" disabled={!dirty}
+          className="min-h-11 shrink-0 rounded-lg border border-zinc-700 px-4 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 disabled:opacity-50">
+          {dirty ? "Save" : saved ? "Saved ✓" : "Save"}
+        </button>
+      </div>
+      <p className="mt-1 text-[11px] text-zinc-400" aria-live="polite">
+        {saved ? <>You&apos;ll post as <span className="font-semibold text-zinc-200">{saved}</span> from your next Daily.</> : "Without one you post as Anonymous."}
+      </p>
+    </form>
   );
 }
 
@@ -267,14 +304,14 @@ function EmptyBoard() {
         {targets.map(([rank, rec]) => (
           <div key={rank} className="flex items-center gap-3 rounded-lg border border-dashed border-zinc-800 px-2.5 py-1.5 text-sm">
             <span className={`w-7 shrink-0 text-right text-xs font-bold tabular-nums opacity-60 ${medalText(rank)}`}>{rank}</span>
-            <span className="min-w-0 flex-1 text-zinc-600">your name here</span>
-            <span className="shrink-0 font-mono text-xs font-bold text-zinc-600">{rec}</span>
+            <span className="min-w-0 flex-1 text-zinc-400">your name here</span>
+            <span className="shrink-0 font-mono text-xs font-bold text-zinc-400">{rec}</span>
           </div>
         ))}
       </div>
       <p className="mt-2.5 text-center text-xs text-zinc-400">
         Be the first on today&apos;s board.{" "}
-        <a href="/play?mode=daily" className="font-semibold text-orange-400 hover:text-orange-300">Play now →</a>
+        <Link href="/play?mode=daily" className="font-semibold text-orange-400 hover:text-orange-300">Play now →</Link>
       </p>
     </div>
   );
@@ -290,7 +327,7 @@ function Board({ view }: { view: LeaderboardView }) {
       <div className="mb-1 flex items-center justify-between text-[11px] font-bold uppercase tracking-wide text-zinc-500">
         <span>Today&apos;s top {Math.min(rows.length, 100)}</span><span>{view.total} played</span>
       </div>
-      <div className="mb-1 flex items-center gap-3 px-2.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+      <div className="mb-1 flex items-center gap-3 px-2.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
         <span className="w-7 shrink-0 text-right">#</span>
         <span className="min-w-0 flex-1">Player</span>
         <span className="shrink-0">W–L</span>

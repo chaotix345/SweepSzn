@@ -29,7 +29,7 @@ export default function TodaysBest() {
 
   if (leader) {
     return (
-      <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 font-mono text-sm text-zinc-400 lg:justify-start">
+      <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center font-mono text-sm text-zinc-400 lg:justify-start lg:text-left">
         <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
         <span className="uppercase tracking-wide text-zinc-500">Today&apos;s best</span>
         {/* links to the board, never the leader's /r/ lineup: today's lineup is the Daily's answer
@@ -40,15 +40,15 @@ export default function TodaysBest() {
           <span className="text-red-400">{leader.losses}</span>
           <span className="ml-1.5 font-normal text-zinc-400">by {leader.name}</span>
         </Link>
-        {total > 1 && <span className="text-zinc-600">· {total.toLocaleString()} lineups today</span>}
+        {total > 1 && <span className="text-zinc-400">· {total.toLocaleString()} lineups today</span>}
       </p>
     );
   }
 
   return (
-    <p className="font-mono text-sm text-zinc-500">
+    <p className="text-center font-mono text-sm text-zinc-400 lg:text-left">
       Best draftable five ever found: <span className="font-bold text-green-400">80–2</span>
-      <span className="text-zinc-600"> · nobody&apos;s gone 82–0 yet</span>
+      <span className="text-zinc-400"> · nobody&apos;s gone 82–0 yet</span>
     </p>
   );
 }
