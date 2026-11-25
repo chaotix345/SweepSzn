@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { baseUrl } from "@/lib/site";
 import { FRANCHISES } from "@/lib/teams";
 import { franchisePath } from "@/lib/franchise";
+import { VS_MATCHUPS, vsPath } from "@/lib/vs";
 
 // Indexable routes only. The share permalinks (/r/, /c/, /rank/) are intentionally excluded —
 // they carry their own `noindex` metadata. /admin is disallowed in robots.ts.
@@ -17,5 +18,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${baseUrl}/about`, lastModified, changeFrequency: "monthly", priority: 0.5 },
     { url: `${baseUrl}/teams`, lastModified, changeFrequency: "monthly", priority: 0.7 },
     ...FRANCHISES.map((t) => ({ url: `${baseUrl}${franchisePath(t)}`, lastModified, changeFrequency: "monthly" as const, priority: 0.6 })),
+    { url: `${baseUrl}/vs`, lastModified: "2026-11-25", changeFrequency: "monthly", priority: 0.6 },
+    ...VS_MATCHUPS.map((m) => ({ url: `${baseUrl}${vsPath(m.slug)}`, lastModified: "2026-11-25", changeFrequency: "monthly" as const, priority: 0.5 })),
   ];
 }

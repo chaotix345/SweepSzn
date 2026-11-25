@@ -83,6 +83,14 @@ export default function TeamsIndex() {
           </Link>
           .
         </p>
+        <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+          These are all-time picks. For real starting fives from famous seasons, like the &apos;96 Bulls against the
+          &apos;16 Warriors, see the{" "}
+          <Link href="/vs" className="font-semibold text-zinc-200 underline underline-offset-4 hover:text-white">
+            head-to-head matchups
+          </Link>
+          .
+        </p>
       </section>
 
       <div className="mt-12 border-t border-zinc-800 pt-10 text-center">

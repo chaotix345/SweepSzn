@@ -10,7 +10,7 @@ import { GRADE_COLOR } from "@/lib/grades";
 // A balanced two-way GOAT five (slot order PG/SG/SF/PF/C). Verified output (engine v4): 78-4, A+
 // HISTORIC, Net +23.4 — Star offense/defense/Spacing help; Usage overload (-6.9) hurts even this lineup,
 // which is the whole pitch. Rendered live so it self-corrects if coefficients.json is recalibrated.
-const HERO_IDS = [
+export const HERO_IDS = [
   "stephen_curry_gsw_2010s_2016",
   "michael_jordan_chi_1990s_1991",
   "lebron_james_mia_2010s_2013",
