@@ -16,7 +16,7 @@ function mockFetch(impl: () => Promise<Partial<Response>>) {
   vi.stubGlobal("fetch", vi.fn(impl as unknown as typeof fetch));
 }
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => { vi.unstubAllGlobals(); localStorage.clear(); });
 
 const dexPlayers = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `p${i}` }));
 
@@ -43,11 +43,18 @@ describe("DexStrip — post-reveal collection strip", () => {
     await waitFor(() => expect(container.textContent).toMatch(/\b13\b/));
   });
 
-  it("prompts the signed-out user to start a Dex (still links to /dex)", async () => {
-    mockFetch(async () => ({ ok: false, status: 401, json: async () => ({ error: "auth_required" }) }));
-    const { container } = render(<DexStrip />);
-    await waitFor(() => expect(container.querySelector('a[href="/dex"]')).toBeTruthy());
-    expect(container.textContent).toMatch(/Dex/i);
+  it("is local-first: posts this device's result history and shows the count signed out (no 401 path)", async () => {
+    localStorage.setItem("82-0:results", JSON.stringify([{ encoded: "abc", mode: "classic", wins: 50, losses: 32, grade: "C", ts: 1 }]));
+    const f = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ players: dexPlayers(5), total: 1, badges: ["first"], signedIn: false }) }));
+    vi.stubGlobal("fetch", f);
+    const { container } = render(<DexStrip lineupIds={["p0", "p1", "p2", "p3", "p4"]} />);
+    await waitFor(() => expect(container.textContent).toMatch(/\b5\b/));
+    expect(container.textContent).toMatch(/joined the Dex/);
+    expect(container.querySelector('a[href="/dex"]')).toBeTruthy();
+    const [url, init] = f.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/dex");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ results: [{ mode: "classic", encoded: "abc", grade: "C" }] });
   });
 
   it("renders nothing (no link) when the dex API rejects — keeps a Redis-dark card silent", async () => {
