@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import LandingSection from "@/components/LandingSection";
 import Beacon from "@/components/Beacon";
-import { baseUrl, X_URL } from "@/lib/site";
+import { homeJsonLd, jsonLdHtml as jsonLdToHtml } from "@/lib/jsonLd";
 
 // Canonical lives here (homepage only) — NOT in the shared root layout, so the noindex
 // /r/[lineup] permalinks don't inherit a canonical pointing back to "/".
@@ -36,28 +36,7 @@ const SEO_COPY =
   "undefeated over a full season? Nobody has — the best draftable five projects 80-2, better than " +
   "the 73-9 Warriors, and the engine is brutally honest about why.";
 
-const jsonLd = {
-  "@context": "https://schema.org",
-  "@type": "WebApplication",
-  name: "SweepSzn",
-  url: baseUrl,
-  description:
-    "All-time NBA lineup simulator. Draft a starting five by spinning team and era reels. Engine calibrated to 1,170 real NBA team-seasons — and it tells you why your lineup wins or loses.",
-  applicationCategory: "GameApplication",
-  operatingSystem: "Any",
-  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-  genre: "Sports simulation",
-  keywords:
-    "NBA lineup simulator, all-time NBA team builder, best NBA starting five, NBA fantasy draft game, NBA team builder game",
-  sameAs: [X_URL],
-};
-
-// Escape the three characters that could break out of the <script> context (defense-in-depth;
-// the payload is fully static today, but this keeps the pattern safe if it ever takes dynamic data).
-const jsonLdHtml = JSON.stringify(jsonLd)
-  .replace(/</g, "\\u003c")
-  .replace(/>/g, "\\u003e")
-  .replace(/&/g, "\\u0026");
+const jsonLdHtml = jsonLdToHtml(homeJsonLd);
 
 export default function Home() {
   return (

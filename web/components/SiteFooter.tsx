@@ -43,6 +43,7 @@ export default function SiteFooter() {
             <Link href="/how-it-works" className="text-zinc-400 hover:text-zinc-100">How it works</Link>
             <Link href="/about" className="text-zinc-400 hover:text-zinc-100">About</Link>
             <Link href="/teams" className="text-zinc-400 hover:text-zinc-100">Teams</Link>
+            <Link href="/vs" className="text-zinc-400 hover:text-zinc-100">Matchups</Link>
           </nav>
         </div>
         <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-zinc-800/70 pt-5 text-xs text-zinc-600">
