@@ -153,6 +153,36 @@ describe("Leaderboard D1 auto-submit", () => {
     act(() => m.root.unmount());
   });
 
+  it("a restored result screen (same trace, remount) reads the board instead of re-posting", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+    const first = mount(<Leaderboard date="2026-6-15" trace={TRACE} />);
+    await act(async () => { first.root.render(<Leaderboard date="2026-6-15" trace={TRACE} />); });
+    await settle();
+    expect(first.calls("/api/daily/submit")).toHaveLength(1);
+    act(() => first.root.unmount());
+
+    const again = mount(<Leaderboard date="2026-6-15" trace={TRACE} />);
+    await act(async () => { again.root.render(<Leaderboard date="2026-6-15" trace={TRACE} />); });
+    await settle();
+    expect(again.calls("/api/daily/submit")).toHaveLength(0);
+    expect(again.calls("/api/daily/leaderboard")).toHaveLength(1);
+    act(() => again.root.unmount());
+  });
+
+  it("a different trace on the same day still auto-submits (keep-best decides)", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+    const first = mount(<Leaderboard date="2026-6-15" trace={TRACE} />);
+    await act(async () => { first.root.render(<Leaderboard date="2026-6-15" trace={TRACE} />); });
+    await settle();
+    act(() => first.root.unmount());
+    const other = TRACE.map((s, i) => (i === 0 ? { ...s, pickedId: "q0" } : s));
+    const again = mount(<Leaderboard date="2026-6-15" trace={other} />);
+    await act(async () => { again.root.render(<Leaderboard date="2026-6-15" trace={other} />); });
+    await settle();
+    expect(again.calls("/api/daily/submit")).toHaveLength(1);
+    act(() => again.root.unmount());
+  });
+
   it("never submits a read-only board", async () => {
     vi.useFakeTimers({ now: Date.parse("2026-06-15T12:00:00Z"), toFake: ["Date"] });
     const m = mount(<Leaderboard date="2026-6-15" trace={TRACE} readOnly />);
