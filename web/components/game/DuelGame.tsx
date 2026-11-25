@@ -194,7 +194,7 @@ export function DuelGame({ onModeSelect }: { onModeSelect: () => void }) {
 
   if (phase === "setup") return (
     <div className="animate-rise-in mx-auto max-w-3xl px-4 py-6 sm:py-10">
-      <button onClick={onModeSelect} className="text-xs text-zinc-400 transition hover:text-zinc-200">← Modes</button>
+      <button onClick={onModeSelect} className="-ml-2 inline-flex min-h-11 items-center px-2 text-xs text-zinc-400 transition hover:text-zinc-200">← Modes</button>
       <h1 className="mt-3 font-display text-3xl tracking-tight sm:text-5xl">Draft Duel</h1>
       <p className="mt-2 text-zinc-400">
         Five rounds, one shared spin per round, snake order: you pick first in rounds 1, 3 and 5, the bot in 2 and 4.
@@ -236,7 +236,7 @@ export function DuelGame({ onModeSelect }: { onModeSelect: () => void }) {
 
   if (phase === "result" && final) return (
     <div className="mx-auto max-w-3xl px-4 py-6">
-      <button onClick={onModeSelect} className="mb-3 text-xs text-zinc-400 transition hover:text-zinc-200">← Modes</button>
+      <button onClick={onModeSelect} className="-ml-2 mb-1 inline-flex min-h-11 items-center px-2 text-xs text-zinc-400 transition hover:text-zinc-200">← Modes</button>
       <DuelResult persona={final.persona} outcome={final.outcome} you={final.you} bot={final.bot} card={final.card}
         onRematch={begin} onChangePersona={() => { genRef.current += 1; setPhase("setup"); }} />
     </div>
@@ -290,12 +290,8 @@ export function DuelGame({ onModeSelect }: { onModeSelect: () => void }) {
           {current && !busy ? (
             <Browser key={`${current.team}|${current.decade}|${turn}`} spin={current} mode="duel" selId={selPlayer?.id ?? null}
               hintsLeft={0} onReveal={() => {}} canPlace={(c) => open.some((s) => c.eligible.includes(s))}
-              onSelect={(c) => {
-                // F25: one open slot he can play → place on the tap; otherwise choose the slot next
-                const only = onlyOpenSlot(c, you);
-                if (only) placeWith(c, only);
-                else setSelPlayer((p) => (p?.id === c.id ? null : c));
-              }} />
+              onSelect={(c) => setSelPlayer((p) => (p?.id === c.id ? null : c))}
+              placeSlot={(c) => onlyOpenSlot(c, you)} onPlace={placeWith} />
           ) : (
             <div className="rounded-2xl border border-dashed border-zinc-800 p-8 text-center text-sm text-zinc-500">
               {error ? (
@@ -306,11 +302,11 @@ export function DuelGame({ onModeSelect }: { onModeSelect: () => void }) {
               ) : busy === "bot" ? `${info.name} is drafting from the spin…` : "Dealing the spin…"}
             </div>
           )}
-          <p className="mt-2 text-center text-[11px] text-zinc-400">Placements are final in a duel — choose the slot carefully.</p>
+          <p className="mt-2 text-center text-[11px] text-zinc-400">Placements are final in a duel. Tap a player to choose his slot; &ldquo;Place at&rdquo; locks the only slot he fits.</p>
         </div>
 
-        <div className="order-last min-w-0 space-y-4">
-          <Court roster={you} selSlot={null} idle={false}
+        <div className="order-last min-w-0 space-y-4 lg:sticky lg:top-20 lg:self-start">
+          <Court roster={you} selSlot={null} idle={false} sticky={false}
             isTarget={(s) => !!selPlayer && !you[s] && selPlayer.eligible.includes(s)}
             onSlot={(s) => { if (selPlayer) placeWith(selPlayer, s); }} />
           {selPlayer && (

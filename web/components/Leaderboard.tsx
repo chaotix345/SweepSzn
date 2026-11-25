@@ -252,9 +252,13 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
           )}
         </>
       ) : (
-        <div className="mt-3 rounded-lg border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-500">
-          Leaderboards are warming up.{" "}
-          <Link href="/play?mode=daily" className="font-semibold text-orange-400 hover:text-orange-300">Play the Daily →</Link>
+        <div className="mt-3 rounded-lg border border-dashed border-zinc-800 p-4 text-center text-xs text-zinc-400">
+          {readOnly ? (
+            <>
+              Leaderboards are warming up.{" "}
+              <Link href="/play?mode=daily" className="font-semibold text-orange-400 hover:text-orange-300">Play the Daily →</Link>
+            </>
+          ) : "Leaderboards are warming up — your result is saved on this device."}
         </div>
       )}
     </div>
@@ -273,11 +277,11 @@ function BoardName() {
   return (
     <form onSubmit={(e) => { e.preventDefault(); if (dirty) save(); }} className="mt-3 border-t border-zinc-800 pt-3">
       <label htmlFor="board-name" className="block text-[11px] text-zinc-400">
-        Your board name <span className="text-zinc-500">· optional, kept on this device</span>
+        Your board name <span className="text-zinc-400">· optional, kept on this device</span>
       </label>
       <div className="mt-1 flex gap-2">
         <input id="board-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={24} placeholder="Anonymous" autoComplete="nickname"
-          className="min-h-11 min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none placeholder:text-zinc-500 focus:border-zinc-500" />
+          className="min-h-11 min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none placeholder:text-zinc-400 focus:border-zinc-500" />
         <button type="submit" disabled={!dirty}
           className="min-h-11 shrink-0 rounded-lg border border-zinc-700 px-4 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 disabled:opacity-50">
           {dirty ? "Save" : saved ? "Saved ✓" : "Save"}

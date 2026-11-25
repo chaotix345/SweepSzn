@@ -15,6 +15,7 @@ import { BLUEPRINTS, type BlueprintKey } from "@/lib/blueprint";
 import type { RosterProjection } from "@/lib/projection";
 import { HINT_BUDGET, type Roster, type Spin } from "@/components/game/gameState";
 import type { ReelValue } from "@/components/game/useReelSpin";
+import { onlyOpenSlot } from "@/lib/placement";
 
 // The draft phase: reels + controls (left column on desktop), the candidate browser, the court
 // (right rail on desktop), and the mobile "choose position" sheet.
@@ -42,6 +43,7 @@ export function DraftView(p: {
   onReSpinEra: () => void;
   onRevealHint: () => void;
   onSelectCandidate: (c: DraftCandidate) => void;
+  onPlaceCandidate: (c: DraftCandidate, slot: Slot) => void;
   onFinish: () => void;
   onRestart: () => void;
   onSlot: (s: Slot) => void;
@@ -135,7 +137,7 @@ export function DraftView(p: {
               hintsLeft={Math.max(0, HINT_BUDGET - p.hintsUsed)} onReveal={p.onRevealHint}
               showUsage={mode === "blueprint" && blueprint === "discipline"}
               canPlace={(c) => openSlots.some((s) => c.eligible.includes(s))}
-              onSelect={p.onSelectCandidate} />
+              onSelect={p.onSelectCandidate} placeSlot={(c) => onlyOpenSlot(c, roster)} onPlace={p.onPlaceCandidate} />
           ) : allFilled ? (
             <div className="animate-rise-in rounded-2xl border border-dashed border-zinc-800 p-8 text-center">
               <p className="mb-3 text-sm text-zinc-400">Your starting five is set.</p>

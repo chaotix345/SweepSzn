@@ -132,3 +132,31 @@ describe("Browser — no-slot guard", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
+
+describe("Browser — one-tap Place button (F25)", () => {
+  const spin = { team: "CHI", decade: "2000s", candidates: [
+    cand({ id: "a", name: "Adam Aaronson", eligible: ["C"], rank: 0 }),
+    cand({ id: "z", name: "Zane Zykov", eligible: ["PG", "SG"], rank: 1 }),
+  ] };
+  const only = (c: DraftCandidate) => (c.id === "a" ? "C" as const : null);
+
+  it("a row tap only selects; the labelled Place button places in one tap", async () => {
+    const onSelect = vi.fn(), onPlace = vi.fn();
+    render(<Browser spin={spin} {...baseProps} onSelect={onSelect} placeSlot={only} onPlace={onPlace} />);
+    await userEvent.click(screen.getByRole("button", { name: /^Select Adam Aaronson, plays C/ }));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onPlace).not.toHaveBeenCalled();
+    const place = screen.getByRole("button", { name: "Place Adam Aaronson at C" });
+    expect(place.textContent).toBe("Place atC");
+    expect(place.className).toContain("min-h-11");
+    await userEvent.click(place);
+    expect(onPlace).toHaveBeenCalledWith(spin.candidates[0], "C");
+    expect(screen.queryByRole("button", { name: /^Place Zane Zykov/ })).toBeNull(); // two open fits: no Place
+  });
+
+  it("hides Place in compare mode", async () => {
+    render(<Browser spin={spin} {...baseProps} placeSlot={only} onPlace={() => {}} />);
+    await userEvent.click(screen.getByRole("button", { name: /compare/i }));
+    expect(screen.queryByRole("button", { name: /^Place / })).toBeNull();
+  });
+});

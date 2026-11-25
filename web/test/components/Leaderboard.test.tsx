@@ -231,7 +231,8 @@ describe("Leaderboard D1 auto-submit", () => {
     const m = mount(<Leaderboard date="2026-6-15" trace={TRACE} />, 503);
     await act(async () => { m.root.render(<Leaderboard date="2026-6-15" trace={TRACE} />); });
     await settle();
-    expect(m.container.textContent).toMatch(/warming up/i);
+    expect(m.container.textContent).toMatch(/warming up — your result is saved on this device/i);
+    expect(m.container.querySelector('a[href="/play?mode=daily"]')).toBeNull(); // N07: no link back to the Daily just played
     expect(m.container.textContent).not.toContain("streak");
     act(() => m.root.unmount());
   });

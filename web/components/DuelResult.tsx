@@ -18,11 +18,11 @@ const YOU = "#ff6a00";
 const BOT = "#38bdf8";
 type Side = { players: Player[]; result: LineupResult };
 
-export function duelVerdict(outcome: DuelOutcome, persona: Persona, you: LineupResult, bot: LineupResult) {
+export function duelVerdict(outcome: DuelOutcome, persona: Persona, you: LineupResult, bot: LineupResult, shared = false) {
   const name = personaInfo(persona).name;
   const wins = Math.abs(you.wins - bot.wins);
   const by = wins ? `by ${wins} ${wins === 1 ? "win" : "wins"}` : `on net rating (${fmtNet(you.netRtg - bot.netRtg)})`;
-  return outcome === "w" ? { head: `You beat ${name}`, sub: by, cls: "text-green-400" }
+  return outcome === "w" ? { head: `${shared ? "Player" : "You"} beat ${name}`, sub: by, cls: "text-green-400" }
     : outcome === "l" ? { head: `${name} wins`, sub: by, cls: "text-red-400" }
     : { head: "Dead even", sub: "same record, same net rating", cls: "text-zinc-200" };
 }
@@ -77,7 +77,7 @@ export default function DuelResult({ persona, outcome, you, bot, card, shared, o
   onRematch?: () => void; onChangePersona?: () => void;
 }) {
   const info = personaInfo(persona);
-  const v = duelVerdict(outcome, persona, you.result, bot.result);
+  const v = duelVerdict(outcome, persona, you.result, bot.result, shared);
   const path = `/duel/${card}`;
   return (
     <div className="animate-rise-in overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
@@ -117,7 +117,7 @@ export default function DuelResult({ persona, outcome, you, bot, card, shared, o
           )}
         </div>
         {!shared && onChangePersona && (
-          <button onClick={onChangePersona} className="mt-2 w-full rounded-xl border border-zinc-700 py-2 text-sm font-semibold text-zinc-300 transition hover:border-zinc-500">Change opponent</button>
+          <button onClick={onChangePersona} className="mt-2 min-h-11 w-full rounded-xl border border-zinc-700 py-2 text-sm font-semibold text-zinc-300 transition hover:border-zinc-500">Change opponent</button>
         )}
         <SaveCardImage path={path} />
       </div>

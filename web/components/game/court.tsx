@@ -33,14 +33,15 @@ export function MiniRoster({ roster, maskColors }: { roster: Roster; maskColors?
   );
 }
 
-export function Court({ roster, selSlot, isTarget, onSlot, maskColors, idle }: {
+export function Court({ roster, selSlot, isTarget, onSlot, maskColors, idle, sticky = true }: {
   roster: Roster; selSlot: Slot | null; isTarget: (s: Slot) => boolean; onSlot: (s: Slot) => void; maskColors?: boolean;
   // idle = no pick/swap in progress; filled slots then advertise that tapping picks them up to move/swap
   // (the mechanic was implemented but undiscoverable pre-tap, and the textual hints were desktop-only).
   idle?: boolean;
+  sticky?: boolean; // false when the parent rail is the sticky unit (Draft Duel)
 }) {
   return (
-    <div className="relative mx-auto aspect-[4/3.4] w-full max-w-sm overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-b from-[#14223b] to-[#0c1626] lg:sticky lg:top-20">
+    <div className={`relative mx-auto aspect-[4/3.4] w-full max-w-sm overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-b from-[#14223b] to-[#0c1626] ${sticky ? "lg:sticky lg:top-20" : ""}`}>
       <svg viewBox="0 0 100 85" className="absolute inset-0 h-full w-full text-zinc-600/40" fill="none" stroke="currentColor" strokeWidth="0.6">
         <rect x="2" y="2" width="96" height="81" rx="2" />
         <rect x="38" y="2" width="24" height="30" />

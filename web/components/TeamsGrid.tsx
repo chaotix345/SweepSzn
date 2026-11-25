@@ -35,7 +35,7 @@ export default function TeamsGrid({ teams }: { teams: TeamCard[] }) {
           ))}
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} type="search" placeholder="Filter by team or player" aria-label="Filter franchises by team or player"
-          className="min-h-11 min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none placeholder:text-zinc-500 focus:border-zinc-600 sm:max-w-xs" />
+          className="min-h-11 min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-200 outline-none placeholder:text-zinc-400 focus:border-zinc-600 sm:max-w-xs" />
         <span className="text-xs text-zinc-400" aria-live="polite">{shown.length === teams.length ? `${teams.length} franchises` : `${shown.length} of ${teams.length}`}</span>
       </div>
 

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { enableRedisEnv, freshFake, ctx, req, readJson, exhaustRateLimit, signIn } from "@/test/routeHarness";
 import { encodeLineup } from "@/lib/share";
 import { encodeSurgeonCard } from "@/lib/surgeon";
+import { encodeDuelCard } from "@/lib/duel";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -93,6 +94,17 @@ describe("POST /api/dex (local-first)", () => {
     expect(body.players).toEqual([]);
     expect(body.total).toBe(0);
     expect(body.badges).toEqual([]);
+  });
+
+  it("N03: counts a Draft Duel's own five (cards past 256 chars), never the bot's", async () => {
+    const BOT = ["magic_johnson_lal_1980s_1990", "larry_bird_bos_1980s_1985", "hakeem_olajuwon_hou_1990s_1993", "tim_duncan_sas_2000s_2002", "stephen_curry_gsw_2010s_2016"];
+    const card = encodeDuelCard("oldhead", FIVE, BOT);
+    expect(card.length).toBeGreaterThan(256);
+    const { body } = await readJson(await post({ results: [{ encoded: card, mode: "duel", grade: "A" }] }));
+    expect((body.players as { id: string }[]).map((p) => p.id).sort()).toEqual([...FIVE].sort());
+    expect(body.total).toBe(1);
+    const { body: big } = await readJson(await post({ results: [{ encoded: "x".repeat(641), mode: "duel", grade: "A" }] }));
+    expect(big.total).toBe(0);
   });
 
   it("decodes Surgeon cards from local history too (drafted five + the swapped-in player)", async () => {

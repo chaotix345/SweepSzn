@@ -31,7 +31,8 @@ export function ComparePanel({ a, b, dialogRef, onClose, onPick, canPick }: {
   return (
     <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Compare players"
       onKeyDown={(e) => buildFocusTrapHandler(dialogRef, onClose)(e)}
-      className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] outline-none backdrop-blur-sm sm:items-center">
       <div className="animate-slide-up w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
         <div className="flex items-center justify-between">
           <span className="text-xs font-black uppercase tracking-widest text-orange-500">⚖️ Compare</span>

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from "react";
-import type { CandidateFit, DraftCandidate, EraContext } from "@/lib/types";
+import type { CandidateFit, DraftCandidate, EraContext, Slot } from "@/lib/types";
 import { eraLabel } from "@/lib/teams";
 import { TRAIT_META } from "@/lib/traits";
 import type { Mode } from "@/components/game/types";
@@ -31,9 +31,12 @@ function Mini({ v, k, className }: { v: number | null | undefined; k: string; cl
   );
 }
 
-export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect, showUsage }: {
+export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSelect, showUsage, placeSlot, onPlace }: {
   spin: Spin; mode: Mode; selId: string | null; hintsLeft: number; onReveal: () => void;
   canPlace: (c: DraftCandidate) => boolean; onSelect: (c: DraftCandidate) => void; showUsage?: boolean;
+  // F25 one-tap placement: when a player fits exactly one open slot, his row gets an explicit
+  // "Place at {SLOT}" button. A tap on the row itself only ever selects.
+  placeSlot?: (c: DraftCandidate) => Slot | null; onPlace?: (c: DraftCandidate, slot: Slot) => void;
 }) {
   const hideStats = mode === "hoopiq"; // HoopIQ hides stats — draft on memory
   // Classic-style assist (Classic + Prime + Blueprint — Blueprint follows Classic's hint rules,
@@ -89,7 +92,7 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
           ))}
         </div>
         <input value={q} onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }} placeholder="Search…" aria-label="Search players"
-          className="min-h-11 min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 sm:min-h-9 sm:w-32 sm:flex-none" />
+          className="min-h-11 min-w-32 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-sm outline-none focus:border-orange-500 sm:min-h-9 sm:w-32 sm:flex-none" />
         {canHint && (revealed ? (
           <span title="Fit grades revealed for this pick (cost 1 hint)" className="rounded-md bg-green-500/20 px-2 py-1.5 text-xs font-semibold text-green-300">
             💡 Hints on
@@ -152,14 +155,15 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
           const fits = canPlace(c);
           const showRowFit = showFit && fits && c.fit;
           const isOpen = openId === c.id;
+          const only = !compareMode && fits && onPlace ? placeSlot?.(c) ?? null : null;
           return (
             <div key={c.id} className="mb-1.5">
-            <div className="flex items-stretch">
+            <div className="flex flex-wrap items-stretch">
             <button onClick={() => (compareMode ? toggleCmp(c) : fits && onSelect(c))}
               aria-pressed={compareMode ? cmpHit : sel} aria-disabled={!compareMode && !fits} tabIndex={!compareMode && !fits ? -1 : undefined}
               aria-label={compareMode ? `${cmpHit ? "Deselect" : "Select"} ${c.name} to compare` : `Select ${c.name}, plays ${c.eligible.join("/")}${fits ? "" : ", no open slot"}${showUsage && c.usage != null ? `, ${Math.round(c.usage)} percent usage demand` : ""}${showRowFit ? `, fit ${c.fit!.delta > 0 ? "+" : ""}${c.fit!.delta}${c.fit!.adds.length ? ", adds " + c.fit!.adds.join(" and ") : ""}` : ""}`}
               title={!compareMode && !fits ? "No open slot for this player — re-spin or pick a different position" : undefined}
-              className={`flex min-w-0 flex-1 items-center gap-3 ${hideStats ? "rounded-lg" : "rounded-l-lg"} border px-3 py-2 text-left transition active:scale-[0.98] ${
+              className={`flex min-w-0 flex-1 items-center gap-3 ${hideStats ? (only ? "rounded-lg max-sm:rounded-b-none sm:rounded-r-none" : "rounded-lg") : only ? "rounded-l-lg max-sm:rounded-bl-none" : "rounded-l-lg"} border px-3 py-2 text-left transition active:scale-[0.98] ${
                 compareMode ? (cmpHit ? "border-orange-500 bg-orange-500/10" : "border-zinc-800 bg-zinc-950/60 hover:-translate-y-px hover:border-zinc-600")
                   : sel ? "border-orange-500 bg-orange-500/10"
                   : showRowFit && c.fit!.best ? "border-green-600/50 bg-green-500/[0.06] shadow-[0_0_14px_-4px_rgba(52,211,153,0.45)] hover:-translate-y-px hover:border-green-500"
@@ -210,8 +214,16 @@ export function Browser({ spin, mode, selId, hintsLeft, onReveal, canPlace, onSe
             {!hideStats && (
               <button onClick={() => setOpenId(isOpen ? null : c.id)} aria-expanded={isOpen} aria-label={`${isOpen ? "Hide" : "Show"} ${c.name} details`}
                 title="Player details — accolades, career, era context"
-                className={`flex w-11 shrink-0 items-center justify-center rounded-r-lg border text-sm transition ${isOpen ? "border-orange-500 bg-orange-500/10 text-orange-400" : "border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:text-orange-400"}`}>
+                className={`flex w-11 shrink-0 items-center justify-center rounded-r-lg border ${only ? "max-sm:rounded-br-none sm:rounded-r-none" : ""} text-sm transition ${isOpen ? "border-orange-500 bg-orange-500/10 text-orange-400" : "border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:text-orange-400"}`}>
                 {isOpen ? "▴" : "ⓘ"}
+              </button>
+            )}
+            {/* phones: a full-width strip closing the row's card (an inline column crushed the name); sm+: the last column */}
+            {only && (
+              <button onClick={() => onPlace!(c, only)} aria-label={`Place ${c.name} at ${only}`}
+                className={`flex min-h-11 w-full items-center justify-center gap-1 rounded-b-lg border border-t-0 text-xs font-semibold transition active:scale-95 sm:w-14 sm:shrink-0 sm:flex-col sm:gap-0 sm:rounded-none sm:rounded-r-lg sm:border-t sm:border-l-0 sm:text-[10px] sm:leading-tight ${
+                  sel ? "border-orange-500 bg-orange-500 text-black hover:bg-orange-400" : "border-orange-500/50 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20"}`}>
+                <span>Place at</span><span className="font-bold sm:text-xs">{only}</span>
               </button>
             )}
             </div>

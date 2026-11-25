@@ -145,7 +145,7 @@ export function CompareLineup({ players, result, lineupSeg }: { players: Player[
             <div className="mt-1 flex gap-2">
               <input id="cmp-friend-link" value={link} onChange={(e) => setLink(e.target.value)}
                 placeholder="Paste a friend's result link (sweepszn.com/r/…)"
-                className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2 text-sm text-zinc-200 placeholder:text-zinc-500" />
+                className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2 text-sm text-zinc-200 placeholder:text-zinc-400" />
               <button onClick={loadFriend} aria-label="Compare with friend" disabled={status === "loading"}
                 className="shrink-0 rounded-lg bg-cyan-500 px-3 py-2 text-sm font-bold text-black transition hover:bg-cyan-400 disabled:opacity-50">
                 {status === "loading" ? "…" : "Compare"}

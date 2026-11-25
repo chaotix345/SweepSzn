@@ -26,6 +26,7 @@ afterEach(() => { cleanup(); share.props = null; });
 describe("DuelResult", () => {
   it("verdict: win/loss by wins, tie on net rating, dead even", () => {
     expect(duelVerdict("w", "analyst", res(60), res(55))).toMatchObject({ head: "You beat The Analyst", sub: "by 5 wins" });
+    expect(duelVerdict("w", "analyst", res(60), res(55), true).head).toBe("Player beat The Analyst");
     expect(duelVerdict("l", "bro", res(50, 1), res(50, 2.5)).sub).toBe("on net rating (-1.5)");
     expect(duelVerdict("t", "oldhead", res(50), res(50)).head).toBe("Dead even");
   });

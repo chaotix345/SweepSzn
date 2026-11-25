@@ -3,11 +3,17 @@ import { ButtonLink } from "@/components/ui/Button";
 import ResultPreview from "@/components/ResultPreview";
 import { marketingMetadata } from "@/lib/marketingMeta";
 import { bestFiveAnswer, perfectSeasonAnswer } from "@/lib/answers";
+import { getLatestPlayers } from "@/lib/data";
 
 export const metadata: Metadata = {
   ...marketingMetadata("about"),
   alternates: { canonical: "/about" },
 };
+
+// the box-score span of the card pool, so a new season's release updates the FAQ by itself
+const years = getLatestPlayers().map((p) => p.year);
+const FIRST_YEAR = years.reduce((a, b) => Math.min(a, b));
+const LAST_YEAR = years.reduce((a, b) => Math.max(a, b));
 
 const FAQ: { q: string; a: string }[] = [
   {
@@ -26,7 +32,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Where does the player data come from?",
-    a: "Basketball-Reference box scores from 1950 to 2025, normalized per season so different eras can be compared fairly. Pre-1974 defense (before steals and blocks were tracked) is estimated honestly rather than guessed.",
+    a: `Basketball-Reference box scores from ${FIRST_YEAR} to ${LAST_YEAR}, normalized per season so different eras can be compared fairly. Pre-1974 defense (before steals and blocks were tracked) is estimated honestly rather than guessed.`,
   },
   {
     q: "What are the game modes?",

@@ -25,3 +25,16 @@ describe("ComparePanel — Pick (F26)", () => {
     expect(onPick).toHaveBeenCalledWith(a);
   });
 });
+
+describe("ComparePanel — backdrop (N09)", () => {
+  it("sits above the header and closes on a backdrop click, not a click inside the panel", () => {
+    const onClose = vi.fn();
+    render(<ComparePanel a={cand("a", "Alpha Able")} b={cand("b", "Bravo Baker")} dialogRef={createRef<HTMLDivElement>()} onClose={onClose} onPick={() => {}} canPick={() => true} />);
+    const dialog = screen.getByRole("dialog", { name: "Compare players" });
+    expect(dialog.className).toContain("z-50");
+    fireEvent.click(screen.getByText("Alpha Able", { selector: "*" }));
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(dialog);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

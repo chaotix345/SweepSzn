@@ -42,7 +42,6 @@ import { projectionAllowed, type RosterProjection } from "@/lib/projection";
 import { isoDay, seedDay } from "@/lib/poolDate";
 import { saveArchiveRun } from "@/lib/archiveHistory";
 import { dayUTC, shortDay } from "@/lib/day";
-import { onlyOpenSlot } from "@/lib/placement";
 
 const rand = () => Math.floor(Math.random() * 1e9);
 
@@ -261,7 +260,7 @@ export default function Game() {
     else simulate(r);
   }, [mode, beginFhPrediction, beginSurgeon, simulate]);
 
-  // `c` defaults to the selected player; the one-tap path (onlyOpenSlot) passes it directly.
+  // `c` defaults to the selected player; the row's "Place at {SLOT}" button passes it directly.
   const place = useCallback((slot: Slot, c: DraftCandidate | null = selPlayer) => {
     if (!c || roster[slot] || !c.eligible.includes(slot)) return;
     setCrowdNote(null); // clear any prior slot's reveal before this lock's fetch resolves
@@ -325,14 +324,11 @@ export default function Game() {
     if (roster[slot]) setSelSlot(slot); // pick up to move/swap
   }, [selPlayer, selSlot, roster, place, canSwap]);
 
-  // F25: tapping a player with exactly one open slot he can play places him there in one tap; with
-  // two or more open fits the tap selects and the slot is chosen next (unchanged).
+  // A row tap only selects; the one-tap path is the row's explicit "Place at {SLOT}" button (F25).
   const selectCandidate = useCallback((c: DraftCandidate) => {
     setSelSlot(null);
-    const fits = onlyOpenSlot(c, roster);
-    if (fits) { place(fits, c); return; }
     setSelPlayer((p) => (p?.id === c.id ? null : c));
-  }, [roster, place]);
+  }, []);
 
   // is `slot` a valid target for the current selection? (drives the orange glow)
   const slotTarget = useCallback((slot: Slot): boolean => {
@@ -395,7 +391,7 @@ export default function Game() {
         projAllowed={projAllowed} prime={seed.startsWith("prime-")} projection={projection} skips={skips} selPlayer={selPlayer} selSlot={selSlot} hintsUsed={hintsUsed}
         crowdNote={crowdNote} error={error} loading={loading} fhFetching={fhFetching}
         onSpin={spin} onReSpinTeam={reSpinTeam} onReSpinEra={reSpinEra} onRevealHint={revealHint}
-        onSelectCandidate={selectCandidate}
+        onSelectCandidate={selectCandidate} onPlaceCandidate={(c, slot) => { setSelSlot(null); place(slot, c); }}
         onFinish={() => finishDraft(roster)} onRestart={restart} onSlot={clickSlot} slotTarget={slotTarget}
         onCancelSelection={() => { setSelPlayer(null); setSelSlot(null); }} />
 
