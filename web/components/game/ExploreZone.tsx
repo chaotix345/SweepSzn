@@ -1,7 +1,8 @@
 "use client";
 import { useId, useState } from "react";
 
-// Progressive-disclosure wrapper for the post-game deep tools (Scouting / What-If Lab / Compare).
+// Progressive-disclosure "Dig deeper" wrapper for the post-game deep tools (roster dossiers / Scouting /
+// What-If Lab / Compare).
 // They sit BELOW the Share CTA so a first-time mobile visitor reaches the growth loop without
 // scrolling past a wall of analysis. Three deliberate properties:
 //   • lazy children — the panel element is always in the DOM (so aria-controls always resolves),
@@ -43,7 +44,7 @@ export function ExploreZone({ summary, children, defaultOpen = false, onOpen }: 
       >
         <span className="flex items-center gap-2">
           <span aria-hidden className="text-zinc-500">{open ? "▴" : "▾"}</span>
-          {open ? "Show less" : "Explore your five"}
+          {open ? "Show less" : "Dig deeper"}
         </span>
         {!open && summary && (
           <span className="truncate text-[11px] font-normal normal-case tracking-normal text-zinc-600">{summary}</span>
@@ -51,7 +52,7 @@ export function ExploreZone({ summary, children, defaultOpen = false, onOpen }: 
       </button>
       {/* Panel is always in the DOM so aria-controls always resolves; aria-label is stable (the
           button's text changes on toggle, so labelling the region by it would degrade its name). */}
-      <div id={panelId} role="region" aria-label="Explore your five" hidden={!open} className="px-6 pb-5 pt-1">
+      <div id={panelId} role="region" aria-label="Dig deeper" hidden={!open} className="px-6 pb-5 pt-1">
         {everOpened && children}
       </div>
     </div>

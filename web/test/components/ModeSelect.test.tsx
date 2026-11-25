@@ -21,9 +21,10 @@ beforeEach(() => { mockList.mockReturnValue([]); });
 afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
 
 describe("ModeSelect", () => {
-  it("features Daily as the recommended start and renders all eight modes", () => {
+  it("features Daily as the recommended start and renders all eight modes (four behind More modes)", () => {
     render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
     expect(screen.getByText(/start here/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /more modes/i }));
     for (const name of ["Daily", "Classic", "HoopIQ", "Factor Hunt", "Prime Draft", "Blueprint", "Surgeon", "Challenge a Friend"]) {
       expect(screen.getByText(name)).toBeTruthy();
     }
@@ -36,6 +37,7 @@ describe("ModeSelect", () => {
 
   it("renders every 'Play →' CTA in the action orange — never a mode accent (DESIGN.md: orange is the only CTA color)", () => {
     render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /more modes/i }));
     const ctas = screen.getAllByText("Play →");
     expect(ctas.length).toBeGreaterThanOrEqual(7); // 6 discipline tiles + the Challenge invite
     for (const el of ctas) {
@@ -49,6 +51,7 @@ describe("ModeSelect", () => {
     render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} />);
     fireEvent.click(screen.getByLabelText(/Play Daily mode/i));
     expect(onPick).toHaveBeenCalledWith("daily");
+    fireEvent.click(screen.getByRole("button", { name: /more modes/i }));
     fireEvent.click(screen.getByLabelText("Play Surgeon mode"));
     expect(onPick).toHaveBeenCalledWith("surgeon");
     fireEvent.click(screen.getByLabelText("Challenge a friend"));
@@ -94,5 +97,36 @@ describe("ModeSelect", () => {
     render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /Play Classic again/i }));
     expect(onPick).toHaveBeenCalledWith("classic");
+  });
+
+  // W1 sharper core: Daily, Classic, Prime and the Challenge bar are top level; the four niche modes
+  // live in a collapsed "More modes" drawer whose open state is remembered per viewer.
+  it("keeps Surgeon, Blueprint, Factor Hunt and HoopIQ in a collapsed More modes drawer", () => {
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    for (const name of ["Daily", "Classic", "Prime Draft", "Challenge a Friend"]) expect(screen.getByText(name)).toBeTruthy();
+    const toggle = screen.getByRole("button", { name: /more modes/i });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    for (const name of ["Surgeon", "Blueprint", "Factor Hunt", "HoopIQ"]) expect(screen.queryByText(name)).toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    for (const name of ["Surgeon", "Blueprint", "Factor Hunt", "HoopIQ"]) expect(screen.getByText(name)).toBeTruthy();
+  });
+
+  it("remembers the drawer state across visits", async () => {
+    const first = render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /more modes/i }));
+    first.unmount();
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    expect(await screen.findByText("Surgeon")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /more modes/i })); // close → remembered closed
+    expect(screen.queryByText("Surgeon")).toBeNull();
+  });
+
+  it("still works when storage throws (private mode)", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("denied"); });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("denied"); });
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /more modes/i }));
+    expect(screen.getByText("Surgeon")).toBeTruthy();
   });
 });

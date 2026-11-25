@@ -2,6 +2,7 @@ import "server-only";
 import { redis, isRedisEnabled, TTL, TTL_WEEK, encScore, readBoardView, type StoredRow } from "./redis";
 import { isoWeek } from "./isoweek";
 import { KEEP_BEST_LUA, KEEP_BEST_ROW_LUA, TRIM_BOARD_LUA } from "./score";
+import { isLiveDaily } from "./day";
 import type { LineupResult, LeaderboardView } from "./types";
 
 // Daily leaderboard store (Upstash sorted sets) + weekly/all-time aggregate boards.
@@ -20,9 +21,14 @@ export const ALLTIME_CAP = 10_000;
 
 export function isLeaderboardEnabled(): boolean { return isRedisEnabled(); }
 
+// D2 anti-spoiler: while the Daily is live, a row's lineup is the day's answer key. Every read of a
+// live board (the CDN-cached GET included) drops lineups unless the viewer has a verified submission
+// on it — a row only lands on the board through the replay-verified submit, so `you` is that proof.
+// Past days are unaffected.
 export async function getLeaderboard(date: string, uid?: string): Promise<LeaderboardView | null> {
   if (!redis) return null;
   const { total, top, you } = await readBoardView<StoredRow>(keyZ(date), keyH(date), uid);
+  if (isLiveDaily(date) && !you) return { date, total, top: top.map((row) => { const r: Partial<typeof row> = { ...row }; delete r.lineup; return r as Omit<typeof row, "lineup">; }) };
   return { date, total, top, you };
 }
 

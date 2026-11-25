@@ -3,27 +3,25 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
 import type { DraftStep } from "@/lib/types";
-import { BLUEPRINTS, blueprintDef, type BlueprintKey, type BpBoardView, type BpBoardRow } from "@/lib/blueprint";
+import { blueprintDef, type BlueprintKey, type BpBoardView, type BpBoardRow } from "@/lib/blueprint";
 import { getUid, getName, setName as persistName } from "@/lib/streak";
 import { useSessionContext } from "@/components/SessionProvider";
 import { dayUTC } from "@/lib/day";
 import { gradeColor } from "@/lib/grades";
 
 // Blueprint daily board — FhLeaderboard's slim shape (no streak, no weekly/all-time, no sign-in
-// claim: bp scores carry a cosmetic execution multiplier and stay out of the aggregates). The
-// COMBINED board is the primary tab (five stratified boards would feel empty at current player
-// counts — the spec's own flagged risk); per-blueprint chips filter down to one objective.
+// claim: bp scores carry a cosmetic execution multiplier and stay out of the aggregates). Only the
+// COMBINED board is shown (W1: the five per-objective sub-tabs felt empty at current player counts);
+// each row's emoji still names the objective it was drafted to. The per-blueprint API is unchanged.
 
 const serverDate = dayUTC;
-type BoardTab = BlueprintKey | "all";
 const gradeText = gradeColor; // single source of truth — DESIGN.md grade-color scale
 
 export default function BpLeaderboard({ date, trace, blueprint, usedHints = false, readOnly = false }: {
   date: string; trace: DraftStep[]; blueprint: BlueprintKey; usedHints?: boolean; readOnly?: boolean;
 }) {
   const { user } = useSessionContext();
-  const [tab, setTab] = useState<BoardTab>("all");
-  const [views, setViews] = useState<Partial<Record<BoardTab, BpBoardView>>>({});
+  const [view, setView] = useState<BpBoardView | null>(null);
   const [enabled, setEnabled] = useState(true);
   const [uid, setUid] = useState("");
   const [name, setNameState] = useState("");
@@ -42,19 +40,19 @@ export default function BpLeaderboard({ date, trace, blueprint, usedHints = fals
         // POST: the anon uid rides the body, never a URL (DESIGN.md §12); signed in, the session wins
         const r = await fetch("/api/blueprint/leaderboard", {
           method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ date, bp: tab, uid: getUid() }), signal: ctl.signal,
+          body: JSON.stringify({ date, bp: "all", uid: getUid() }), signal: ctl.signal,
         });
         if (r.status === 503) { setEnabled(false); return; }
         if (r.ok) {
           const v = await r.json();
-          setViews((prev) => ({ ...prev, [tab]: v }));
+          setView(v);
           // "have I already posted this seed?" is answered by the combined board (every submit lands there)
-          if (tab === "all") setSubmitted((s) => s || !!v?.you);
+          setSubmitted((s) => s || !!v?.you);
         }
       } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline — board hidden */ }
     })();
     return () => ctl.abort();
-  }, [date, tab, reload, user?.uid]);
+  }, [date, reload, user?.uid]);
 
   const submit = useCallback(async () => {
     if (date !== serverDate()) { setErr("Today's blueprint just reset — start today's game to post a score."); return; }
@@ -68,14 +66,12 @@ export default function BpLeaderboard({ date, trace, blueprint, usedHints = fals
       const v = await r.json();
       if (!r.ok) { setErr(v?.error === "stale date" ? "Today's blueprint just reset — start today's game to post a score." : v?.error ?? "submit failed"); return; }
       if (name.trim()) persistName(name.trim());
-      // the response is your own blueprint's board — land the player on the board they competed on
-      setViews((prev) => ({ ...prev, [blueprint]: v }));
-      setTab(blueprint); setSubmitted(true); setReload((n) => n + 1);
+      // the response is your own blueprint's board; re-read the combined board you're shown
+      setSubmitted(true); setReload((n) => n + 1);
       track("bp_submit", { blueprint, rank: v?.you?.rank ?? 0 });
     } catch { setErr("network error"); } finally { setBusy(false); }
   }, [date, uid, name, trace, blueprint, usedHints]);
 
-  const view = views[tab] ?? null;
   return (
     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
       <div className="flex items-center justify-between">
@@ -84,13 +80,6 @@ export default function BpLeaderboard({ date, trace, blueprint, usedHints = fals
       </div>
       {enabled ? (
         <>
-          <div role="tablist" aria-label="Blueprint objective" className="mt-3 flex flex-wrap gap-1 rounded-lg bg-zinc-950/60 p-1 text-xs font-semibold">
-            <Chip active={tab === "all"} onClick={() => setTab("all")} label="🏆 All" title="Best blueprint-adjusted score across every objective" />
-            {BLUEPRINTS.map((b) => (
-              <Chip key={b.key} active={tab === b.key} onClick={() => setTab(b.key)} label={`${b.emoji} ${b.label.split(" ")[0]}`} title={b.label} />
-            ))}
-          </div>
-
           {stale && !submitted && (
             <div className="mt-3 rounded-lg border border-amber-600/40 bg-amber-500/10 p-3 text-xs text-amber-300">
               Today&apos;s blueprint just reset — this game was for an earlier day, so it can&apos;t be posted.
@@ -113,13 +102,6 @@ export default function BpLeaderboard({ date, trace, blueprint, usedHints = fals
         <div className="mt-2 text-xs text-zinc-600">Board opens soon — your execution grade still counts for bragging rights.</div>
       )}
     </div>
-  );
-}
-
-function Chip({ active, onClick, label, title }: { active: boolean; onClick: () => void; label: string; title: string }) {
-  return (
-    <button onClick={onClick} title={title} aria-label={title} role="tab" aria-selected={active}
-      className={`rounded-md px-2 py-1.5 ${active ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>{label}</button>
   );
 }
 

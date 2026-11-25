@@ -39,7 +39,7 @@ describe("ExploreZone — progressive disclosure for the post-game deep tools", 
     const panel = getByRole("region");
     expect(btn.getAttribute("aria-controls")).toBe(panel.getAttribute("id"));
     // stable region name — NOT derived from the mutable button text ("Show less")
-    expect(panel.getAttribute("aria-label")).toBe("Explore your five");
+    expect(panel.getAttribute("aria-label")).toBe("Dig deeper");
   });
 
   it("keeps children mounted but hidden after collapsing (state persists across reopen)", () => {

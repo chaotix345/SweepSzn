@@ -219,6 +219,13 @@ describe("POST /api/daily/submit — anon path", () => {
     expect(streakKeys).toHaveLength(0);
   });
 
+  it("D2: the submitter's own response carries today's lineups (they now have a verified row)", async () => {
+    const { status, body } = await readJson(await submit({ date: TODAY, trace: LEGIT_TRACE, uid: "anon-uid-12345678", name: "Tester" }));
+    expect(status).toBe(200);
+    expect(body.you).toMatchObject({ lineup: "p0pg,p1sg,p2sf,p3pf,p4c" });
+    expect((body.top as Array<{ lineup?: string }>)[0].lineup).toBe("p0pg,p1sg,p2sf,p3pf,p4c");
+  });
+
   it("anon keep-best: resubmitting a worse score does not decrease the stored score", async () => {
     const anonUid = "anon-uid-12345678";
     const dailyZ = `lb:${TODAY}`;
