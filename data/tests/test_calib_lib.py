@@ -11,7 +11,8 @@ COEFF = {
     "usageBudget": 110.0, "usageFloor": 90.0, "overloadGamma": 0.2, "overloadPow": 1.0,
     "shortfallGamma": 0.3, "noRimPenalty": 7.0, "thinPerimeterPenalty": 3.0,
     "rim": {"blkLo": 0.4, "blkSpan": 1.4, "trbProxyLo": 0.8, "trbProxySpan": 1.6},
-    "coverage": {"trbLo": -0.2, "trbSpan": 1.0, "stlLo": 0.0, "stlSpan": 1.0},
+    "coverage": {"trbLo": -0.2, "trbSpan": 1.0, "stlLo": 0.0, "stlSpan": 1.0, "htLo": 78, "htSpan": 3},
+    "frontcourt": {"h2Floor": 77, "h2Span": 4, "penalty": 8},
 }
 
 
@@ -68,3 +69,15 @@ def test_no_big_lineup_pays_interior_with_partial_rebounding_credit():
     assert math.isclose(lineup_penalties(guards, COEFF)["rim"], 7.0 * (1 - 0.5))
     bigs = [s(2005, 0, 0, pos="C", usg=20.0, z={"stl": -1.0})] * 5
     assert math.isclose(lineup_penalties(bigs, COEFF)["perim"], 3.0)
+
+
+def test_height_gives_size_coverage_and_frontcourt_floor_penalises_tiny_lineups():
+    from calib_lib import size_cover, frontcourt_penalty
+    cv = {"trbLo": -0.2, "trbSpan": 1.0, "htLo": 78, "htSpan": 3}
+    assert size_cover({"pos": "PG", "ht": 81, "z": {}}, cv) == 1.0
+    assert math.isclose(size_cover({"pos": "SF", "ht": 79, "z": {"trb": -1.0}}, cv), 1 / 3)
+    fc = {"h2Floor": 77, "h2Span": 4, "penalty": 8}
+    guards = [{"ht": 81}, {"ht": 75}, {"ht": 74}, {"ht": 73}, {"ht": 74}]
+    assert math.isclose(frontcourt_penalty(guards, fc), 8 * 0.5)
+    assert frontcourt_penalty([{"ht": 84}, {"ht": 80}, {"ht": 75}, {"ht": 74}, {"ht": 73}], fc) == 0.0
+    assert frontcourt_penalty([{"ht": 84}, {}, {}, {}, {}], fc) == 0.0

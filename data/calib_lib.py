@@ -61,7 +61,25 @@ def lineup_penalties(five, c):
     over = c["overloadGamma"] * max(0.0, usage - c["usageBudget"]) ** pw
     short = c.get("shortfallGamma", 0.0) * max(0.0, c.get("usageFloor", 0.0) - usage) ** pw
     cv = c["coverage"]
-    size = max(1.0 if p.get("pos") in BIG_POS else _clamp((_z(p, "trb") - cv["trbLo"]) / cv["trbSpan"], 0, 1) for p in five)
+    size = max(size_cover(p, cv) for p in five)
     perim = max(1.0 if p.get("pos") in PERIM_POS else _clamp((_z(p, "stl") - cv["stlLo"]) / cv["stlSpan"], 0, 1) for p in five)
-    return {"overload": over, "shortfall": short, "rim": c["noRimPenalty"] * (1 - size),
+    return {"overload": over, "shortfall": short,
+            "rim": c["noRimPenalty"] * (1 - size) + frontcourt_penalty(five, c["frontcourt"]),
             "perim": c["thinPerimeterPenalty"] * (1 - perim)}
+
+
+def size_cover(p, cv):
+    """Mirror of engine playerSizeCover: listed big, else max of height and rebounding credit."""
+    if p.get("pos") in BIG_POS:
+        return 1.0
+    h = p.get("ht")
+    by_ht = _clamp((h - cv["htLo"]) / cv["htSpan"], 0, 1) if h else 0.0
+    return max(by_ht, _clamp((_z(p, "trb") - cv["trbLo"]) / cv["trbSpan"], 0, 1))
+
+
+def frontcourt_penalty(five, fc):
+    """Second-tallest player below the real-team floor (mirror of engine lineupTerms)."""
+    hs = sorted((p["ht"] for p in five if p.get("ht")), reverse=True)
+    if len(hs) < 2:
+        return 0.0
+    return fc["penalty"] * _clamp((fc["h2Floor"] - hs[1]) / fc["h2Span"], 0, 1)

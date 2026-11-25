@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Card IDs, card seasons, display stat lines, the draftable pool, and 82-0 parity are frozen. The set of ids in `web/public/data/players.json` must be byte-identical before and after.
-- Never regenerate `players.json` from the scrape. Only `rate_cards.py` may write it, and only the fields `off_rating`, `def_rating` (new) and nothing else.
+- Never regenerate `players.json` from the scrape. Only `rate_cards.py` may write it, and only the fields `off_rating`, `def_rating`, `ht` (new) and nothing else. (`ht` added during execution for the frontcourt term; DESIGN.md §14.)
 - Committed data stays Basketball-Reference-derived. RAPM is downloaded to gitignored `data/raw/rapm/` and used only as a fitting target; never commit RAPM values or a file that contains them.
 - The whole pipeline runs end to end with RAPM absent (`--no-rapm` or missing files) and records `_meta.rapm_used: false`.
 - Offline only: the app reads committed static JSON; no runtime API calls.

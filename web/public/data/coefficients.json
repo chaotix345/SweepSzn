@@ -93,7 +93,14 @@
     "trbLo": -0.2,
     "trbSpan": 1.0,
     "stlLo": 0.5,
-    "stlSpan": 2.5
+    "stlSpan": 2.5,
+    "htLo": 78,
+    "htSpan": 3
+  },
+  "frontcourt": {
+    "h2Floor": 77.0,
+    "h2Span": 2.0,
+    "penalty": 12.0
   },
   "noRimPenalty": 10.0,
   "thinPerimeterPenalty": 7.0,
@@ -133,7 +140,7 @@
     "ood_fire_rate": {
       "overload": 0.0094,
       "shortfall": 0.0077,
-      "rim": 0.0094,
+      "rim": 0.0085,
       "perim": 0.0
     }
   }

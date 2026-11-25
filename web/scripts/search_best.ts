@@ -27,7 +27,9 @@ function wpOf(fs: F[]): number {
   const eff = sh <= 3 ? sh : 3 + (sh - 3) * c.spacing.diminish;
   const spacing = modern ? Math.max(c.spacing.noneFloor, Math.min(3, c.spacing.perShooter * (eff - c.spacing.baseline))) : 0;
   const ortg = c.ortgBase + c.offScale * sO + spacing - overload - shortfall;
-  const drtg = c.drtgBase - c.defScale * sD + c.noRimPenalty * (1 - rim) + c.thinPerimeterPenalty * (1 - perimScore);
+  const hts = fs.map((f) => f.ht).filter((h) => h > 0).sort((a, b) => b - a);
+  const front = hts.length >= 2 ? c.frontcourt.penalty * Math.max(0, Math.min(1, (c.frontcourt.h2Floor - hts[1]) / c.frontcourt.h2Span)) : 0;
+  const drtg = c.drtgBase - c.defScale * sD + c.noRimPenalty * (1 - rim) + front + c.thinPerimeterPenalty * (1 - perimScore);
   const oP = Math.max(1, ortg) ** c.pythK, dP = Math.max(1, drtg) ** c.pythK;
   return oP / (oP + dP); // winPct (continuous, breaks the integer-win ties)
 }

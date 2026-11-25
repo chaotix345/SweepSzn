@@ -64,6 +64,8 @@ export interface Player {
   // before era strength. The engine prefers these over the single-season obpm/dbpm.
   off_rating?: number | null;
   def_rating?: number | null;
+  ht?: number | null; // height in inches (data/scrape_heights.py); drives the lineup size terms
+
   z?: ZScores;
   defense_estimated?: boolean;
   peak_score?: number;
@@ -216,8 +218,10 @@ export interface Coefficients {
   spacing: { perShooter: number; diminish: number; noneFloor: number; baseline: number };
   // continuous rim protection: best big's blk z (or trb z proxy pre-1974) mapped 0..1 over [lo, lo+span]
   rim: { blkLo: number; blkSpan: number; trbProxyLo: number; trbProxySpan: number };
-  // v4 lineup coverage: partial size credit from rebounding z, partial perimeter credit from steals z
-  coverage: { trbLo: number; trbSpan: number; stlLo: number; stlSpan: number };
+  // v4 lineup coverage: partial size credit from height or rebounding z, partial perimeter credit from steals z
+  coverage: { trbLo: number; trbSpan: number; stlLo: number; stlSpan: number; htLo: number; htSpan: number };
+  // v4: second-tallest player below the real-team floor (p1) -> up to `penalty` pts DRtg over `h2Span` inches
+  frontcourt: { h2Floor: number; h2Span: number; penalty: number };
   noRimPenalty: number;
   thinPerimeterPenalty: number;
 }

@@ -308,9 +308,22 @@ NO_RIM_PENALTY = 10.0
 THIN_PERIMETER_PENALTY = 7.0
 # Lineup coverage (v4): a listed big / perimeter player covers fully; rebounding / steals z give
 # partial credit. Chosen so >= 99% of real top-fives have full coverage (asserted below).
-COVERAGE = {"trbLo": -0.2, "trbSpan": 1.0, "stlLo": 0.5, "stlSpan": 2.5}
+COVERAGE = {"trbLo": -0.2, "trbSpan": 1.0, "stlLo": 0.5, "stlSpan": 2.5, "htLo": 78, "htSpan": 3}
+# frontcourt: the second-tallest player under the real-team floor (p1 of real top-fives' second-tallest,
+#   computed below) -- no real team has gone there. Reasoned size: 12 pts DRtg once the second-tallest is
+#   2+ inches under the floor (e.g. a 6'3" second-biggest player): the defensive glass ~4-5 per 100, the
+#   rim ~4, post mismatches ~3, against every two-big frontcourt in the league.
+FRONTCOURT_PENALTY = 12.0
+FRONTCOURT_SPAN = 2.0
 
 tps = json.load(open("data/out/team_player_seasons.json", encoding="utf-8"))
+from heights import load_heights, height_of
+HT = load_heights()
+for s in tps:
+    s["ht"] = height_of(HT, s["name"], s["year"])
+for r in rows:
+    for p in r["top5"]:
+        p["ht"] = height_of(HT, p["name"], p["year"])
 by_person = defaultdict(list)
 for s in tps:
     by_person[normalize_name(s["name"])].append(s)
@@ -417,7 +430,11 @@ usage_p1 = round(float(np.percentile(real_usg, 1)) * 2) / 2
 usage_p99 = round(float(np.percentile(real_usg, 99)) * 2) / 2
 USAGE_BUDGET, USAGE_FLOOR = usage_p99, usage_p1
 gamma = OVERLOAD_GAMMA
-pen_c = {"usageBudget": USAGE_BUDGET, "usageFloor": USAGE_FLOOR, "overloadGamma": OVERLOAD_GAMMA,
+h2s = np.array([sorted([p["ht"] for p in r["top5"] if p.get("ht")], reverse=True)[1] for r in rows])
+H2_FLOOR = float(np.percentile(h2s, 1))
+FRONTCOURT = {"h2Floor": H2_FLOOR, "h2Span": FRONTCOURT_SPAN, "penalty": FRONTCOURT_PENALTY}
+print(f"  frontcourt floor (real p1 of second-tallest) = {H2_FLOOR:.0f} in")
+pen_c = {"usageBudget": USAGE_BUDGET, "frontcourt": FRONTCOURT, "usageFloor": USAGE_FLOOR, "overloadGamma": OVERLOAD_GAMMA,
          "overloadPow": OVERLOAD_POW, "shortfallGamma": SHORTFALL_GAMMA, "noRimPenalty": NO_RIM_PENALTY,
          "thinPerimeterPenalty": THIN_PERIMETER_PENALTY,
          "coverage": COVERAGE}
@@ -481,7 +498,7 @@ coeff = {
   # interior-presence penalty (no real big -> concedes rim+post+glass). CV-safe: every real top-5 has a big.
   # A DRB-rate penalty was tested and DROPPED: it cannot separate all-guard fantasy lineups from real
   # small-ball teams (both have meanTrbZ ~0; see the DRB CV diagnostic above), so size is carried here.
-  "coverage": COVERAGE,
+  "coverage": COVERAGE, "frontcourt": FRONTCOURT,
   "noRimPenalty": NO_RIM_PENALTY, "thinPerimeterPenalty": THIN_PERIMETER_PENALTY,
   "_meta": {"team_seasons": len(rows), "off_r2": round(r2o, 3), "def_r2": round(r2d, 3),
             # cv_wins_rmse measures against the LUCK-FREE pythag-wins target (k=PYTH_TARGET_K);

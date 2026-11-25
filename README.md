@@ -68,9 +68,10 @@ calibration fails with FileNotFoundError until the build step has run. The draft
 pip install -r data/requirements.txt
 python data/scrape.py          # ~25 min, throttled; resumable (skips cached files)
 python data/build_dataset.py   # -> data/out/* (pass --write-pool to regenerate players.json + run enrich_players.mjs)
+python data/scrape_heights.py  # player heights (26 B-R index pages) -> data/out/heights.json
 python data/fetch_rapm.py      # optional: nbarapm 3-year RAPM -> data/out/rapm.json (fitting target only, never committed)
 python data/calibrate.py       # -> coefficients.json + famous_teams.json + calibration report (asserts the accuracy gates)
-python data/rate_cards.py      # -> off_rating/def_rating on every card in players.json (ids and stats untouched)
+python data/rate_cards.py      # -> off_rating/def_rating/ht on every card in players.json (ids and stats untouched)
 python -m pytest data/tests    # pipeline unit tests
 ```
 

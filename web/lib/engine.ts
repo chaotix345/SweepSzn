@@ -25,7 +25,8 @@ export const DEFAULT_COEFFICIENTS: Coefficients = {
   shortfallGamma: 0.13,
   spacing: { perShooter: 1.293, diminish: 0.55, noneFloor: -3, baseline: 1.6 },
   rim: { blkLo: 0.4, blkSpan: 1.4, trbProxyLo: 0.8, trbProxySpan: 1.6 },
-  coverage: { trbLo: -0.2, trbSpan: 1, stlLo: 0.5, stlSpan: 2.5 },
+  coverage: { trbLo: -0.2, trbSpan: 1, stlLo: 0.5, stlSpan: 2.5, htLo: 78, htSpan: 3 },
+  frontcourt: { h2Floor: 77, h2Span: 2, penalty: 12 },
   noRimPenalty: 10,
   thinPerimeterPenalty: 7,
 };
@@ -118,7 +119,7 @@ export function playerFeatures(p: Player, c: Coefficients = DEFAULT_COEFFICIENTS
     rim: rimScore >= 0.5, rimScore, modern: p.year >= 1980,
     perim: perimPos && zget(p, "stl") >= 0.6,
     perimScore: perimPos ? clamp((zget(p, "stl") - 0.2) / 0.8, 0, 1) : 0,
-    sizeCover: playerSizeCover(p, c), perimCover: playerPerimCover(p, c),
+    sizeCover: playerSizeCover(p, c), perimCover: playerPerimCover(p, c), ht: p.ht ?? 0,
   };
 }
 
@@ -162,7 +163,8 @@ function playerRimScore(p: Player, c: Coefficients): number {
 // player's defensive rating; real data shows no extra team effect from them (DESIGN.md §14).
 function playerSizeCover(p: Player, c: Coefficients): number {
   if (p.pos === "C" || p.pos === "PF" || p.pos === "F") return 1;
-  return clamp((zget(p, "trb") - c.coverage.trbLo) / c.coverage.trbSpan, 0, 1);
+  const byHt = p.ht ? clamp((p.ht - c.coverage.htLo) / c.coverage.htSpan, 0, 1) : 0;
+  return Math.max(byHt, clamp((zget(p, "trb") - c.coverage.trbLo) / c.coverage.trbSpan, 0, 1));
 }
 function playerPerimCover(p: Player, c: Coefficients): number {
   if (p.pos === "PG" || p.pos === "SG" || p.pos === "SF" || p.pos === "G") return 1;
@@ -205,7 +207,11 @@ function lineupTerms(lineup: Player[], c: Coefficients) {
   const spacing = anyModern ? clamp(c.spacing.perShooter * (effShoot - c.spacing.baseline), c.spacing.noneFloor, 3) : 0;
   // No big at all concedes the rim, the post and the glass; no perimeter player at all lets every
   // ball-handler downhill. Both are 0 for real NBA top-fives (coverage 1), so they only price fantasy builds.
-  const rimAdj = c.noRimPenalty * (1 - rim);
+  // Frontcourt floor: no real top-five's second-tallest player was under h2Floor (real p1), so a five
+  // whose second-biggest player is a guard concedes the glass and the rim to every two-big frontcourt.
+  const hts = lineup.map((p) => p.ht ?? 0).filter((h) => h > 0).sort((a, b) => b - a);
+  const frontcourt = hts.length >= 2 ? c.frontcourt.penalty * clamp((c.frontcourt.h2Floor - hts[1]) / c.frontcourt.h2Span, 0, 1) : 0;
+  const rimAdj = c.noRimPenalty * (1 - rim) + frontcourt;
   const perimAdj = c.thinPerimeterPenalty * (1 - perimScore);
 
   const ortg = c.ortgBase + c.offScale * sumOff + spacing - overloadPenalty - shortfallPenalty;

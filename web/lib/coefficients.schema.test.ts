@@ -41,7 +41,7 @@ describe("coefficients.json — structural completeness", () => {
 
   // Nested object keys
   const OBJECT_KEYS: Array<keyof Coefficients> = [
-    "eraStrength", "offModel", "defModel", "defModelEst", "usgModel", "spacing", "rim", "coverage",
+    "eraStrength", "offModel", "defModel", "defModelEst", "usgModel", "spacing", "rim", "coverage", "frontcourt",
   ];
 
   for (const key of OBJECT_KEYS) {

@@ -301,7 +301,8 @@ create a shot.
 ### Card ratings (`data/card_model.py`, `data/rate_cards.py`)
 
 Each card keeps its season, id and display stats (82-0 parity, share links and Dex are untouched), but the
-engine now reads two new fields, `off_rating` and `def_rating`:
+engine now reads three new fields, `off_rating`, `def_rating` and `ht` (height in inches, from
+Basketball-Reference's player index via `data/scrape_heights.py`):
 
 - **Three-season, minutes-weighted window**: the card season plus the seasons either side (any team),
   weighted by minutes, neighbours at half weight, shrunk lightly (50 pseudo-minutes) toward what a season
@@ -339,7 +340,11 @@ real team-seasons (`calibrate.py` asserts it; `_meta.ood_fire_rate`).
   big (C/PF/F) or any perimeter player (PG/SG/SF/G); otherwise partial credit from rebounding (size) or
   steals (perimeter). Sizes are reasoned: 10 pts for no size at all (rim protection ~5 + glass ~3 + post
   ~2 per 100), 7 for no perimeter player (live-ball turnovers, no ball pressure, no point-of-attack D).
-  Fire rates 0.94% and 0%.
+- **Height.** Size coverage also counts height (6'6" partial up to 6'9" full), and a new **frontcourt
+  floor** charges up to 12 pts DRtg when the five's second-tallest player is under the real-team p1
+  (6'5"); full charge at 2 inches under (glass ~4-5, rim ~4, post mismatches ~3 per 100). In real data
+  height is nearly a wash once player ratings are in (taller teams defend ~0.3/in better but score
+  ~0.2/in worse), so only the never-seen extreme is priced. Interior fire rate 0.85%, perimeter 0%.
 
 ### Pre-registered stress panel (`web/lib/stressPanel.ts`)
 
@@ -352,9 +357,9 @@ being retuned toward:
 | Lineup | Engine | Fan range | Why the engine disagrees |
 |---|---|---|---|
 | Washington all-time five | 38 | 45-52 | Late-career and pre-1985 cards rate low on their surrounding seasons |
-| Five elite PGs | 74 | 50-57 | Magic's rebounding gives partial size coverage; the data has no height |
+| Five elite PGs | 62 | 50-57 | Frontcourt floor costs 14 wins (was 74 before heights, 67 in v3); the talent is elite |
 | Five ball-dominant scorers | 65 | 58-64 | One win high |
-| All-wing two-way five | 76 | 62-69 | Rebounding wings count as size coverage |
+| All-wing two-way five | 76 | 62-69 | Pippen 6'8" with rebounding wings: within the size real teams have fielded |
 | Five shooters | 55 | 47-54 | One win high |
 | Defensive walls, no closer | 56 | 39-46 | Elite defense outweighs a 2.4-pt shot-creation penalty |
 | 3-and-D role players | 37 | 26-33 | Same |
@@ -390,4 +395,4 @@ live challenges from their stored lineups and archives the cumulative weekly and
 
 ### Pipeline order
 
-`scrape.py` → `build_dataset.py` (pool frozen unless `--write-pool`) → `fetch_rapm.py` → `calibrate.py` → `rate_cards.py`
+`scrape.py` → `build_dataset.py` (pool frozen unless `--write-pool`) → `scrape_heights.py` → `fetch_rapm.py` → `calibrate.py` → `rate_cards.py`
