@@ -35,7 +35,7 @@ export default function SurgeonResult({
         </div>
         <div className="mt-1 flex items-center justify-center gap-3 text-lg font-bold tracking-wide">
           <span className={GRADE_COLOR[before.grade] ?? "text-zinc-300"}>{before.wins}-{before.losses}</span>
-          <span aria-hidden className="text-zinc-600">→</span>
+          <span aria-hidden className="text-zinc-400">→</span>
           <span className={GRADE_COLOR[after.grade] ?? "text-zinc-300"}>{after.wins}-{after.losses}</span>
         </div>
         <p className="mt-1 text-xs font-semibold text-zinc-300">{historyPercentileText(after.wins)} after the swap</p>

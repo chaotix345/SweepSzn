@@ -103,7 +103,7 @@ export default function DuelResult({ persona, outcome, you, bot, card, shared, o
             { label: info.name, z: avgZ(bot.players), color: BOT },
           ]} />
         </div>
-        <p className="mt-1 text-center text-[10px] text-zinc-600">Each five&apos;s era-relative profile — descriptive, not a fit rating.</p>
+        <p className="mt-1 text-center text-[10px] text-zinc-400">Each five&apos;s era-relative profile — descriptive, not a fit rating.</p>
       </div>
 
       <div className="border-t border-zinc-800 px-4 py-4">

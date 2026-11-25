@@ -43,7 +43,7 @@ export default async function SharedDuel({ params }: Props) {
         <ShareHeader tagline="draft duel" cta="Duel the bot →" ctaHref="/play?mode=duel" />
         <DuelResult persona={d.persona} outcome={d.outcome} you={d.you} bot={d.bot} card={card} shared />
       </div>
-      <footer className="pb-10 text-center text-xs text-zinc-600">engine calibrated to real NBA team-seasons</footer>
+      <footer className="pb-10 text-center text-xs text-zinc-400">engine calibrated to real NBA team-seasons</footer>
     </main>
   );
 }

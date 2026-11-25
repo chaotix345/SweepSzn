@@ -48,7 +48,7 @@ export default function SiteFooter() {
             <Link href="/vs" className="flex min-h-11 items-center text-zinc-400 hover:text-zinc-100">Matchups</Link>
           </nav>
         </div>
-        <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-zinc-800/70 pt-5 text-xs text-zinc-600">
+        <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-zinc-800/70 pt-5 text-xs text-zinc-400">
           {STATS.map(([n, label]) => (
             <span key={label}>
               <span className="font-mono font-bold text-zinc-400">{n}</span> {label}

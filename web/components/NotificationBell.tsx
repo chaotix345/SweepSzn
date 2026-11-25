@@ -120,7 +120,7 @@ export default function NotificationBell() {
           {items.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-zinc-500">
               No notifications yet.<br />
-              <span className="text-zinc-600">Create a challenge — we&apos;ll tell you when a friend takes it.</span>
+              <span className="text-zinc-400">Create a challenge — we&apos;ll tell you when a friend takes it.</span>
             </div>
           ) : (
             <ul className="max-h-[24rem] divide-y divide-zinc-800 overflow-y-auto">
@@ -140,7 +140,7 @@ export default function NotificationBell() {
                         <span className="block truncate text-sm font-semibold text-zinc-100">{title}</span>
                         <span className="mt-0.5 block text-xs text-zinc-400">{body}</span>
                       </span>
-                      <span className="shrink-0 text-[11px] tabular-nums text-zinc-600">{relTime(n.ts)}</span>
+                      <span className="shrink-0 text-[11px] tabular-nums text-zinc-400">{relTime(n.ts)}</span>
                     </Link>
                   </li>
                 );

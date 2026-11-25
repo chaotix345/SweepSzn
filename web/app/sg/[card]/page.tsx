@@ -71,7 +71,7 @@ export default async function SharedSurgeon({ params }: Props) {
           afterPlayers={data.afterPlayers} outIdx={data.outIdx} diagnosis={data.diagnosis} card={card} shared />
         </div>
       </div>
-      <footer className="pb-10 text-center text-xs text-zinc-600">
+      <footer className="pb-10 text-center text-xs text-zinc-400">
         engine calibrated to real NBA team-seasons — and it tells you why
       </footer>
     </main>

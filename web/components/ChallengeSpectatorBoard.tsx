@@ -49,7 +49,7 @@ export default function ChallengeSpectatorBoard({ id }: { id: string }) {
           </li>
         ))}
       </ol>
-      <p className="mt-3 text-center text-[11px] text-zinc-600">Updates live · records only — every five stays hidden until you play</p>
+      <p className="mt-3 text-center text-[11px] text-zinc-400">Updates live · records only — every five stays hidden until you play</p>
     </div>
   );
 }

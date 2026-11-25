@@ -79,7 +79,7 @@ export function SurgeonDialog({ sgPool, sgInId, setSgInId, sgOutId, setSgOutId, 
                       onClick={() => eligible && setSgOutId(player.id)}
                       className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-1.5 text-left text-sm transition ${
                         sgOutId === player.id ? "border-red-400 bg-red-500/15 text-red-200"
-                          : eligible ? "border-zinc-700 bg-zinc-950/60 text-zinc-300 hover:border-zinc-500" : "border-zinc-900 bg-zinc-950/40 text-zinc-600"}`}>
+                          : eligible ? "border-zinc-700 bg-zinc-950/60 text-zinc-300 hover:border-zinc-500" : "border-zinc-900 bg-zinc-950/40 text-zinc-500"}`}>
                       <span className="truncate font-semibold">{displayName(player.name)} <span className="text-[10px] font-normal text-zinc-500">at {slot}</span></span>
                       <span className="shrink-0 text-[10px] text-zinc-500">{eligible ? `${cand.pos} fits ${slot}` : `can't play ${slot}`}</span>
                     </button>

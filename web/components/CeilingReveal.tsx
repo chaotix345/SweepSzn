@@ -45,7 +45,7 @@ export default function CeilingReveal({ date, yourWins }: { date: string; yourWi
     <section aria-label={`Perfect five for ${shortDay(date)}`} className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-500">Perfect five · {shortDay(date)}</h3>
-        <span className="text-[10px] text-zinc-600">best five from that day&apos;s spins</span>
+        <span className="text-[10px] text-zinc-400">best five from that day&apos;s spins</span>
       </div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className={`font-display text-3xl tabular-nums ${GRADE_COLOR[c.grade] ?? "text-zinc-200"}`}>{c.wins}-{c.losses}</span>

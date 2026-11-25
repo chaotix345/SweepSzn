@@ -117,7 +117,7 @@ export default async function ComparePage({ params }: Props) {
           </p>
         </div>
       </div>
-      <footer className="pb-10 text-center text-xs text-zinc-600">engine calibrated to real NBA team-seasons</footer>
+      <footer className="pb-10 text-center text-xs text-zinc-400">engine calibrated to real NBA team-seasons</footer>
     </main>
   );
 }

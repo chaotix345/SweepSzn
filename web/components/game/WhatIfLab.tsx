@@ -108,7 +108,7 @@ export function WhatIfLab({ players, slots, baseWins, baseLosses, baseGrade }: {
           </div>
         ))}
       </div>
-      <p className="mt-2 text-[10px] text-zinc-600">The round is already scored — this is a sandbox to learn from, not your record. Options are listed by fame, never by outcome.</p>
+      <p className="mt-2 text-[10px] text-zinc-400">The round is already scored — this is a sandbox to learn from, not your record. Options are listed by fame, never by outcome.</p>
     </div>
   );
 }

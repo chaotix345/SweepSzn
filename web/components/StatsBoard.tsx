@@ -123,7 +123,7 @@ export default function StatsBoard() {
             </thead>
             <tbody className="font-mono">
               {s.modes.map((m) => (
-                <tr key={m.mode} className={`border-t border-zinc-800/60 ${m.played ? "" : "text-zinc-600"}`}>
+                <tr key={m.mode} className={`border-t border-zinc-800/60 ${m.played ? "" : "text-zinc-400"}`}>
                   <th scope="row" className={`py-2.5 font-sans font-bold ${m.played ? "text-zinc-200" : ""}`}>{MODE_LABEL[m.mode]}</th>
                   <td className="py-2.5 text-right tabular-nums">{m.played}</td>
                   <td className="py-2.5 pl-4">

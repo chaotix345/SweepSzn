@@ -43,7 +43,7 @@ export default function SgLeaderboard({ date, preloaded }: { date: string; prelo
         view && view.top.length ? <Board view={view} /> :
         <div className="mt-3 text-xs text-zinc-500">Be the first to post a fix today.</div>
       ) : (
-        <div className="mt-2 text-xs text-zinc-600">Board opens soon — your delta still counts for bragging rights.</div>
+        <div className="mt-2 text-xs text-zinc-400">Board opens soon — your delta still counts for bragging rights.</div>
       )}
     </div>
   );

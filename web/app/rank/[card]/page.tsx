@@ -50,7 +50,7 @@ export default async function RankPage({ params }: Props) {
           <div className="mt-1 font-mono tabular-nums text-zinc-300">{metric(c)}</div>
         </div>
       </div>
-      <footer className="pb-10 text-center text-xs text-zinc-600">engine calibrated to real NBA team-seasons</footer>
+      <footer className="pb-10 text-center text-xs text-zinc-400">engine calibrated to real NBA team-seasons</footer>
     </main>
   );
 }

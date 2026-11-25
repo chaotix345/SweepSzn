@@ -114,7 +114,7 @@ export function DexBoard() {
             const got = earned.has(b.key);
             return (
               <span key={b.key} title={got ? b.hint : "Locked — keep drafting to discover"}
-                className={`rounded-lg border px-2.5 py-1 text-xs ${got ? "border-orange-500/50 bg-orange-500/10 text-orange-300" : "border-zinc-800 bg-zinc-900/40 text-zinc-600"}`}>
+                className={`rounded-lg border px-2.5 py-1 text-xs ${got ? "border-orange-500/50 bg-orange-500/10 text-orange-300" : "border-zinc-800 bg-zinc-900/40 text-zinc-500"}`}>
                 {got ? "★ " : "▦ "}{b.name}
               </span>
             );
