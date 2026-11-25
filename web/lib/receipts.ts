@@ -8,7 +8,7 @@ import type { Coefficients, Player } from "./types";
 // is static, so no route traces these files at request time.
 const DATA_DIR = path.join(process.cwd(), "public", "data");
 
-export interface FamousTeam { label: string; year: number; team: string; predicted_wins: number; actual_wins: number; actual_losses: number }
+export interface FamousTeam { label: string; year: number; team: string; predicted_wins: number; cold_wins: number; actual_wins: number; actual_losses: number }
 export interface EngineMeta {
   team_seasons: number;
   cv_wins_rmse: number;

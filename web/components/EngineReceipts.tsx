@@ -41,17 +41,23 @@ export default function EngineReceipts() {
         graded on.
       </p>
 
-      <h3 className="mt-10 text-sm font-black uppercase tracking-wide text-zinc-300">Famous teams, predicted cold</h3>
+      <h3 className="mt-10 text-sm font-black uppercase tracking-wide text-zinc-300">Famous teams</h3>
+      <p className="mt-2 text-xs text-zinc-500">
+        Each team&apos;s real top five by minutes. &quot;Engine&quot; uses the same card ratings the game uses; &quot;Cold&quot;
+        rates every player only from his other seasons. Both run through the model with the starting five alone, so
+        great benches and coaching don&apos;t show up, and the best teams come in under their real record.
+      </p>
       <div className="mt-3 overflow-hidden rounded-xl border border-zinc-800">
         <table className="w-full text-sm">
           <thead className="bg-zinc-900 text-left text-[11px] uppercase tracking-wide text-zinc-500">
-            <tr><th className="px-3 py-2">Team</th><th className="px-3 py-2 text-right">Engine</th><th className="px-3 py-2 text-right">Actual</th></tr>
+            <tr><th className="px-3 py-2">Team</th><th className="px-3 py-2 text-right">Engine</th><th className="px-3 py-2 text-right">Cold</th><th className="px-3 py-2 text-right">Actual</th></tr>
           </thead>
           <tbody className="font-mono tabular-nums">
             {famous.map((t) => (
               <tr key={t.label} className="border-t border-zinc-800">
                 <td className="px-3 py-2 font-sans text-zinc-300">{t.label}</td>
                 <td className="px-3 py-2 text-right text-zinc-100">{t.predicted_wins}-{82 - t.predicted_wins}</td>
+                <td className="px-3 py-2 text-right text-zinc-400">{t.cold_wins}-{82 - t.cold_wins}</td>
                 <td className="px-3 py-2 text-right text-zinc-400">{t.actual_wins}-{t.actual_losses}</td>
               </tr>
             ))}
@@ -61,8 +67,8 @@ export default function EngineReceipts() {
 
       <h3 className="mt-10 text-sm font-black uppercase tracking-wide text-zinc-300">Stress tests</h3>
       <p className="mt-2 text-xs text-zinc-500">
-        Gimmick lineups run straight through the engine (most aren&apos;t draftable). The fan range was written down
-        before the engine&apos;s fit penalties were set.
+        Lineups no real team would field, run straight through the engine (most can&apos;t be drafted). The penalties
+        for these builds are judgment calls, so here is exactly what the engine charges each one.
       </p>
       <div className="mt-3 space-y-2">
         {panel.map((l) => l.result && (
@@ -72,9 +78,8 @@ export default function EngineReceipts() {
               <span className="font-mono text-lg font-black tabular-nums text-zinc-100">{l.result.wins}-{l.result.losses}</span>
             </div>
             <div className="mt-0.5 text-[11px] text-zinc-500">{l.five.map((p) => `${p.name} ${yr(p.year)}`).join(" · ")}</div>
-            <div className="mt-1 flex justify-between gap-3 text-xs">
-              <span className="text-zinc-400">{l.label}</span>
-              {l.range && <span className="shrink-0 text-zinc-500">fan range {l.range[0]}–{l.range[1]}</span>}
+            <div className="mt-1 text-xs text-zinc-400">
+              {l.result.factors.filter((f) => f.value < 0).map((f) => `${f.label.replace(/\s*\(.*\)\s*$/, "")} ${f.value.toFixed(1)}`).join(" · ") || "No fit penalties"}
             </div>
           </div>
         ))}

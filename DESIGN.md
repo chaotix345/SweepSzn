@@ -284,3 +284,110 @@ copy cites the draftable number; the S grade (80+) is engine-theoretical and unr
 leaderboard (it always was — the pre-fix ceiling was also 79). "82-0 achievable" copy was replaced
 with the chase framing; golden tests pin both numbers. Factor Hunt's label list and Surgeon's need mapping ("Era adjustment" → modern-era star,
 "Thin perimeter defense" → perimeter stopper) were extended to cover the new factors.
+
+---
+
+## 14. Engine v4 (2026-11) — starter-minute card ratings, data-checked lineup terms, public receipts
+
+Spec: `docs/specs/2026-11-25-engine-accuracy-v4-design.md`. Plan: `docs/plans/2026-11-25-engine-accuracy-v4.md`.
+Before/after numbers: `docs/plans/2026-11-25-engine-accuracy-v4-baseline.md`. Supersedes §10-13 where they conflict.
+
+**Why.** The team fit was already near its ceiling, but the verdicts failed the smell test: Hakeem, Duncan
+and Kobe missing from the all-time top 25, 24-minute specialists (Noel, Oliver Miller, Thybulle,
+McMillan) in the top 10 defenders, McMillan in the best possible five, a 15-win usage tax on the
+Washington legends at a usage level real teams have reached, and no cost at all for a five that can't
+create a shot.
+
+### Card ratings (`data/card_model.py`, `data/rate_cards.py`)
+
+Each card keeps its season, id and display stats (82-0 parity, share links and Dex are untouched), but the
+engine now reads two new fields, `off_rating` and `def_rating`:
+
+- **Three-season, minutes-weighted window**: the card season plus the seasons either side (any team),
+  weighted by minutes, neighbours at half weight, shrunk lightly (50 pseudo-minutes) toward what a season
+  at that mpg is usually worth.
+- **Box-score weights fitted to play-by-play RAPM** (nbarapm.com 3-year windows keyed to the centre
+  season, 99% name match for 1998+ starters). RAPM is a fitting target only: it lives in gitignored
+  `data/raw` and `data/out`, and only the fitted weights are committed (`coefficients.json.cardModel`). The
+  fit moves defense credit toward DWS/48 (team-defense context) and away from raw DBPM stocks.
+- **Starter translation**: positive impact from a card under 36 mpg is scaled by (mpg/36)^0.5, because the
+  game always plays a card as a starter. Real-team accuracy can't reward this (it scores teams at their
+  actual minutes), so it is reasoned. It costs 0.04 wins of Track B, and Track B still beats its baseline.
+- Pre-1974 seasons substitute the engine's own fallback models for OBPM/DBPM, so every era shares one
+  scale (no step at the 1974 or 1997 seams; acceptance-tested). DWS is not counted twice for them.
+
+### Two accuracy tracks (`data/calibrate.py`)
+
+- **Track A** (unchanged core, raw same-season BPM): 5.557 wins RMSE vs luck-free Pythagorean wins (was
+  5.565), 6.066 vs actual. It can't see card changes, because same-season BPM is already team-adjusted.
+- **Track B** (new, the honest card test): every player on every real top five is rated from his OTHER
+  seasons only, the team map is refit per fold, year-grouped 10-fold CV. 8.095 vs 8.142 for a naive
+  adjacent-season baseline. The shipped team map (offScale 0.893, defScale 1.006) is fitted on these
+  ratings. Diminishing returns (ΣOBPM², ΣDBPM²) were tested and rejected (5.655, worse).
+
+### Lineup terms: fitted bounds, reasoned sizes
+
+The rule from §11 is now enforced in code: every reasoned penalty must be < 0.2 pts on ≥ 99% of the 1,170
+real team-seasons (`calibrate.py` asserts it; `_meta.ood_fire_rate`).
+
+- **Usage band** [95.5, 128.5] = real top-five usage p1/p99. Overload costs 0.22 pts ORtg per point above
+  it (unchanged size). The new **shot-creation shortfall** costs 0.13 per point below it (the
+  usage-efficiency trade-off). Fire rates 0.94% and 0.77%.
+- **The v3 interior and perimeter terms were wrong in-distribution.** They charged about 52% and 24% of
+  real teams, and real residuals show no effect (DRtg residual vs (1−rim) −0.43, vs (1−perim) −0.02; the 19
+  real teams with no listed big: +0.5 ± 0.9). They now price **coverage**: no penalty if the five has any
+  big (C/PF/F) or any perimeter player (PG/SG/SF/G); otherwise partial credit from rebounding (size) or
+  steals (perimeter). Sizes are reasoned: 10 pts for no size at all (rim protection ~5 + glass ~3 + post
+  ~2 per 100), 7 for no perimeter player (live-ball turnovers, no ball pressure, no point-of-attack D).
+  Fire rates 0.94% and 0%.
+
+### Pre-registered stress panel (`web/lib/stressPanel.ts`)
+
+Eleven gimmick and poor-fit fives with fan ranges set by the owner stand-in: a tuning half (penalties
+sized against it) and a holdout half with ranges written blind before any penalty was sized
+(commit 9006f8a). Three of the eleven ranged lineups land in range (five non-scoring defenders, 80s iso
+scorers, Rockets towers). The misses stay as `it.fails` in `test/acceptance.v4.test.ts` rather than
+being retuned toward:
+
+| Lineup | Engine | Fan range | Why the engine disagrees |
+|---|---|---|---|
+| Washington all-time five | 38 | 45-52 | Late-career and pre-1985 cards rate low on their surrounding seasons |
+| Five elite PGs | 74 | 50-57 | Magic's rebounding gives partial size coverage; the data has no height |
+| Five ball-dominant scorers | 65 | 58-64 | One win high |
+| All-wing two-way five | 76 | 62-69 | Rebounding wings count as size coverage |
+| Five shooters | 55 | 47-54 | One win high |
+| Defensive walls, no closer | 56 | 39-46 | Elite defense outweighs a 2.4-pt shot-creation penalty |
+| 3-and-D role players | 37 | 26-33 | Same |
+| Five heliocentric MVPs | 69 | 61-68 | One win high |
+
+The public page shows these lineups with the engine's record and its own factor costs, not the fan range.
+
+### Lists and ceiling
+
+- Top-10 defenders: Russell, Wilt, Hakeem, Mikan, Jokić, Eaton, Robinson, Camby, Ben Wallace, Bol. Noel,
+  Miller, Thybulle and McMillan are out. Known misses: Duncan (box scores can't see his defense) and Bol
+  at 26 mpg.
+- The all-time top 25 still misses Hakeem (#28), Duncan (#35), Russell (#37) and Kobe (#51). That's the
+  box-score ceiling: putting RAPM values themselves into the cards would republish the data.
+- Best draftable five: **80-2** (Stockton '89, LeBron '09, Kirilenko '04, Magic '90, Jokić '24), equal to
+  the engine-theoretical max (Jokić, LeBron '09, Wilt '68, Magic, Stockton). The S grade is now earnable.
+- Flattening check: random fives from the top 300 and top 1,500 cards spread 4.40 and 7.84 wins SD, vs
+  4.15 and 7.36 for the v3 cards under the same lineup rules. The all-cards spread fell (10.9 to 9.7)
+  because the v3 taxes and low-minute noise are gone.
+
+### Public receipts and copy
+
+`/how-it-works#receipts` (linked from every result card) renders both CV numbers from `_meta`, ten famous
+teams (engine ratings, cold ratings, actual record; `web/public/data/famous_teams.json`), the stress
+panel, top-10 lists, and which parts are fitted vs reasoned. The "every coefficient is fit, not
+hand-tuned" claim was removed from `/how-it-works`, `/about` and the landing section.
+
+### Stored scores
+
+`web/scripts/rescore_v4.ts`, run once after the deploy's Daily rollover, rescores profile histories and
+live challenges from their stored lineups and archives the cumulative weekly and all-time boards under
+`:v3`, so they restart on the new engine.
+
+### Pipeline order
+
+`scrape.py` → `build_dataset.py` (pool frozen unless `--write-pool`) → `fetch_rapm.py` → `calibrate.py` → `rate_cards.py`

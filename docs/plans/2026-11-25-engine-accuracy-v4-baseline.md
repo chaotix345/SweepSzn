@@ -105,3 +105,106 @@ FACTORS:
   Nerlens Noel           2021 C def 3.8 
   Matisse Thybulle       2021 SG def 3.8 
 ```
+
+## After (engine v4, 2026-11-25)
+
+Track A 5.557 (vs actual 6.066); Track B 8.095 vs baseline 8.142. Spread (draftable pools): top300 4.40, top1500 7.84.
+
+### scripts/search_best.ts (after)
+```
+================ BEST TEAM OF ALL TIME (per engine) ================
+RECORD: 80-2   PERFECT   (ORtg 124.8 / DRtg 95.6 / Net +29.2, win% 97.5)
+lean-scorer vs engine winPct drift: 0.00003 (exact)
+LINEUP:
+  C  Nikola Jokić           2024 DEN   off   5.4  def   3.0  usg 29.3  
+  SF LeBron James           2009 CLE   off   5.5  def   2.4  usg 33.8  
+  C  Wilt Chamberlain       1968 PHI   off   3.4  def   3.3  usg 24.6906833  (est.D)
+  PG Magic Johnson          1990 LAL   off   4.8  def   1.4  usg 24.8  
+  PG John Stockton          1989 UTA   off   3.5  def   2.1  usg 19.1  
+FACTORS:
+  +20.3  Star offense
+  +12.3  Star defense
+  -0.7  Usage overload (132% demand)  (~0 wins)
+
+--- top 10 teams by win% (brute force pool, person-deduped) ---
+   1. 80-2  (net 29.2)  Jokić/James/Chamberlain/Johnson/Stockton
+   2. 80-2  (net 29.2)  Jokić/James/Chamberlain/Johnson/Stockton
+   3. 80-2  (net 28.1)  Jokić/James/Chamberlain/Stockton/Russell
+   4. 80-2  (net 28.9)  Jokić/James/Chamberlain/Johnson/Stockton
+   5. 80-2  (net 28.8)  Jokić/James/Chamberlain/Stockton/Paul
+   6. 80-2  (net 29.0)  Jokić/James/Chamberlain/Johnson/Stockton
+   7. 80-2  (net 28.6)  Jokić/James/Chamberlain/Johnson/Stockton
+   8. 80-2  (net 28.4)  Jokić/James/Chamberlain/Paul/Stockton
+   9. 80-2  (net 28.3)  Jokić/James/Chamberlain/Stockton/Kirilenko
+  10. 80-2  (net 28.0)  Jokić/James/Chamberlain/Johnson/Russell
+
+brute-forcing C(80,5) draftable combos...
+draftable: brute-force winPct=0.9719 | slot hill-climb winPct=0.9719 | agree=true
+
+================ BEST DRAFTABLE TEAM (slot-legal) ================
+RECORD: 80-2   S PERFECT   (ORtg 125.2 / DRtg 96.8 / Net +28.4, win% 97.2)
+LINEUP (assigned slot):
+  PG John Stockton          1989 UTA  elig[PG]  off   3.5  def   2.1  usg 19
+  SG LeBron James           2009 CLE  elig[PG,SG,SF,PF,C]  off   5.5  def   2.4  usg 34
+  SF Andrei Kirilenko       2004 UTA  elig[SF,PF]  off   2.8  def   2.2  usg 22
+  PF Magic Johnson          1990 LAL  elig[PG,SG,PF]  off   4.8  def   1.4  usg 25
+  C  Nikola Jokić           2024 DEN  elig[C]  off   5.4  def   3.0  usg 29
+FACTORS:
+  +19.7  Star offense
+  +11.2  Star defense
+  +0.4  Spacing (1.9 shooters)  (~0 wins)
+
+--- top 10 DRAFTABLE teams (brute force pool) ---
+   1. 80-2  (net 28.4)  Jokić/James/Johnson/Stockton/Kirilenko
+   2. 80-2  (net 28.6)  Jokić/James/Johnson/Stockton/Durant
+   3. 80-2  (net 28.7)  Jokić/James/Johnson/Stockton/Durant
+   4. 80-2  (net 28.3)  Jokić/James/Johnson/Stockton/Leonard
+   5. 80-2  (net 28.4)  Jokić/James/Durant/Johnson/Stockton
+   6. 80-2  (net 28.2)  Jokić/James/Johnson/Stockton/Kirilenko
+   7. 80-2  (net 28.4)  Jokić/James/Johnson/Stockton/Leonard
+   8. 80-2  (net 27.9)  Jokić/James/Jordan/Johnson/Stockton
+   9. 80-2  (net 28.3)  Jokić/James/Johnson/Stockton/Durant
+  10. 80-2  (net 28.4)  Jokić/James/Durant/Johnson/Stockton
+```
+
+### scripts/rank.ts (after)
+```
+=== TOP 25 BY TOTAL IMPACT (off+def, pts/100 vs avg; best season per player) ===
+ 1. Nikola Jokić           2024 C  off   5.4 def     3 tot   8.4 
+ 2. LeBron James           2009 SF off   5.5 def   2.4 tot   7.9 
+ 3. Michael Jordan         1988 SG off   5.3 def   2.4 tot   7.7 
+ 4. David Robinson         1994 C  off     4 def   2.9 tot   6.9 
+ 5. Wilt Chamberlain       1968 C  off   3.4 def   3.3 tot   6.7 (est.D)
+ 6. Kevin Garnett          2004 PF off   4.1 def   2.4 tot   6.5 
+ 7. Chris Paul             2009 PG off   4.2 def   2.3 tot   6.5 
+ 8. Shai Gilgeous-Alexander 2025 PG off   4.7 def   1.7 tot   6.4 
+ 9. James Harden           2019 PG off   5.2 def   1.1 tot   6.3 
+10. Kevin Durant           2014 SF off   5.1 def   1.2 tot   6.3 
+11. Magic Johnson          1990 PG off   4.8 def   1.4 tot   6.2 
+12. Stephen Curry          2016 PG off   5.2 def   0.9 tot   6.1 
+13. Kareem Abdul-Jabbar    1976 C  off   3.7 def   2.4 tot   6.1 
+14. Shaquille O'Neal       2000 C  off   4.4 def   1.5 tot   5.9 
+15. Giannis Antetokounmpo  2022 PF off   3.8 def   2.1 tot   5.9 
+16. Larry Bird             1985 SF off     4 def   1.7 tot   5.7 
+17. John Stockton          1991 PG off   3.9 def   1.8 tot   5.7 
+18. Kawhi Leonard          2017 SF off   3.9 def   1.8 tot   5.7 
+19. Luka Dončić            2024 PG off   4.5 def   1.1 tot   5.6 
+20. Joel Embiid            2022 C  off   3.9 def   1.7 tot   5.6 
+21. Russell Westbrook      2017 PG off   4.1 def   1.4 tot   5.5 
+22. Charles Barkley        1990 SF off   4.7 def   0.8 tot   5.5 
+23. Oscar Robertson        1964 PG off   4.2 def   1.2 tot   5.4 (est.D)
+24. George Mikan           1952 C  off   2.3 def   3.1 tot   5.4 (est.D)
+25. Dwyane Wade            2009 SG off   4.1 def   1.3 tot   5.4 
+
+=== TOP 10 DEFENDERS (best season per player) ===
+  Bill Russell           1963 C def 4 (est.)
+  Wilt Chamberlain       1968 C def 3.3 (est.)
+  Hakeem Olajuwon        1990 C def 3.2 
+  George Mikan           1952 C def 3.1 (est.)
+  Nikola Jokić           2024 C def 3 
+  Mark Eaton             1985 C def 3 
+  David Robinson         1994 C def 2.9 
+  Marcus Camby           2007 C def 2.9 
+  Ben Wallace            2002 C def 2.8 
+  Manute Bol             1986 C def 2.8 
+```

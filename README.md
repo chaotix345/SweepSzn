@@ -15,7 +15,9 @@ The original sums per-game stats (PPG×0.46 + RPG×0.25 + …) with no era adjus
 - **Fantasy-regime penalties fire only out-of-distribution**: the usage budget sits at 110 (the median real top-5 sums ~107.5% usage, so the old budget of 100 penalized 91.7% of *real* teams), and the perimeter-defense term is a continuous gradient, not a gameable cliff. **Elite peak cards are 3-yr smoothed** (same-team adjacent seasons) so one transcendent outlier season isn't priced as durable ability.
 - Every penalty factor on the result card carries its **exact win cost for that lineup** (counterfactual through the Pythagorean curve), the era discount is itemized, and records are anchored to verified real seasons ("comparable to the 66-16 Heat").
 
-Result: a balanced two-way team beats a stat-stuffer; nobody has gone 82-0 — the best **draftable** five projects **79-3** (the engine's theoretical max is 80-2, but that five needs two C-only bigs and is slot-illegal; both pinned by golden tests, reproduce with `scripts/search_best.ts`). See `DESIGN.md` §11 and §13 for the accuracy writeups.
+Result: a balanced two-way team beats a stat-stuffer; nobody has gone 82-0 — the best **draftable** five projects **80-2**, equal to the engine's theoretical max (pinned by golden tests, reproduce with `scripts/search_best.ts`). See `DESIGN.md` §11, §13 and §14 for the accuracy writeups.
+
+**Engine v4 (2026-11):** cards are rated as starters from a minutes-weighted three-season window, with box-score weights fitted to play-by-play RAPM (used offline as a fitting target only); the lineup penalties fire only where real teams never go (asserted on all 1,170 team-seasons); and the receipts are public at `/how-it-works#receipts`. Details in `DESIGN.md` §14.
 
 ## Layout
 
@@ -57,16 +59,19 @@ themselves when their vars are present — see `web/.env.example` for the full r
 
 ## Rebuild the dataset (optional)
 
-Order matters: `build_dataset.py` writes `data/out/team_rotations.json`, which `calibrate.py`
-reads at startup — on a fresh clone, calibration fails with FileNotFoundError until the build
-step has run.
+Order matters: `build_dataset.py` writes `data/out/team_rotations.json` and
+`team_player_seasons.json`, which `calibrate.py` and `rate_cards.py` read — on a fresh clone,
+calibration fails with FileNotFoundError until the build step has run. The draftable pool is frozen
+(82-0 parity, card ids in share links): a normal build does not touch `players.json`.
 
 ```bash
 pip install -r data/requirements.txt
-python data/scrape.py          # ~13 min, throttled; resumable (skips cached files)
-python data/build_dataset.py   # -> web/public/data/players.json, league_context.json (+ data/out/*)
-node   data/enrich_players.mjs # adds multi-position `eligible` + current-franchise `team` (82-0 parity; UI only, no recalibration)
-python data/calibrate.py       # -> web/public/data/coefficients.json + calibration report
+python data/scrape.py          # ~25 min, throttled; resumable (skips cached files)
+python data/build_dataset.py   # -> data/out/* (pass --write-pool to regenerate players.json + run enrich_players.mjs)
+python data/fetch_rapm.py      # optional: nbarapm 3-year RAPM -> data/out/rapm.json (fitting target only, never committed)
+python data/calibrate.py       # -> coefficients.json + famous_teams.json + calibration report (asserts the accuracy gates)
+python data/rate_cards.py      # -> off_rating/def_rating on every card in players.json (ids and stats untouched)
+python -m pytest data/tests    # pipeline unit tests
 ```
 
 ## Validate the engine
