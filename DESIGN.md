@@ -213,8 +213,9 @@ change that. The defenses we DO maintain, and that every new mode must keep:
 1. **Server-side replay is the only score that counts.** Every submit route re-runs the full trace
    through `verifyTrace` + the engine; client-sent scores/factors are never read.
 2. **No free hints on competitive seeds.** Fit grades / per-candidate deltas are withheld from the
-   wire for Daily, HoopIQ, challenges, and any shared-seed mode (`lib/data.ts` spin gating) so
-   devtools alone don't reveal the optimal pick. Raising the bar from "open devtools" to "write a
+   wire for Daily, HoopIQ, challenges, Draft Duel, and any shared-seed mode (`lib/data.ts` spin
+   gating) so devtools alone don't reveal the optimal pick. Draft Duel's bot runs server-side only
+   (`lib/duelBot.ts`); the client sees its finished picks, never a per-candidate score. Raising the bar from "open devtools" to "write a
    script" is the entire goal — it filters out ~all casual cheating.
 3. **One identity, keep-best, rate-limited.** Anti-grind comes from per-uid keep-best, daily caps,
    and per-IP rate limits — not from trying to hide the math.
