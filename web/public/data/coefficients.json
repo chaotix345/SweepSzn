@@ -92,11 +92,11 @@
   "coverage": {
     "trbLo": -0.2,
     "trbSpan": 1.0,
-    "stlLo": 0.0,
-    "stlSpan": 1.0
+    "stlLo": 0.5,
+    "stlSpan": 2.5
   },
   "noRimPenalty": 10.0,
-  "thinPerimeterPenalty": 3.0,
+  "thinPerimeterPenalty": 7.0,
   "_meta": {
     "team_seasons": 1170,
     "off_r2": 0.427,

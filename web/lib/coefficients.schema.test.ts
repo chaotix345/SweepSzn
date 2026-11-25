@@ -27,6 +27,7 @@ describe("coefficients.json — structural completeness", () => {
   const SCALAR_KEYS: Array<keyof Coefficients> = [
     "ortgBase", "drtgBase", "offScale", "defScale", "pythK", "zCap",
     "defEstCap", "dwsShrinkK", "leagueDwsMean", "usageBudget", "overloadGamma",
+    "usageFloor", "overloadPow", "shortfallGamma",
     "noRimPenalty", "thinPerimeterPenalty",
   ];
 
@@ -40,7 +41,7 @@ describe("coefficients.json — structural completeness", () => {
 
   // Nested object keys
   const OBJECT_KEYS: Array<keyof Coefficients> = [
-    "eraStrength", "offModel", "defModel", "defModelEst", "usgModel", "spacing", "rim",
+    "eraStrength", "offModel", "defModel", "defModelEst", "usgModel", "spacing", "rim", "coverage",
   ];
 
   for (const key of OBJECT_KEYS) {
@@ -147,8 +148,11 @@ describe("coefficients.json — numeric sanity bounds", () => {
   });
 
   // usageBudget: total usage for 5 players (5 * ~20 base = 100)
-  it("usageBudget in [80, 120]", () => {
-    const v = num("usageBudget"); expect(v).toBeGreaterThanOrEqual(80); expect(v).toBeLessThanOrEqual(120);
+  // v4: the band is the real top-5 usage p1/p99 (1985-2025), e.g. [95.5, 128.5]
+  it("usageBudget in [100, 145] and usageFloor in [70, 105], floor below budget", () => {
+    const v = num("usageBudget"); expect(v).toBeGreaterThanOrEqual(100); expect(v).toBeLessThanOrEqual(145);
+    const f = num("usageFloor"); expect(f).toBeGreaterThanOrEqual(70); expect(f).toBeLessThanOrEqual(105);
+    expect(f).toBeLessThan(v);
   });
 
   // overloadGamma: penalty per percentage point over budget (small positive)

@@ -2,7 +2,9 @@
 // committed coefficients.json merged over DEFAULT_COEFFICIENTS (exactly as lib/data.ts does).
 // Any change to coefficients or scoring math will break this file loudly.
 //
-// Last regenerated for the 2026-06 realism pass: usageBudget 100->110 (penalty is fantasy-regime
+// Last regenerated for engine v4 (2026-11-25, DESIGN.md §14): multi-season minutes-aware card ratings,
+// two-sided usage band, coverage-based interior/perimeter terms, shot-creation shortfall.
+// Previously regenerated for the 2026-06 realism pass: usageBudget 100->110 (penalty is fantasy-regime
 // only), 3-yr peak smoothing on elite cards, pythK refit to 13.75 vs the luck-free pythag-wins
 // target, continuous perimeter credit, and the new Era adjustment display factor.
 import { describe, it, expect } from "vitest";
@@ -130,29 +132,29 @@ const MODERN_BALANCED = lineup(
 describe("engine golden master — evaluateLineup with committed coefficients.json", () => {
 
   // 1. Modern dynasty
-  // ortg=121.7, drtg=99.4, netRtg=22.2, winPct=0.941 (rounded per engine round1/round3)
+  // (values re-pinned for engine v4, 2026-11-25) (rounded per engine round1/round3)
   describe("modernDynasty", () => {
     const r = evaluateLineup(MODERN_DYNASTY, COEFF);
     it("wins", () => expect(r.wins).toBe(77));
     it("losses", () => expect(r.losses).toBe(5));
-    it("ortg", () => expect(r.ortg).toBe(121.7));
-    it("drtg", () => expect(r.drtg).toBe(99.4));
-    it("netRtg", () => expect(r.netRtg).toBe(22.2));
-    it("winPct", () => expect(r.winPct).toBe(0.941));
+    it("ortg", () => expect(r.ortg).toBe(123.6));
+    it("drtg", () => expect(r.drtg).toBe(100.6));
+    it("netRtg", () => expect(r.netRtg).toBe(23));
+    it("winPct", () => expect(r.winPct).toBe(0.944));
     it("grade is A+ or S (wins=77)", () => expect(["S", "A+"].includes(r.grade)).toBe(true));
     it("has player breakdowns for all 5", () => expect(r.players).toHaveLength(5));
   });
 
   // 2. Pre-1974-heavy (estimated defense, era-discounted)
-  // ortg=113.3, drtg=95.7, netRtg=17.6, winPct=0.911
+  // (values re-pinned for engine v4, 2026-11-25)
   describe("pre74Heavy", () => {
     const r = evaluateLineup(PRE74_HEAVY, COEFF);
-    it("wins", () => expect(r.wins).toBe(75));
-    it("losses", () => expect(r.losses).toBe(7));
-    it("ortg", () => expect(r.ortg).toBe(113.3));
-    it("drtg", () => expect(r.drtg).toBe(95.7));
-    it("netRtg", () => expect(r.netRtg).toBe(17.6));
-    it("winPct", () => expect(r.winPct).toBe(0.911));
+    it("wins", () => expect(r.wins).toBe(77));
+    it("losses", () => expect(r.losses).toBe(5));
+    it("ortg", () => expect(r.ortg).toBe(117));
+    it("drtg", () => expect(r.drtg).toBe(95.4));
+    it("netRtg", () => expect(r.netRtg).toBe(21.5));
+    it("winPct", () => expect(r.winPct).toBe(0.943));
     // pre-1985 note is attached when lineup has members with year < fullYear
     it("has era-discount note for pre-1985 players", () => {
       expect(r.notes.some((n) => /pre-1985/i.test(n) || /era.adjust/i.test(n))).toBe(true);
@@ -170,15 +172,15 @@ describe("engine golden master — evaluateLineup with committed coefficients.js
   });
 
   // 3. All-PG (usage overload)
-  // ortg=117.9, drtg=107.8, netRtg=10.1, winPct=0.773
+  // (values re-pinned for engine v4, 2026-11-25)
   describe("allPG (usage overload)", () => {
     const r = evaluateLineup(ALL_PG, COEFF);
-    it("wins", () => expect(r.wins).toBe(63));
-    it("losses", () => expect(r.losses).toBe(19));
-    it("ortg", () => expect(r.ortg).toBe(117.9));
-    it("drtg", () => expect(r.drtg).toBe(107.8));
-    it("netRtg", () => expect(r.netRtg).toBe(10.1));
-    it("winPct", () => expect(r.winPct).toBe(0.773));
+    it("wins", () => expect(r.wins).toBe(74));
+    it("losses", () => expect(r.losses).toBe(8));
+    it("ortg", () => expect(r.ortg).toBe(119.5));
+    it("drtg", () => expect(r.drtg).toBe(102.1));
+    it("netRtg", () => expect(r.netRtg).toBe(17.4));
+    it("winPct", () => expect(r.winPct).toBe(0.897));
     // overload factor should appear (totalUsage=173.4, budget=110, penalty=13.9)
     it("includes usage overload factor", () => {
       expect(r.factors.some((f) => /overload/i.test(f.label) && f.kind === "bad")).toBe(true);
@@ -188,40 +190,40 @@ describe("engine golden master — evaluateLineup with committed coefficients.js
   });
 
   // 4. GOAT era
-  // ortg=115.8, drtg=99.6, netRtg=16.1, winPct=0.887
+  // (values re-pinned for engine v4, 2026-11-25)
   describe("goatEra", () => {
     const r = evaluateLineup(GOAT_ERA, COEFF);
-    it("wins", () => expect(r.wins).toBe(73));
-    it("losses", () => expect(r.losses).toBe(9));
-    it("ortg", () => expect(r.ortg).toBe(115.8));
-    it("drtg", () => expect(r.drtg).toBe(99.6));
-    it("netRtg", () => expect(r.netRtg).toBe(16.1));
-    it("winPct", () => expect(r.winPct).toBe(0.887));
+    it("wins", () => expect(r.wins).toBe(74));
+    it("losses", () => expect(r.losses).toBe(8));
+    it("ortg", () => expect(r.ortg).toBe(118));
+    it("drtg", () => expect(r.drtg).toBe(100.6));
+    it("netRtg", () => expect(r.netRtg).toBe(17.4));
+    it("winPct", () => expect(r.winPct).toBe(0.9));
     it("grade A+ (wins=73)", () => expect(r.grade).toBe("A+"));
   });
 
   // 5. Shooting lineup
-  // ortg=119.9, drtg=105.4, netRtg=14.6, winPct=0.856
+  // (values re-pinned for engine v4, 2026-11-25)
   describe("shootingLineup", () => {
     const r = evaluateLineup(SHOOTING_LINEUP, COEFF);
-    it("wins", () => expect(r.wins).toBe(70));
-    it("losses", () => expect(r.losses).toBe(12));
-    it("ortg", () => expect(r.ortg).toBe(119.9));
-    it("drtg", () => expect(r.drtg).toBe(105.4));
-    it("netRtg", () => expect(r.netRtg).toBe(14.6));
-    it("winPct", () => expect(r.winPct).toBe(0.856));
+    it("wins", () => expect(r.wins).toBe(76));
+    it("losses", () => expect(r.losses).toBe(6));
+    it("ortg", () => expect(r.ortg).toBe(122.5));
+    it("drtg", () => expect(r.drtg).toBe(102.4));
+    it("netRtg", () => expect(r.netRtg).toBe(20.1));
+    it("winPct", () => expect(r.winPct).toBe(0.921));
   });
 
   // 6. All-center
-  // ortg=114.3, drtg=97.6, netRtg=16.7, winPct=0.898
+  // (values re-pinned for engine v4, 2026-11-25)
   describe("allCenter", () => {
     const r = evaluateLineup(ALL_CENTER, COEFF);
-    it("wins", () => expect(r.wins).toBe(74));
-    it("losses", () => expect(r.losses).toBe(8));
-    it("ortg", () => expect(r.ortg).toBe(114.3));
-    it("drtg", () => expect(r.drtg).toBe(97.6));
-    it("netRtg", () => expect(r.netRtg).toBe(16.7));
-    it("winPct", () => expect(r.winPct).toBe(0.898));
+    it("wins", () => expect(r.wins).toBe(76));
+    it("losses", () => expect(r.losses).toBe(6));
+    it("ortg", () => expect(r.ortg).toBe(117.1));
+    it("drtg", () => expect(r.drtg).toBe(97.7));
+    it("netRtg", () => expect(r.netRtg).toBe(19.4));
+    it("winPct", () => expect(r.winPct).toBe(0.924));
     // no-perimeter-defender penalty expected (all bigs — perimScore is exactly 0)
     it("includes thin-perimeter or no-perimeter factor", () => {
       expect(r.factors.some((f) => /perimeter/i.test(f.label) && f.kind === "bad")).toBe(true);
@@ -234,15 +236,15 @@ describe("engine golden master — evaluateLineup with committed coefficients.js
   });
 
   // 7. Pure pre-1974
-  // ortg=110.1, drtg=95.3, netRtg=14.7, winPct=0.878
+  // (values re-pinned for engine v4, 2026-11-25)
   describe("allPre74", () => {
     const r = evaluateLineup(ALL_PRE74, COEFF);
-    it("wins", () => expect(r.wins).toBe(72));
-    it("losses", () => expect(r.losses).toBe(10));
-    it("ortg", () => expect(r.ortg).toBe(110.1));
-    it("drtg", () => expect(r.drtg).toBe(95.3));
-    it("netRtg", () => expect(r.netRtg).toBe(14.7));
-    it("winPct", () => expect(r.winPct).toBe(0.878));
+    it("wins", () => expect(r.wins).toBe(78));
+    it("losses", () => expect(r.losses).toBe(4));
+    it("ortg", () => expect(r.ortg).toBe(114.5));
+    it("drtg", () => expect(r.drtg).toBe(92.8));
+    it("netRtg", () => expect(r.netRtg).toBe(21.7));
+    it("winPct", () => expect(r.winPct).toBe(0.947));
     // spacing is zero (all pre-1980, shooterUnit returns 0 for year < 1980)
     it("spacing factor absent (all pre-3pt era)", () => {
       const spacingFactor = r.factors.find((f) => /spacing/i.test(f.label));
@@ -259,45 +261,45 @@ describe("engine golden master — evaluateLineup with committed coefficients.js
   });
 
   // 8. Stat stuffer
-  // ortg=108.9, drtg=101.8, netRtg=7.1, winPct=0.716
+  // (values re-pinned for engine v4, 2026-11-25)
   describe("statStuffer", () => {
     const r = evaluateLineup(STAT_STUFFER, COEFF);
-    it("wins", () => expect(r.wins).toBe(59));
-    it("losses", () => expect(r.losses).toBe(23));
-    it("ortg", () => expect(r.ortg).toBe(108.9));
-    it("drtg", () => expect(r.drtg).toBe(101.8));
-    it("netRtg", () => expect(r.netRtg).toBe(7.1));
-    it("winPct", () => expect(r.winPct).toBe(0.716));
+    it("wins", () => expect(r.wins).toBe(61));
+    it("losses", () => expect(r.losses).toBe(21));
+    it("ortg", () => expect(r.ortg).toBe(110.6));
+    it("drtg", () => expect(r.drtg).toBe(102.4));
+    it("netRtg", () => expect(r.netRtg).toBe(8.2));
+    it("winPct", () => expect(r.winPct).toBe(0.744));
     it("has usage overload factor", () => {
       expect(r.factors.some((f) => /overload/i.test(f.label) && f.kind === "bad")).toBe(true);
     });
   });
 
   // 9. Mixed era
-  // ortg=117.3, drtg=94.5, netRtg=22.7, winPct=0.951
+  // (values re-pinned for engine v4, 2026-11-25)
   describe("mixedEra", () => {
     const r = evaluateLineup(MIXED_ERA, COEFF);
-    it("wins", () => expect(r.wins).toBe(78));
-    it("losses", () => expect(r.losses).toBe(4));
-    it("ortg", () => expect(r.ortg).toBe(117.3));
-    it("drtg", () => expect(r.drtg).toBe(94.5));
-    it("netRtg", () => expect(r.netRtg).toBe(22.7));
-    it("winPct", () => expect(r.winPct).toBe(0.951));
+    it("wins", () => expect(r.wins).toBe(79));
+    it("losses", () => expect(r.losses).toBe(3));
+    it("ortg", () => expect(r.ortg).toBe(120.4));
+    it("drtg", () => expect(r.drtg).toBe(94.7));
+    it("netRtg", () => expect(r.netRtg).toBe(25.6));
+    it("winPct", () => expect(r.winPct).toBe(0.964));
     it("has era-discount note (Mikan/Russell are pre-1985)", () => {
       expect(r.notes.some((n) => /pre-1985/i.test(n) || /era.adjust/i.test(n))).toBe(true);
     });
   });
 
   // 10. Modern balanced
-  // ortg=122.2, drtg=98.2, netRtg=24.0, winPct=0.953
+  // (values re-pinned for engine v4, 2026-11-25)
   describe("modernBalanced", () => {
     const r = evaluateLineup(MODERN_BALANCED, COEFF);
-    it("wins", () => expect(r.wins).toBe(78));
-    it("losses", () => expect(r.losses).toBe(4));
-    it("ortg", () => expect(r.ortg).toBe(122.2));
-    it("drtg", () => expect(r.drtg).toBe(98.2));
-    it("netRtg", () => expect(r.netRtg).toBe(24));
-    it("winPct", () => expect(r.winPct).toBe(0.953));
+    it("wins", () => expect(r.wins).toBe(79));
+    it("losses", () => expect(r.losses).toBe(3));
+    it("ortg", () => expect(r.ortg).toBe(124.2));
+    it("drtg", () => expect(r.drtg).toBe(99));
+    it("netRtg", () => expect(r.netRtg).toBe(25.2));
+    it("winPct", () => expect(r.winPct).toBe(0.957));
     it("grade A+ (wins=78, S threshold is 80)", () => expect(r.grade).toBe("A+"));
   });
 
@@ -361,36 +363,35 @@ describe("engine golden master — evaluateLineup with committed coefficients.js
   describe("engine-theoretical best five (not draftable)", () => {
     const ENGINE_MAX = lineup(
       "nikola_joki_den_2020s_2024",
-      "lebron_james_mia_2010s_2013",
+      "lebron_james_cle_2000s_2009",
       "wilt_chamberlain_phi_1960s_1968",
+      "magic_johnson_lal_1980s_1990",
       "john_stockton_uta_1980s_1989",
-      "nate_mcmillan_sea_1990s_1994",
     );
     const r = evaluateLineup(ENGINE_MAX, COEFF);
     it("still projects 80-2", () => {
       expect(r.wins).toBe(80);
       expect(r.losses).toBe(2);
     });
-    it("is the only S-grade five known (engine-theoretical — S is unreachable by drafting)", () =>
-      expect(r.grade).toBe("S"));
+    it("grades S (v4: the draftable best five reaches S too)", () => expect(r.grade).toBe("S"));
   });
 
-  // Best DRAFTABLE five (slot-legal: PG Stockton, SG McMillan, SF LeBron, PF Magic, C Jokić) —
-  // the ceiling the result card and marketing copy cite (BEST_DRAFTABLE_RECORD "79-3").
+  // Best DRAFTABLE five (slot-legal: PG Stockton, SG LeBron, SF Kirilenko, PF Magic, C Jokić) —
+  // the ceiling the result card and marketing copy cite (BEST_DRAFTABLE_RECORD "80-2").
   describe("best draftable five (BEST_DRAFTABLE_RECORD anchor)", () => {
     const BEST_DRAFTABLE = lineup(
       "john_stockton_uta_1980s_1989",
-      "nate_mcmillan_sea_1990s_1994",
-      "lebron_james_mia_2010s_2013",
+      "lebron_james_cle_2000s_2009",
+      "andrei_kirilenko_uta_2000s_2004",
       "magic_johnson_lal_1980s_1990",
       "nikola_joki_den_2020s_2024",
     );
     const r = evaluateLineup(BEST_DRAFTABLE, COEFF);
-    it("still projects 79-3", () => {
-      expect(r.wins).toBe(79);
-      expect(r.losses).toBe(3);
+    it("still projects 80-2", () => {
+      expect(r.wins).toBe(80);
+      expect(r.losses).toBe(2);
     });
-    it("grade A+ (the best earnable grade in actual play)", () => expect(r.grade).toBe("A+"));
+    it("grade S (v4: the top grade is earnable in actual play)", () => expect(r.grade).toBe("S"));
   });
 
   // ── Display-tether sync: UI constants read DEFAULT_COEFFICIENTS ───────────

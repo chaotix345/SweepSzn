@@ -262,7 +262,7 @@ const medalText = (rank: number) =>
 // Cold-visitor state: a ghost podium showing the records to chase + one clear "play now" CTA, so a
 // first-time visitor immediately understands what they're competing for (vs. a bare "be the first").
 function EmptyBoard() {
-  const targets: [number, string][] = [[1, "79–3"], [2, "74–8"], [3, "71–11"]];
+  const targets: [number, string][] = [[1, "80–2"], [2, "74–8"], [3, "71–11"]];
   return (
     <div className="mt-3">
       <div className="space-y-1">

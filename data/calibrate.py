@@ -298,15 +298,17 @@ from fetch_rapm import normalize_name
 #   team ORtg for the five-defenders lineup (~29 points short). Checked on the tuning half.
 # no-rim: 10 pts DRtg for zero size coverage -- an elite rim protector is worth ~+5 per 100 in RAPM
 #   terms, the defensive glass ~+3, post defense ~+2. Reasoned, not fitted (real teams never go there).
-# perimeter: 3 pts for no perimeter player at all (unchanged v3 value; fires on 0% of real teams).
+# perimeter: 7 pts DRtg for no perimeter player at all -- no ball-handler means live-ball turnovers,
+#   no ball pressure and no point-of-attack defense (~3-4 + ~3 per 100). Every real top-five has a
+#   guard or wing, so this fires on 0% of real teams; a big's steals earn partial credit only.
 OVERLOAD_GAMMA = 0.22
 OVERLOAD_POW = 1.0
 SHORTFALL_GAMMA = 0.13
 NO_RIM_PENALTY = 10.0
-THIN_PERIMETER_PENALTY = 3.0
+THIN_PERIMETER_PENALTY = 7.0
 # Lineup coverage (v4): a listed big / perimeter player covers fully; rebounding / steals z give
 # partial credit. Chosen so >= 99% of real top-fives have full coverage (asserted below).
-COVERAGE = {"trbLo": -0.2, "trbSpan": 1.0, "stlLo": 0.0, "stlSpan": 1.0}
+COVERAGE = {"trbLo": -0.2, "trbSpan": 1.0, "stlLo": 0.5, "stlSpan": 2.5}
 
 tps = json.load(open("data/out/team_player_seasons.json", encoding="utf-8"))
 by_person = defaultdict(list)

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { LineupResult, Player } from "./types";
+import { DEFAULT_COEFFICIENTS } from "./engine";
 import {
   bpSeedOk, bpCode, bpFromCode, bpKeyOk, BLUEPRINTS, blueprintDef, blueprintMetric,
   gradeBlueprint, encBpScore, decodeBpDisplay, BP_MULT, type BlueprintKey,
@@ -61,7 +62,7 @@ describe("blueprint metric derivation", () => {
   it("fortress metric = Star defense factor value", () => expect(blueprintMetric("fortress", r)).toBe(8.2));
   it("discipline metric = exact usage sum", () => expect(blueprintMetric("discipline", r)).toBeCloseTo(96, 9));
   it("rim metric = defScale-weighted rim-protector def", () =>
-    expect(blueprintMetric("rim", r)).toBeCloseTo((3.5 + 2.5) * 0.742, 9));
+    expect(blueprintMetric("rim", r)).toBeCloseTo((3.5 + 2.5) * DEFAULT_COEFFICIENTS.defScale, 9));
   it("balanced metric = net rating", () => expect(blueprintMetric("balanced", r)).toBe(10));
   it("suppressed spacing factor -> 0", () => expect(blueprintMetric("spacing", synth({ factors: [] }))).toBe(0));
 });

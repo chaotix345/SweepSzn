@@ -2,32 +2,32 @@ import type { Player, Coefficients, DefModel, LineupResult, PlayerBreakdown, Slo
 
 // Defaults mirror the fitted coefficients.json so the engine is sane even if the file is missing.
 export const DEFAULT_COEFFICIENTS: Coefficients = {
-  ortgBase: 104.407,
-  drtgBase: 107.595,
-  offScale: 0.6178,
-  defScale: 0.742,
+  ortgBase: 105.21,
+  drtgBase: 107.969,
+  offScale: 0.8934,
+  defScale: 1.0055,
   pythK: 13.75,
   zCap: 3.3,
   eraStrength: { floor: 0.85, gamma: 0.7, startYear: 1950, fullYear: 1985 },
-  offModel: { intercept: 0.4328, pts: 1.058, ast: 0.6331, ts: 0.9088 },
-  defModel: { intercept: -2.4242, dws: 79.5313, trb: -0.7115, posC: 0.6555, posPF: 0.2915, posSF: 0.1066, posSG: -0.0155 },
-  defModelEst: { intercept: -1.7504, dws: 77.2445, posC: 0.0613, posPF: -0.2484, posSF: -0.1734, posSG: -0.1265 },
+  offModel: { intercept: 0.4307, pts: 1.055, ast: 0.6267, ts: 0.904 },
+  defModel: { intercept: -2.4239, dws: 79.4384, trb: -0.7144, posC: 0.6583, posPF: 0.295, posSF: 0.1102, posSG: -0.0142 },
+  defModelEst: { intercept: -1.7417, dws: 76.9113, posC: 0.0616, posPF: -0.2472, posSF: -0.171, posSG: -0.1255 },
   defEstCap: 5.5,
   dwsShrinkK: 40,
   leagueDwsMean: 0.02037,
-  usgModel: { intercept: 21.2311, pts: 3.0339, ast: -0.4904 },
-  // 110 (was 100): the median real top-5 sums ~107.5% usage, so 100 penalized 91.7% of REAL
-  // teams — fantasy-regime penalties must be ~0 in-distribution. See calibrate.py USAGE_BUDGET.
-  usageBudget: 110,
-  usageFloor: 0,
+  usgModel: { intercept: 21.2312, pts: 3.0338, ast: -0.4907 },
+  // v4: usage band [usageFloor, usageBudget] = real top-5 usage p1/p99 (1985-2025); penalties only
+  // outside it. calibrate.py asserts each reasoned penalty fires on <= 1% of real teams.
+  usageBudget: 128.5,
   overloadGamma: 0.22,
+  usageFloor: 95.5,
   overloadPow: 1,
-  shortfallGamma: 0,
-  spacing: { perShooter: 0.987, diminish: 0.55, noneFloor: -3, baseline: 1.6 },
+  shortfallGamma: 0.13,
+  spacing: { perShooter: 1.293, diminish: 0.55, noneFloor: -3, baseline: 1.6 },
   rim: { blkLo: 0.4, blkSpan: 1.4, trbProxyLo: 0.8, trbProxySpan: 1.6 },
-  coverage: { trbLo: -0.2, trbSpan: 1, stlLo: 0, stlSpan: 1 },
-  noRimPenalty: 7,
-  thinPerimeterPenalty: 3,
+  coverage: { trbLo: -0.2, trbSpan: 1, stlLo: 0.5, stlSpan: 2.5 },
+  noRimPenalty: 10,
+  thinPerimeterPenalty: 7,
 };
 
 const num = (v: number | null | undefined) => (v == null || Number.isNaN(v) ? 0 : v);

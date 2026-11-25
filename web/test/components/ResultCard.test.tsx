@@ -274,7 +274,7 @@ describe("ResultCard — context & explanation layer", () => {
 
   it("notes the verified draftable ceiling on elite results", () => {
     const { container } = renderCard({ result: makeResult({ wins: 74, losses: 8, grade: "A+", label: "HISTORIC" }) });
-    expect(container.textContent).toMatch(/best draftable five projects 79-3/i);
+    expect(container.textContent).toMatch(/best draftable five projects 80-2/i);
   });
 
   it("at the draftable ceiling, the ladder says S is theoretical instead of taunting '1 win from S'", () => {
@@ -303,8 +303,8 @@ describe("ResultCard — context & explanation layer", () => {
   it("expands Star offense into per-player impact rows", () => {
     const { container } = renderCard();
     expect(container.textContent).toMatch(/Per-player impact/i);
-    // Player PG: off 3.5 × 0.6178 = +2.2 on the offense disclosure
-    expect(container.textContent).toContain("+2.2");
+    // Player PG: off 3.5 × 0.8934 = +3.1 on the offense disclosure
+    expect(container.textContent).toContain("+3.1");
     // the not-a-career-grade caveat is present
     expect(container.textContent).toMatch(/not a career grade/i);
   });

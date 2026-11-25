@@ -45,7 +45,7 @@ export default function TodaysBest() {
 
   return (
     <p className="font-mono text-sm text-zinc-500">
-      Best draftable five ever found: <span className="font-bold text-green-400">79–3</span>
+      Best draftable five ever found: <span className="font-bold text-green-400">80–2</span>
       <span className="text-zinc-600"> · nobody&apos;s gone 82–0 yet</span>
     </p>
   );

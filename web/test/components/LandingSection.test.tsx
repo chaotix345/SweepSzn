@@ -30,7 +30,7 @@ afterEach(() => { cleanup(); resultPreviewProps.length = 0; });
 describe("LandingSection — top-of-funnel hero", () => {
   it("leads the hero subhead with the engine differentiator (the explainable-engine moat)", () => {
     render(<LandingSection />);
-    // 79-3 lives in TodaysBest right below; the subhead's prime real estate is the differentiator
+    // 80-2 lives in TodaysBest right below; the subhead's prime real estate is the differentiator
     expect(document.body.textContent ?? "").toMatch(/finds every hole in your lineup/i);
   });
 

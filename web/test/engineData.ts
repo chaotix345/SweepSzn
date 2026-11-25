@@ -12,9 +12,8 @@ const coeffClean = Object.fromEntries(Object.entries(coeffRaw).filter(([k]) => k
 export const COEFF: Coefficients = { ...DEFAULT_COEFFICIENTS, ...coeffClean };
 export const BY_ID = new Map(PLAYERS.map((p) => [p.id, p]));
 
-export function randomLineups(n = 2000, seed = 7): Player[][] {
+export function randomLineups(n = 2000, seed = 7, pool: Player[] = PLAYERS): Player[][] {
   const rnd = mulberry32(seed);
-  const pool = PLAYERS.filter((p) => p.eligible && p.eligible.length);
   const out: Player[][] = [];
   while (out.length < n) {
     const used = new Set<string>();
@@ -30,8 +29,10 @@ export function randomLineups(n = 2000, seed = 7): Player[][] {
   return out;
 }
 
-export function spreadSD(): number {
-  const w = randomLineups().map((l) => quickScore(l, COEFF).wins);
+export function spreadSD(pool: Player[] = PLAYERS, n = 2000, seed = 7): number {
+  const w = randomLineups(n, seed, pool).map((l) => quickScore(l, COEFF).wins);
   const m = w.reduce((a, b) => a + b, 0) / w.length;
   return Math.sqrt(w.reduce((a, b) => a + (b - m) ** 2, 0) / w.length);
 }
+
+export const BY_PEAK = [...PLAYERS].sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0));

@@ -222,12 +222,12 @@ describe("POST /api/daily/submit — anon path", () => {
   it("anon keep-best: resubmitting a worse score does not decrease the stored score", async () => {
     const anonUid = "anon-uid-12345678";
     const dailyZ = `lb:${TODAY}`;
-    // Pre-seed a score higher than what LEGIT_TRACE will produce (wins=60, net=8.3 → 60108).
-    // Use wins=70 (encScore(70, 0) = 70100) so the submitted trace (60108) is strictly worse.
-    const highScore = 70100;
+    // Pre-seed a score higher than anything LEGIT_TRACE can produce (engine v4: ~74 wins).
+    // Use wins=81 (encScore(81, 0) = 81100) so the submitted trace is strictly worse.
+    const highScore = 81100;
     ctx.redis!.zsets.set(dailyZ, new Map([[anonUid, highScore]]));
 
-    // Submit the legit trace — it would produce 60108, which is < 70100.
+    // Submit the legit trace — its score is < 81100.
     // submitScore's keep-best guard must leave the stored score unchanged.
     await submit({ date: TODAY, trace: LEGIT_TRACE, uid: anonUid });
     const stored = ctx.redis!.zsets.get(dailyZ)?.get(anonUid) ?? 0;
