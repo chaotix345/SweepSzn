@@ -11,6 +11,7 @@ export const initialReel = (m: Mode | null): ReelValue => ({ team: "ATL", era: m
 // spin touches outside the reels (current spin, selection, re-spin bookkeeping) is passed in.
 export function useReelSpin(opts: {
   seed: string;
+  asOf: string;
   mode: Mode | null;
   filled: number;
   drafted: DraftCandidate[];
@@ -24,7 +25,7 @@ export function useReelSpin(opts: {
   setCrowdNote: (n: string | null) => void;
   setSkips: Dispatch<SetStateAction<{ team: boolean; era: boolean }>>;
 }) {
-  const { seed, mode, filled, drafted, genRef, saltRef, roundRespinsRef, setError, setCurrent, setSelPlayer, setSelSlot, setCrowdNote, setSkips } = opts;
+  const { seed, asOf, mode, filled, drafted, genRef, saltRef, roundRespinsRef, setError, setCurrent, setSelPlayer, setSelSlot, setCrowdNote, setSkips } = opts;
   const [spinning, setSpinning] = useState(false);
   const [reel, setReel] = useState<ReelValue>(initialReel(null));
   const [lockedReel, setLockedReel] = useState<"team" | "era" | null>(null);
@@ -62,7 +63,7 @@ export function useReelSpin(opts: {
         method: "POST", headers: { "content-type": "application/json" },
         // fit grades are a Classic-style hint assist (Classic + Prime + Blueprint); never requested
         // in Daily/HoopIQ/Challenge/Factor Hunt so the network response can't be read to draft optimally
-        body: JSON.stringify({ seed, round: filled, exclude: drafted.map((p) => p.id), fit: mode === "classic" || mode === "prime" || mode === "blueprint", ...spinOpts }),
+        body: JSON.stringify({ seed, asOf, round: filled, exclude: drafted.map((p) => p.id), fit: mode === "classic" || mode === "prime" || mode === "blueprint", ...spinOpts }),
       });
       if (stale()) return;
       if (!r.ok) throw new Error("spin failed");
@@ -91,7 +92,7 @@ export function useReelSpin(opts: {
     } finally {
       if (!stale()) { if (tickRef.current) clearTimeout(tickRef.current); setSpinning(false); }
     }
-  }, [spinning, seed, filled, drafted, mode, genRef, saltRef, roundRespinsRef, setError, setCurrent, setSelPlayer, setSelSlot, setCrowdNote, setSkips]);
+  }, [spinning, seed, asOf, filled, drafted, mode, genRef, saltRef, roundRespinsRef, setError, setCurrent, setSelPlayer, setSelSlot, setCrowdNote, setSkips]);
 
   // Stop the reel churn (used when a game is abandoned mid-spin).
   const stopReel = useCallback(() => {

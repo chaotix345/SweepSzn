@@ -1,0 +1,254 @@
+[
+ {
+  "name": "stress: goat-balanced",
+  "ids": [
+   "michael_jordan_chi_1980s_1988",
+   "magic_johnson_lal_1980s_1990",
+   "larry_bird_bos_1980s_1985",
+   "tim_duncan_sas_2000s_2002",
+   "hakeem_olajuwon_hou_1990s_1993"
+  ],
+  "overload": 3.674,
+  "shortfall": 0.0,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "stress: washington-legends",
+  "ids": [
+   "russell_westbrook_was_2020s_2021",
+   "dave_bing_wsb_1970s_1976",
+   "michael_jordan_was_2000s_2003",
+   "elvin_hayes_wsb_1970s_1975",
+   "moses_malone_wsb_1980s_1987"
+  ],
+  "overload": 1.725615839,
+  "shortfall": 0.0,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "stress: five-pgs",
+  "ids": [
+   "stephen_curry_gsw_2010s_2016",
+   "magic_johnson_lal_1980s_1990",
+   "chris_paul_noh_2000s_2009",
+   "steve_nash_pho_2000s_2007",
+   "isiah_thomas_det_1980s_1985"
+  ],
+  "overload": 0.726,
+  "shortfall": 0.0,
+  "rim": 12.0,
+  "perim": 0.0
+ },
+ {
+  "name": "stress: five-stoppers",
+  "ids": [
+   "bruce_bowen_sas_2000s_2006",
+   "tony_allen_mem_2010s_2011",
+   "p_j_tucker_pho_2010s_2014",
+   "ben_wallace_det_2000s_2002",
+   "dennis_rodman_det_1990s_1992"
+  ],
+  "overload": 0.0,
+  "shortfall": 3.731,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "stress: five-scorers",
+  "ids": [
+   "allen_iverson_phi_2000s_2001",
+   "kobe_bryant_lal_2000s_2006",
+   "kevin_durant_okc_2010s_2014",
+   "carmelo_anthony_nyk_2010s_2014",
+   "wilt_chamberlain_sfw_1960s_1963"
+  ],
+  "overload": 9.374212038,
+  "shortfall": 0.0,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "stress: all-wings",
+  "ids": [
+   "john_stockton_uta_1980s_1989",
+   "michael_jordan_chi_1990s_1991",
+   "scottie_pippen_chi_1990s_1995",
+   "klay_thompson_gsw_2010s_2015",
+   "kawhi_leonard_sas_2010s_2017"
+  ],
+  "overload": 1.87,
+  "shortfall": 0.0,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "stress: five-shooters",
+  "ids": [
+   "steve_nash_pho_2000s_2007",
+   "ray_allen_sea_2000s_2006",
+   "reggie_miller_ind_1990s_1997",
+   "kyle_korver_atl_2010s_2015",
+   "stephen_curry_gsw_2020s_2021"
+  ],
+  "overload": 0.0,
+  "shortfall": 0.0,
+  "rim": 6.266,
+  "perim": 0.0
+ },
+ {
+  "name": "stress: no-creators-a",
+  "ids": [
+   "michael_cooper_lal_1980s_1984",
+   "shane_battier_hou_2000s_2007",
+   "andrei_kirilenko_uta_2000s_2004",
+   "dikembe_mutombo_den_1990s_1994",
+   "mark_eaton_uta_1980s_1985"
+  ],
+  "overload": 0.0,
+  "shortfall": 2.431,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "stress: no-creators-b",
+  "ids": [
+   "thabo_sefolosha_okc_2010s_2013",
+   "danny_green_sas_2010s_2015",
+   "jae_crowder_bos_2010s_2016",
+   "kendrick_perkins_okc_2010s_2013",
+   "tyson_chandler_dal_2010s_2015"
+  ],
+  "overload": 0.0,
+  "shortfall": 3.211,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "stress: heliocentric",
+  "ids": [
+   "russell_westbrook_okc_2010s_2017",
+   "james_harden_hou_2010s_2019",
+   "luka_don_i_dal_2020s_2024",
+   "joel_embiid_phi_2020s_2022",
+   "giannis_antetokounmpo_mil_2020s_2022"
+  ],
+  "overload": 13.112,
+  "shortfall": 0.0,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "stress: eighties-wings",
+  "ids": [
+   "dominique_wilkins_atl_1980s_1987",
+   "bernard_king_nyk_1980s_1984",
+   "adrian_dantley_uta_1980s_1981",
+   "george_gervin_sas_1970s_1978",
+   "alex_english_den_1980s_1983"
+  ],
+  "overload": 4.246,
+  "shortfall": 0.0,
+  "rim": 1.259,
+  "perim": 0.0
+ },
+ {
+  "name": "stress: rockets-towers",
+  "ids": [
+   "hakeem_olajuwon_hou_1990s_1993",
+   "moses_malone_hou_1980s_1982",
+   "ralph_sampson_hou_1980s_1984",
+   "yao_ming_hou_2000s_2009",
+   "calvin_murphy_hou_1970s_1974"
+  ],
+  "overload": 1.479410324,
+  "shortfall": 0.0,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "best draftable five",
+  "ids": [
+   "john_stockton_uta_1980s_1989",
+   "lebron_james_cle_2000s_2009",
+   "andrei_kirilenko_uta_2000s_2004",
+   "magic_johnson_lal_1980s_1990",
+   "nikola_joki_den_2020s_2024"
+  ],
+  "overload": 0.088,
+  "shortfall": 0.0,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "pre-1978 bigs (usage model)",
+  "ids": [
+   "wilt_chamberlain_sfw_1960s_1963",
+   "elvin_hayes_wsb_1970s_1975",
+   "dave_bing_wsb_1970s_1976",
+   "calvin_murphy_hou_1970s_1974",
+   "john_stockton_uta_1980s_1989"
+  ],
+  "overload": 0.0,
+  "shortfall": 0.0,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "2025-26 cards",
+  "ids": [
+   "luka_don_i_lal_2020s_2026",
+   "tyrese_maxey_phi_2020s_2026",
+   "kawhi_leonard_lac_2020s_2026",
+   "cooper_flagg_dal_2020s_2026",
+   "victor_wembanyama_sas_2020s_2026"
+  ],
+  "overload": 6.996,
+  "shortfall": 0.0,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "five highest-usage",
+  "ids": [
+   "russell_westbrook_okc_2010s_2017",
+   "james_harden_hou_2010s_2019",
+   "kobe_bryant_lal_2000s_2006",
+   "luka_don_i_lal_2020s_2026",
+   "demarcus_cousins_sac_2010s_2017"
+  ],
+  "overload": 14.476,
+  "shortfall": 0.0,
+  "rim": 0.0,
+  "perim": 0.0
+ },
+ {
+  "name": "five centers",
+  "ids": [
+   "mark_eaton_uta_1980s_1985",
+   "manute_bol_wsb_1980s_1986",
+   "hakeem_olajuwon_hou_1980s_1990",
+   "theo_ratliff_por_2000s_2004",
+   "dikembe_mutombo_den_1990s_1994"
+  ],
+  "overload": 0.0,
+  "shortfall": 2.457,
+  "rim": 0.0,
+  "perim": 3.01196
+ },
+ {
+  "name": "five smallest guards",
+  "ids": [
+   "muggsy_bogues_chh_1980s_1990",
+   "earl_boykins_den_2000s_2005",
+   "spud_webb_atl_1980s_1990",
+   "keith_jennings_gsw_1990s_1995",
+   "isaiah_thomas_bos_2010s_2017"
+  ],
+  "overload": 0.0,
+  "shortfall": 0.0,
+  "rim": 22.0,
+  "perim": 0.0
+ }
+]

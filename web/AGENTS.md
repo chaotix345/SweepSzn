@@ -20,4 +20,4 @@ the wordmark, or grade colors. The root `DESIGN.md` is a different doc (engine/g
   secrets needed). Never write standalone `npx tsx` test scripts.
 - Every new API route needs a matching test in `test/routes/`.
 - Env vars: `web/.env.example` is the canonical reference; features self-disable when vars are absent.
-- Trust model + frozen 82-0 parity: root `DESIGN.md` §12 — read it before adding a game mode.
+- Trust model, 82-0 rules and pool by date: root `DESIGN.md` §12 — read it before adding a game mode.

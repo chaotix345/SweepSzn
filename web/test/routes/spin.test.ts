@@ -137,3 +137,17 @@ describe("POST /api/spin — exclude cap", () => {
     expect(opts.exclude).toEqual(exclude.slice(0, 4));
   });
 });
+
+describe("POST /api/spin — pool date", () => {
+  it("passes the game's pinned day through to spin()", async () => {
+    vi.mocked(spin).mockClear();
+    await post({ seed: "classic-abc", asOf: "2026-11-01" });
+    expect(vi.mocked(spin).mock.calls[0][2]?.asOf).toBe("2026-11-01");
+  });
+
+  it("drops a non-string day", async () => {
+    vi.mocked(spin).mockClear();
+    await post({ seed: "classic-abc", asOf: 20261101 });
+    expect(vi.mocked(spin).mock.calls[0][2]?.asOf).toBeUndefined();
+  });
+});

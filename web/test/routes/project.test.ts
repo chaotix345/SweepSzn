@@ -4,9 +4,15 @@ import { enableRedisEnv, freshFake, ctx, req, readJson, exhaustRateLimit } from 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
 vi.mock("next/server", async (orig) => (await import("@/test/routeHarness")).nextServerMockModule(await orig()));
+vi.mock("@/lib/data", async (orig) => {
+  const real = await orig<typeof import("@/lib/data")>();
+  return { ...real, getDraftablePool: vi.fn(real.getDraftablePool) };
+});
 
 enableRedisEnv();
 const { POST } = await import("@/app/api/project/route");
+const { getDraftablePool } = await import("@/lib/data");
+const { isoDay } = await import("@/lib/poolDate");
 
 // Real player ids from players.json (distinct people), in SLOT order [PG, SG, SF, PF, C].
 const FIVE = [
@@ -71,6 +77,22 @@ describe("POST /api/project — projection on allowed seeds", () => {
     expect(status).toBe(200);
     expect(body.gated).toBeUndefined();
     expect((body.floor as { wins: number }).wins).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("POST /api/project — pool date", () => {
+  beforeEach(() => { vi.mocked(getDraftablePool).mockClear(); });
+
+  it("projects against the game's pinned pool date", async () => {
+    await post({ seed: "classic-1", asOf: "2026-11-01", lineup: [FIVE[0], null, null, null, null] });
+    expect(vi.mocked(getDraftablePool).mock.calls[0][2]).toBe("2026-11-01");
+  });
+
+  it("a malformed or missing pool date means today; a dated seed uses its own day", async () => {
+    await post({ seed: "classic-1", asOf: 20261101, lineup: [FIVE[0], null, null, null, null] });
+    await post({ seed: "classic-1", lineup: [FIVE[0], null, null, null, null] });
+    await post({ seed: "bp-2026-06-15", asOf: "2026-11-01", lineup: [FIVE[0], null, null, null, null] });
+    expect(vi.mocked(getDraftablePool).mock.calls.map((c) => c[2])).toEqual([isoDay(), isoDay(), "2026-06-15"]);
   });
 });
 

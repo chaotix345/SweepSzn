@@ -188,7 +188,7 @@ export const WIN_GRADES = [
 ];
 
 // Shared lineup-construction math (used by both evaluateLineup and quickScore).
-function lineupTerms(lineup: Player[], c: Coefficients) {
+export function lineupTerms(lineup: Player[], c: Coefficients) {
   let sumOff = 0, sumDef = 0, totalUsage = 0, shooterUnits = 0, perimScore = 0, rim = 0;
   let anyModern = false;
   for (const p of lineup) {

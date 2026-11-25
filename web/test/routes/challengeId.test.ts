@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { LEGACY_AS_OF } from "@/lib/poolDate";
 import {
   enableRedisEnv,
   freshFake,
@@ -138,6 +139,13 @@ describe("GET /api/challenge/[id] — existing challenge", () => {
 
     const { body } = await readJson(await get(VALID_ID));
     expect(body.seed).toBe(`h2h-${VALID_ID}`);
+  });
+
+  it("returns the stored pool date, or the pre-release day for records that predate it", async () => {
+    ctx.redis!.strings.set(`chal:${VALID_ID}:info`, JSON.stringify({ ...mkInfo(), asOf: "2026-12-01" }));
+    expect((await readJson(await get(VALID_ID))).body.asOf).toBe("2026-12-01");
+    ctx.redis!.strings.set(`chal:${VALID_ID}:info`, JSON.stringify(mkInfo()));
+    expect((await readJson(await get(VALID_ID))).body.asOf).toBe(LEGACY_AS_OF);
   });
 
   it("response does NOT include uid, lineup, or raw name (public redaction)", async () => {

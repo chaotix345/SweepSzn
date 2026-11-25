@@ -17,9 +17,9 @@ describe("v4 acceptance: spread", () => {
 });
 
 describe("v4 acceptance: card identity and ratings", () => {
-  it("card id set is unchanged from v3", async () => {
+  it("card id set is unchanged from v3; later releases only add `since` cards", async () => {
     const v3: string[] = (await import("./fixtures/card_ids_v3.json")).default;
-    expect([...PLAYERS.map((p) => p.id)].sort()).toEqual(v3);
+    expect([...PLAYERS.filter((p) => !p.since).map((p) => p.id)].sort()).toEqual(v3);
   });
 
   it("every card has finite off_rating and def_rating", () => {

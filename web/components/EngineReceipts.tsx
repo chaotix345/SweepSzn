@@ -2,7 +2,7 @@
 // computed from the committed data and the live engine at build time — nothing here is hand-typed,
 // so it cannot drift from what the game actually scores. The engine's best possible five is
 // deliberately NOT shown (it would spoil the chase).
-import { getAllPlayers, getCoefficients, getPlayersByIds } from "@/lib/data";
+import { getLatestPlayers, getCoefficients, getPlayersByIds } from "@/lib/data";
 import { evaluateLineup } from "@/lib/engine";
 import { getEngineMeta, getFamousTeams, topCards } from "@/lib/receipts";
 import { STRESS_PANEL } from "@/lib/stressPanel";
@@ -14,7 +14,7 @@ export default function EngineReceipts() {
   const c = getCoefficients();
   const meta = getEngineMeta();
   const famous = getFamousTeams();
-  const players = getAllPlayers();
+  const players = getLatestPlayers();
   const top = topCards(players, c, "total", 10);
   const defenders = topCards(players, c, "def", 10);
   const panel = STRESS_PANEL.map((l) => {

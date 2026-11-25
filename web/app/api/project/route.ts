@@ -3,6 +3,7 @@ import { getPlayersByIds, getDraftablePool, getCoefficients } from "@/lib/data";
 import { projectRoster, projectionAllowed } from "@/lib/projection";
 import { rateLimit, ipOf } from "@/lib/redis";
 import { isFitLockedSeed } from "@/lib/challengeStore";
+import { resolveAsOf } from "@/lib/poolDate";
 import type { Slot } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
 
   const drafted = getPlayersByIds(draftedIds);
   const openSlots = SLOTS.filter((_, i) => lineup[i] === null);
-  const pool = getDraftablePool(seed.startsWith("prime-"));
+  const pool = getDraftablePool(seed.startsWith("prime-"), undefined, resolveAsOf(seed, typeof body?.asOf === "string" ? body.asOf : undefined));
   const { floor, ceiling, n } = projectRoster(drafted, pool, openSlots, getCoefficients());
   return NextResponse.json({ floor, ceiling, n });
 }
