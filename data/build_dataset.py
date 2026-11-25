@@ -318,8 +318,14 @@ def build():
         pool.append(best)
 
     pool.sort(key=lambda r: -(r["peak_score"] or -9))
-    dump_json(pool, f"{WEBDATA}/players.json")
-    dump_json(league_ctx, f"{WEBDATA}/league_context.json")
+    # The draftable pool is frozen (82-0 parity, card ids in share links/Dex). Only an explicit
+    # --write-pool regenerates it; a normal rebuild refreshes data/out/* for calibration only.
+    if "--write-pool" in sys.argv:
+        dump_json(pool, f"{WEBDATA}/players.json")
+        dump_json(league_ctx, f"{WEBDATA}/league_context.json")
+    else:
+        print("pool NOT written (frozen); pass --write-pool to regenerate web/public/data/players.json")
+    dump_json(team_rows, f"{OUT}/team_player_seasons.json")  # per-team seasons for card_model.py
     dump_json(team_seasons, f"{OUT}/team_seasons.json")
     dump_json(pool_rows, f"{OUT}/all_player_seasons.json")  # for z->BPM calibration
 
