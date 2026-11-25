@@ -2,10 +2,11 @@
 // narrow Redis surface so the env-gated ops script (scripts/rescore_v4.ts) and the hermetic tests
 // (test/rescore.test.ts, redisFake) run the same code. Idempotent: a second run changes nothing.
 //
-// Policy (spec §9.3): rescore what still holds a lineup — profile result history (no TTL) and live
-// challenges (creator info + every board row). The weekly and all-time boards only keep running
-// totals, so they are archived under a version suffix and restart empty. Closed daily/mode boards
-// are left as they were (finished competitions that expire within 31 days).
+// Policy (spec §9.3): rescore what still holds a lineup — profile result history (no TTL), live
+// challenges (creator info + every board row) and today's still-open Daily board. The weekly and
+// all-time boards only keep running totals, so they are archived under a version suffix and restart
+// empty. Closed daily boards and the mode boards (Factor Hunt / Blueprint / Surgeon, scored from more
+// than the record) are left as they were: finished competitions that expire within 31 days.
 import { encScore } from "./score";
 import { decodeLineup } from "./share";
 import { decodeSurgeonCard } from "./surgeon";
@@ -65,17 +66,25 @@ export async function rescoreChallenge(redis: RescoreRedis, id: string, evaluate
       touched = true;
     }
   }
+  return (await rescoreBoard(redis, zKey, hKey, evaluate)) > 0 || touched;
+}
+
+// Rescore every row of a lineup-carrying board (meta HASH of StoredRow + score ZSET): the challenge
+// boards and the still-open daily board (lb:{today}), whose rows keep the encoded lineup.
+export async function rescoreBoard(redis: RescoreRedis, zKey: string, hKey: string, evaluate: Evaluate): Promise<number> {
   const rows = (await redis.hgetall<BoardRow>(hKey)) ?? {};
+  let changed = 0;
   for (const [uid, row] of Object.entries(rows)) {
+    if (!row?.lineup) continue;
     const r = evaluate(decodeLineup(row.lineup));
     if (!r) continue;
     const net = Math.round(r.netRtg * 10) / 10;
     if (r.wins === row.wins && r.losses === row.losses && net === row.net) continue;
     await redis.hset(hKey, { [uid]: { ...row, wins: r.wins, losses: r.losses, net } });
     await redis.zadd(zKey, { score: encScore(r.wins, r.netRtg), member: uid });
-    touched = true;
+    changed++;
   }
-  return touched;
+  return changed;
 }
 
 // Copy a ZSET + its meta HASH under `<key>:v<version>` and clear the originals (no RENAME, so the

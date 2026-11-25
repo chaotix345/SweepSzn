@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createRedisFake } from "./redisFake";
-import { rescoreProfileResults, rescoreChallenge, archiveBoard, type RescoreRedis } from "../lib/rescore";
+import { rescoreProfileResults, rescoreChallenge, rescoreBoard, archiveBoard, type RescoreRedis } from "../lib/rescore";
 import { encScore } from "../lib/score";
 import type { LineupResult } from "../lib/types";
 
@@ -60,5 +60,20 @@ describe("archiveBoard", () => {
     expect(await r.hgetall("lb:alltime:meta:v3")).toEqual({ u1: { uid: "u1", name: "A", wins: 120 } });
     await r.zadd("lb:alltime", { score: 5, member: "u3" });
     expect(await archiveBoard(r, "lb:alltime", "lb:alltime:meta", 3)).toBe(false);
+  });
+});
+
+describe("rescoreBoard (today's daily board)", () => {
+  it("rescores rows that carry a lineup and skips rows that don't", async () => {
+    const r = fake();
+    await r.hset("lb:2026-11-25:meta", {
+      u1: { uid: "u1", name: "A", wins: 41, losses: 41, net: 0, lineup: IDS.join(",") },
+      u2: { uid: "u2", name: "B", wins: 50, losses: 32, net: 2 },
+    });
+    await r.zadd("lb:2026-11-25", { score: encScore(41, 0), member: "u1" }, { score: encScore(50, 2), member: "u2" });
+    expect(await rescoreBoard(r, "lb:2026-11-25", "lb:2026-11-25:meta", evaluate)).toBe(1);
+    const z = await r.zrange<(string | number)[]>("lb:2026-11-25", 0, -1, { withScores: true });
+    expect(z).toEqual(["u2", encScore(50, 2), "u1", encScore(60, 7.4)]);
+    expect(await rescoreBoard(r, "lb:2026-11-25", "lb:2026-11-25:meta", evaluate)).toBe(0);
   });
 });

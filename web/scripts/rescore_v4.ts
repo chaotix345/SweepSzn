@@ -1,13 +1,14 @@
 // Tracked env-gated ops tool: move stored scores onto the v4 engine (DESIGN.md §14, spec §9.3).
-// Run once, right after the Daily rollover that follows the v4 deploy:
+// Run once, right after the v4 deploy is live:
 //   DRY_RUN=1 npx tsx scripts/rescore_v4.ts     # counts only, writes nothing
-//   npx tsx scripts/rescore_v4.ts               # rescore profiles + challenges, archive weekly/all-time
+//   npx tsx scripts/rescore_v4.ts               # rescore profiles, challenges, today's Daily; archive weekly/all-time
 // Requires UPSTASH_REDIS_REST_URL/TOKEN. Skips cleanly when absent. Idempotent (lib/rescore.ts).
 import fs from "node:fs";
 import path from "node:path";
 import { Redis } from "@upstash/redis";
 import { evaluateLineup, DEFAULT_COEFFICIENTS } from "../lib/engine";
-import { rescoreProfileResults, rescoreChallenge, archiveBoard, type RescoreRedis } from "../lib/rescore";
+import { rescoreProfileResults, rescoreChallenge, rescoreBoard, archiveBoard, type RescoreRedis } from "../lib/rescore";
+import { dayUTC } from "../lib/day";
 import { isoWeek } from "../lib/isoweek";
 import type { Player, Coefficients } from "../lib/types";
 
@@ -61,6 +62,10 @@ async function scanKeys(match: string): Promise<string[]> {
   let chalChanged = 0;
   for (const id of chals) if (await rescoreChallenge(r, id, evaluate, CHALLENGE_TTL)) chalChanged++;
   console.log(`challenges: ${chals.length} scanned, ${chalChanged} rescored`);
+
+  const today = dayUTC();
+  const dailyChanged = await rescoreBoard(r, `lb:${today}`, `lb:${today}:meta`, evaluate);
+  console.log(`daily ${today}: ${dailyChanged} rows rescored`);
 
   const w = isoWeek(new Date().toISOString().slice(0, 10));
   const a1 = await archiveBoard(r, "lb:alltime", "lb:alltime:meta", 3);
