@@ -52,7 +52,9 @@ describe("historyPercentileText", () => {
     expect(historyPercentileText(55)).toMatch(/^Beats \d{1,2}% of real NBA teams since 1985$/);
     expect(historyPercentileText(80)).toBe("Better than every real team since 1985");
     expect(historyPercentileText(5)).toBe("Worse than every real team since 1985");
-    expect(historyPercentileText(73)).toBe("Beats 99% of real NBA teams since 1985");
+    expect(historyPercentileText(73)).toBe("Top 1% of real NBA teams since 1985");
+    expect(historyPercentileText(67)).toBe("Top 1% of real NBA teams since 1985");
+    expect(historyPercentileText(10)).toBe("Below nearly every real NBA team since 1985");
   });
 });
 

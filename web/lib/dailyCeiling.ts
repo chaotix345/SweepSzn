@@ -1,5 +1,5 @@
 import "server-only";
-import { spinPool, getPlayersByIds, getCoefficients } from "./data";
+import { spinPool, getPlayersByIds, getCoefficients, getAllPlayers } from "./data";
 import { evaluateLineup } from "./engine";
 import { bestFive } from "./ceiling";
 import { redis } from "./redis";
@@ -31,10 +31,12 @@ const MEM_CAP = 64;
 const mem = new Map<string, CeilingRecord>();
 const TTL_SEC = 60 * 60 * 24 * 400;
 
-// Coefficients are part of the answer; a refit must not serve a stale ceiling from Redis. Engine code
-// changes bump the version by hand.
+// Coefficients and card data are both part of the answer: a refit or a data-only card fix (ratings,
+// eligibility) must not serve a stale ceiling from Redis. Engine code changes bump the version by hand.
+// The public past-day GET is CDN-cached (1d + 7d stale), so a key change takes up to ~8 days to show there.
 let _key: string | null = null;
-const keyPrefix = () => (_key ??= `ceiling:v1:${(strSeed(JSON.stringify(getCoefficients())) >>> 0).toString(36)}:`);
+const h36 = (s: string) => (strSeed(s) >>> 0).toString(36);
+const keyPrefix = () => (_key ??= `ceiling:v1:${h36(JSON.stringify(getCoefficients()))}:${h36(JSON.stringify(getAllPlayers()))}:`);
 
 export function computeDailyCeiling(date: string): CeilingRecord | null {
   const seed = `daily-${date}`;

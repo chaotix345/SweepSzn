@@ -40,5 +40,8 @@ export function historyPercentileText(wins: number): string {
   const r = historyRank(wins);
   if (r.beatsAll) return `Better than every real team since ${HISTORY_FROM}`;
   if (r.beatsNone) return `Worse than every real team since ${HISTORY_FROM}`;
+  // The floored % flattens both ends: 67-73 wins would all read "99%", a 10-win five "0%".
+  if (r.pct >= 99) return `Top 1% of real NBA teams since ${HISTORY_FROM}`;
+  if (r.pct === 0) return `Below nearly every real NBA team since ${HISTORY_FROM}`;
   return `Beats ${r.pct}% of real NBA teams since ${HISTORY_FROM}`;
 }
