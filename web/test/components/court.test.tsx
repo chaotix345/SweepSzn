@@ -19,13 +19,13 @@ describe("Court — move/swap discoverability (R7)", () => {
     render(<Court roster={filledRoster()} selSlot={null} isTarget={() => false} onSlot={() => {}} idle />);
     const slot = screen.getByRole("button", { name: /Magic Johnson at PG/i });
     expect(slot.getAttribute("title")).toMatch(/move/i);
-    expect(slot.getAttribute("aria-label")).toMatch(/tap to move/i);
+    expect(slot.getAttribute("aria-label")).toMatch(/select to move/i);
   });
 
   it("does not show the move affordance while a selection is in progress", () => {
     render(<Court roster={filledRoster()} selSlot={"SG" as Slot} isTarget={() => false} onSlot={() => {}} idle={false} />);
     const slot = screen.getByRole("button", { name: /Magic Johnson at PG/i });
     expect(slot.getAttribute("title")).toBeNull();
-    expect(slot.getAttribute("aria-label")).not.toMatch(/tap to move/i);
+    expect(slot.getAttribute("aria-label")).not.toMatch(/to move/i);
   });
 });

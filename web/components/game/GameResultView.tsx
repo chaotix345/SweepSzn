@@ -37,7 +37,7 @@ export function SurgeonResultView({ mode, seed, sgResult, onRestart, onModeSelec
   mode: Mode; seed: string; sgResult: SgResult; onRestart: () => void; onModeSelect: () => void;
 }) {
   return (
-    <Shell roundNum={5} mode={mode} onRestart={onRestart} onModeSelect={onModeSelect} showRestart>
+    <Shell roundNum={5} complete mode={mode} onRestart={onRestart} onModeSelect={onModeSelect} showRestart>
       <SurgeonResult before={sgResult.before} after={sgResult.after} beforePlayers={sgResult.beforePlayers}
         afterPlayers={sgResult.afterPlayers} outIdx={sgResult.outIdx} diagnosis={sgResult.diagnosis}
         card={sgResult.card} onReset={onRestart} />
@@ -105,7 +105,7 @@ export function GameResultView({ mode, seed, asOf, result, roundNum, onRestart, 
   const bpView = mode === "blueprint" && blueprint ? gradeBlueprint(blueprint, result.result) : undefined;
 
   return (
-    <Shell roundNum={roundNum} mode={mode} onRestart={onRestart} onModeSelect={onModeSelect} showRestart>
+    <Shell roundNum={roundNum} complete mode={mode} onRestart={onRestart} onModeSelect={onModeSelect} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} modeKey={mode} usedHints={result.usedHints} onReset={onRestart} pickem={pickemView} factorHunt={fhView}
         prime={mode === "prime" || seed.startsWith("prime-")} blueprint={bpView}
         lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} ceiling={ceiling}
@@ -155,7 +155,7 @@ export function ArchiveResultView({ date, result, onRestart, onModeSelect, onPla
 }) {
   const label = `Archive · ${shortDay(date)}`;
   return (
-    <Shell roundNum={5} mode="daily" label={label} onRestart={onRestart} onModeSelect={onModeSelect} showRestart>
+    <Shell roundNum={5} complete mode="daily" label={label} onRestart={onRestart} onModeSelect={onModeSelect} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={label} modeKey="archive" usedHints={result.usedHints} onReset={onRestart}
         afterActions={<>
           <p className="mt-3 text-center text-xs text-zinc-400" data-testid="archive-unranked">Unranked replay: no leaderboard, streak or weekly credit.</p>

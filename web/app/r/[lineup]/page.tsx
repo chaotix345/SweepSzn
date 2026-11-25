@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const description = blueprint
     ? `${names} went ${blueprint.label} — ${result.wins}-${result.losses} (${result.label}) with ${blueprint.grade} blueprint execution. Can you out-execute them?`
     : prime
-      ? `${claimText({ wins: result.wins, losses: result.losses, names: players.map((p) => displayName(p.name)), prime: true }).replace(/ →$/, ".")} A fantasy simulation: every legend at his peak.`
+      ? `${claimText({ wins: result.wins, losses: result.losses, names: players.map((p) => displayName(p.name)), prime: true }).replace(/ →$/, ".")} A fantasy simulation: every legend in his best season with that franchise.`
       : claimText({ wins: result.wins, losses: result.losses, names: players.map((p) => displayName(p.name)) }).replace(/ →$/, ".");
   return {
     title,
@@ -59,9 +59,9 @@ export default async function SharedResult({ params }: Props) {
         <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared prime={data.prime} blueprint={data.blueprint ?? undefined} />
         </div>
       </div>
-      <footer className="pb-10 text-center text-xs text-zinc-600">
+      <footer className="pb-10 text-center text-xs text-zinc-400">
         {data.prime
-          ? "fantasy simulation, not historical — every legend at his peak"
+          ? "fantasy simulation, not historical — every legend in his best season with that franchise"
           : "engine calibrated to real NBA team-seasons"}
       </footer>
     </main>

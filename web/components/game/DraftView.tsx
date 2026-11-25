@@ -63,6 +63,7 @@ export function DraftView(p: {
   const canPlaceAny = current ? current.candidates.some((c) => openSlots.some((s) => c.eligible.includes(s))) : true;
   const hideIQ = mode === "hoopiq";
   const reelMasked = (locked: boolean) => hideIQ && !(spinning && !locked);
+  const idle = !current && !spinning; // between spins: the reels show nothing real yet
   // Live usage budget: shown from the very first pick in every stats-visible mode so the cap's
   // EXISTENCE is disclosed before the anchor pick — not sprung at round 3, after the two most
   // consequential picks. It reads an empty "0% / budget" at the start, then fills live as players
@@ -77,27 +78,34 @@ export function DraftView(p: {
       <div className="grid gap-5 lg:grid-cols-[1fr_minmax(300px,380px)]">
         {/* Desktop: the reels + controls fold into the LEFT column so the sticky court becomes a right
             rail spanning from the top (no dead space top-right). Mobile is single-column, so the DOM
-            order is unchanged: reels → controls → roster → browser → court. */}
-        <div className="order-first">
+            order is unchanged: reels → controls → roster → browser → court. min-w-0 on both columns
+            (F01): a grid item's min-content would otherwise push the page sideways on a 375px phone. */}
+        <div className="order-first min-w-0">
           {/* reels + draft controls */}
           <div className="mb-5">
-            {/* reels */}
+            {/* reels. Idle (no spin yet this round) they read neutral "?" — never a fake team/era, and
+                never the previous round's spin (F03). Prime's era reel is fixed by design. */}
             <div className="flex flex-wrap items-center justify-center gap-3">
-              <Reel kind="TEAM" value={reel.team} sub={teamName(reel.team)} color="orange" locked={lockedReel === "team"} masked={reelMasked(lockedReel === "team")} spinning={spinning || !current} />
-              <Reel kind="ERA" value={reel.era} sub={prime ? "peak form" : "decade"} color="violet" prime={prime}
+              <Reel kind="TEAM" value={idle ? "?" : reel.team} sub={idle ? "spin to reveal" : teamName(reel.team)} color="orange" locked={lockedReel === "team"} masked={reelMasked(lockedReel === "team")} spinning={spinning || !current} />
+              <Reel kind="ERA" value={idle && !prime ? "?" : reel.era} sub={prime ? "best w/ franchise" : idle ? "spin to reveal" : "decade"} color="violet" prime={prime}
                 locked={!prime && lockedReel === "era"} masked={reelMasked(lockedReel === "era")} spinning={!prime && (spinning || !current)} />
-              {!current && (
+              {/* the one Spin button (F03): right under the reels on phones, beside them on desktop */}
+              {!current && !allFilled && (
                 <button onClick={p.onSpin} disabled={spinning}
-                  className="rounded-xl bg-orange-500 px-7 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400 disabled:opacity-50">
+                  className="min-h-12 w-full max-w-xs rounded-xl bg-orange-500 px-7 py-3 text-base font-black text-black shadow-lg transition hover:bg-orange-400 disabled:opacity-50 sm:w-auto">
                   {spinning ? "Spinning…" : "🎰 SPIN"}
                 </button>
               )}
             </div>
+            {!current && !allFilled && p.crowdNote && (
+              <p className="mt-2 text-center text-xs text-zinc-400"><span className="text-violet-300" aria-hidden>◆</span> {p.crowdNote}</p>
+            )}
+            {!current && !allFilled && p.error && <p role="alert" className="mt-2 text-center text-xs text-red-400">{p.error}</p>}
             {hideIQ && (
-              <p className="mt-2 text-center text-[11px] text-zinc-500">🧠 Team &amp; era hidden — draft by recognizing the players.</p>
+              <p className="mt-2 text-center text-[11px] text-zinc-400">🧠 Team &amp; era hidden — draft by recognizing the players.</p>
             )}
             {prime && (
-              <p className="mt-2 text-center text-[11px] text-zinc-500">⚡ Fantasy simulation, not historical — every legend at his peak, any era.</p>
+              <p className="mt-2 text-center text-[11px] text-zinc-400">⚡ Fantasy simulation, not historical — every legend in his best season with that franchise, any era.</p>
             )}
             {mode === "blueprint" && blueprint && (
               <p className="mt-2 text-center text-[11px] text-cyan-400/80">📐 Committed: {BLUEPRINTS.find((b) => b.key === blueprint)!.label} — the engine grades your execution.</p>
@@ -128,29 +136,16 @@ export function DraftView(p: {
               showUsage={mode === "blueprint" && blueprint === "discipline"}
               canPlace={(c) => openSlots.some((s) => c.eligible.includes(s))}
               onSelect={p.onSelectCandidate} />
-          ) : (
+          ) : allFilled ? (
             <div className="animate-rise-in rounded-2xl border border-dashed border-zinc-800 p-8 text-center">
-              {allFilled ? (
-                <>
-                  <p className="mb-3 text-sm text-zinc-400">Your starting five is set.</p>
-                  <button onClick={p.onFinish} disabled={p.loading || p.fhFetching}
-                    className="rounded-xl bg-orange-500 px-6 py-2.5 font-bold text-black hover:bg-orange-400 disabled:opacity-50">
-                    {p.fhFetching ? "Building your question…" : mode === "factorhunt" ? "Lock Five → Predict" : mode === "surgeon" ? "Lock Five → Diagnose" : "Simulate Season"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  {p.crowdNote && <p className="mb-2 text-xs text-zinc-500"><span className="text-violet-300" aria-hidden>◆</span> {p.crowdNote}</p>}
-                  <p className="text-sm text-zinc-500">{filled === 0 ? "Spin to draft your first player." : `Spin for round ${roundNum} of 5.`}</p>
-                  <button onClick={p.onSpin} disabled={spinning}
-                    className="mt-3 rounded-xl bg-orange-500 px-6 py-2.5 font-bold text-black transition hover:bg-orange-400 disabled:opacity-50">
-                    {spinning ? "Spinning…" : filled === 0 ? "🎰 Spin" : `🎰 Spin · round ${roundNum}`}
-                  </button>
-                </>
-              )}
+              <p className="mb-3 text-sm text-zinc-400">Your starting five is set.</p>
+              <button onClick={p.onFinish} disabled={p.loading || p.fhFetching}
+                className="min-h-11 rounded-xl bg-orange-500 px-6 py-2.5 font-bold text-black hover:bg-orange-400 disabled:opacity-50">
+                {p.fhFetching ? "Building your question…" : mode === "factorhunt" ? "Lock Five → Predict" : mode === "surgeon" ? "Lock Five → Diagnose" : "Simulate Season"}
+              </button>
               {p.error && <p className="mt-3 text-xs text-red-400">{p.error}</p>}
             </div>
-          )}
+          ) : null}
           {current && !canPlaceAny && (
             <div className="mt-3 rounded-lg border border-amber-600/40 bg-amber-500/10 p-3 text-center text-xs text-amber-400">
               No one here fits your open slot ({openSlots.join("/")}).{" "}
@@ -164,16 +159,16 @@ export function DraftView(p: {
         </div>
 
         {/* court (below candidates on mobile, right on desktop) */}
-        <div className="order-last">
+        <div className="order-last min-w-0">
           <Court roster={roster} selSlot={selSlot} isTarget={p.slotTarget} onSlot={p.onSlot} maskColors={hideIQ} idle={!selPlayer && !selSlot} />
           {selPlayer && (
             <p role="status" aria-live="polite" className="mt-2 hidden text-center text-xs font-semibold text-orange-400 lg:block">
-              Placing {displayName(selPlayer.name)} — tap a glowing position
+              Placing {displayName(selPlayer.name)} — choose a glowing position
             </p>
           )}
           {selSlot && (
             <p role="status" aria-live="polite" className="mt-2 hidden text-center text-xs font-semibold text-orange-400 lg:block">
-              Moving {displayName(roster[selSlot]!.name)} — tap a glowing slot to swap
+              Moving {displayName(roster[selSlot]!.name)} — choose a glowing slot to swap
             </p>
           )}
         </div>
@@ -188,7 +183,7 @@ export function DraftView(p: {
             <span className="text-sm font-semibold text-orange-400" role="status" aria-live="polite">
               {selPlayer ? `Place ${displayName(selPlayer.name)} — choose a position` : `Move ${displayName(roster[selSlot!]!.name)}`}
             </span>
-            <button onClick={p.onCancelSelection} aria-label="Cancel" className="px-2 text-zinc-400 hover:text-zinc-200">✕</button>
+            <button onClick={p.onCancelSelection} aria-label="Cancel" className="-my-2 -mr-1 grid min-h-11 min-w-11 shrink-0 place-items-center text-zinc-400 hover:text-zinc-200">✕</button>
           </div>
           <div className="grid grid-cols-5 gap-2">
             {SLOTS.map((s) => {
@@ -198,7 +193,7 @@ export function DraftView(p: {
               return (
                 <button key={s} disabled={!target} onClick={() => p.onSlot(s)}
                   className={`flex min-h-12 flex-col items-center justify-center rounded-lg py-3 text-sm font-bold transition active:scale-95 ${
-                    target ? "bg-orange-500 text-black" : "bg-zinc-800 text-zinc-600"}`}>
+                    target ? "bg-orange-500 text-black" : "bg-zinc-800 text-zinc-400"}`}>
                   <span>{s}</span>{tag && <span className="text-[8px] font-semibold uppercase">{tag}</span>}
                 </button>
               );

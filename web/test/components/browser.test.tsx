@@ -89,7 +89,33 @@ describe("Browser — era-adjustment disclosure at draft (R4)", () => {
   it("flags a pre-1985 player's decade in Prime (per-row)", () => {
     const spin = { team: "CHI", decade: "PRIME", candidates: [cand({ id: "a", name: "A", decade: "1960s", year: 1962 })] };
     render(<Browser spin={spin} {...baseProps} mode={"prime" as const} />);
-    expect(screen.queryByTitle(/discount|era-adjust|before 1985/i)).toBeTruthy();
+    expect(screen.queryAllByTitle(/discount|era-adjust|before 1985/i).length).toBeGreaterThan(0);
+  });
+});
+
+describe("Browser — F23 era legend and long pools", () => {
+  it("states the era-adjustment rule as visible text (not only a hover tooltip)", () => {
+    const spin = { team: "BOS", decade: "1970s", candidates: [cand({ id: "a", name: "A", decade: "1970s", year: 1972 })] };
+    render(<Browser spin={spin} {...baseProps} />);
+    expect(screen.getByText(/pre-1985 box stats era-adjusted/i)).toBeTruthy();
+  });
+
+  it("renders 50 rows at a time and reveals more on demand", async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 120 }, (_, i) => cand({ id: `p${i}`, name: `Player ${String(i).padStart(3, "0")}`, rank: i }));
+    render(<Browser spin={{ team: "CHI", decade: "PRIME", candidates: many }} {...baseProps} mode={"prime" as const} />);
+    expect(screen.getAllByRole("button", { name: /^Select / })).toHaveLength(50);
+    await user.click(screen.getByRole("button", { name: /Show 50 more/ }));
+    expect(screen.getAllByRole("button", { name: /^Select / })).toHaveLength(100);
+    await user.click(screen.getByRole("button", { name: /Show 20 more/ }));
+    expect(screen.getAllByRole("button", { name: /^Select / })).toHaveLength(120);
+    expect(screen.queryByRole("button", { name: /more/ })).toBeNull();
+  });
+
+  it("puts a space between positions and the decade on a Prime row", () => {
+    const spin = { team: "CHI", decade: "PRIME", candidates: [cand({ id: "a", name: "A", decade: "2000s", year: 2004, eligible: ["SF"] })] };
+    render(<Browser spin={spin} {...baseProps} mode={"prime" as const} />);
+    expect(screen.getByRole("button", { name: /^Select A/ }).textContent).toMatch(/SF · 00/);
   });
 });
 

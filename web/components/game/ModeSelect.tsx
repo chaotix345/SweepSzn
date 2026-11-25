@@ -24,7 +24,7 @@ type ModeCard = { id: Mode; title: string; desc: string; accent: AccentKey; diff
 const MODES: ModeCard[] = [
   { id: "classic", title: "Classic", desc: "Full stats visible — draft on what you can see.", accent: "orange", diff: 1 },
   { id: "factorhunt", title: "Factor Hunt", desc: "Draft your five, then guess what the engine rewards or punishes most. Call it right, earn a bonus.", accent: "violet", diff: 2 },
-  { id: "prime", title: "Prime Draft", desc: "No eras — every legend at his peak. Build cross-era fives.", accent: "violet", diff: 2 },
+  { id: "prime", title: "Prime Draft", desc: "No eras — every legend in his best season with that franchise. Build cross-era fives.", accent: "violet", diff: 2 },
   { id: "hoopiq", title: "HoopIQ", desc: "Stats hidden — draft from memory and test your ball knowledge.", accent: "orange", diff: 3 },
   { id: "blueprint", title: "Blueprint", desc: "Pick a game plan before the spin. The engine grades how well you follow it.", accent: "cyan", diff: 3 },
   { id: "surgeon", title: "Surgeon", desc: "The engine finds your lineup's weakest link. One swap to fix it.", accent: "rose", diff: 3 },
