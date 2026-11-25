@@ -95,6 +95,7 @@ describe("dynamic OG cards are CDN-cacheable", () => {
     ["/sg", () => import("@/app/sg/[card]/opengraph-image"), { card: encodeSurgeonCard(FIVE.slice(0, 4).concat("shaquille_o_neal_lal_2000s_2001"), 4, FIVE[4]) }, { card: "nope" }],
     ["/dex/s", () => import("@/app/dex/s/[card]/opengraph-image"), { card: encodeDexShare(FIVE, 40, 3) }, { card: "nope" }],
     ["/rank", () => import("@/app/rank/[card]/opengraph-image"), { card: encodeRankCard({ scope: "daily", rank: 3, total: 50, name: "Sam", wins: 60, losses: 22, net: 8.1 }) }, { card: "nope" }],
+    ["/compare", () => import("@/app/compare/[id1]/[id2]/opengraph-image"), { id1: encodeLineup(FIVE), id2: encodeLineup(FIVE) }, { id1: "nope", id2: "nope" }],
   ];
   for (const [name, load, good, bad] of cases) {
     it(`${name}: success + brand fallback carry a long s-maxage`, async () => {

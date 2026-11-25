@@ -8,6 +8,7 @@ import { decodeSurgeonCard, surgeonDiagnosis } from "@/lib/surgeon";
 import { displayName } from "@/lib/teams";
 import SurgeonResult from "@/components/SurgeonResult";
 import ShareHeader from "@/components/ShareHeader";
+import SkipLink from "@/components/SkipLink";
 import Beacon from "@/components/Beacon";
 
 // Surgeon share permalink: /sg/<beforeIds>.<outIdx>.<inId>. Both lineups are deterministic from
@@ -58,13 +59,17 @@ export default async function SharedSurgeon({ params }: Props) {
   if (!data) notFound();
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      <SkipLink href="#share-content" />
       {/* Share-loop close + first-arrival visit (feeds sourceSplit.visit; device key shared with home). */}
       <Beacon name="share_view" />
       <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <ShareHeader tagline="a friend fixed their five" cta="Fix your five →" ctaHref="/play?mode=surgeon" />
+        <div id="share-content" tabIndex={-1} className="outline-none">
+        <h1 className="sr-only">{`Surgeon swap: ${data.before.wins}-${data.before.losses} to ${data.after.wins}-${data.after.losses} with one move`}</h1>
         <SurgeonResult before={data.before} after={data.after} beforePlayers={data.beforePlayers}
           afterPlayers={data.afterPlayers} outIdx={data.outIdx} diagnosis={data.diagnosis} card={card} shared />
+        </div>
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">
         engine calibrated to real NBA team-seasons — and it tells you why

@@ -7,6 +7,7 @@ import { getPlayersByIds } from "@/lib/data";
 import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { ButtonLink } from "@/components/ui/Button";
 import ShareHeader from "@/components/ShareHeader";
+import SkipLink from "@/components/SkipLink";
 import Beacon from "@/components/Beacon";
 
 type Props = { params: Promise<{ card: string }> };
@@ -41,13 +42,15 @@ export default async function SharedDex({ params }: Props) {
   const { players, count, badges } = data;
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      <SkipLink href="#share-content" />
       {/* Share-loop close + first-arrival visit (feeds sourceSplit.visit; device key shared with home). */}
       <Beacon name="share_view" />
       <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <ShareHeader tagline="a friend's Drafted Dex" cta="Build your own →" />
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+        <div id="share-content" tabIndex={-1} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 outline-none">
+          <h1 className="sr-only">{`A friend's Drafted Dex: ${count} players collected`}</h1>
           <div className="flex items-end justify-between gap-4">
             <div>
               <div className="font-display text-5xl leading-none text-orange-400">{count}</div>
@@ -78,7 +81,7 @@ export default async function SharedDex({ params }: Props) {
         </div>
 
         <div className="mt-5 text-center">
-          <ButtonLink href="/play?mode=daily">Start your own Dex →</ButtonLink>
+          <ButtonLink href="/play?mode=daily" variant="secondary">Start your own Dex →</ButtonLink>
         </div>
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">every player-season you field is saved to your Dex</footer>

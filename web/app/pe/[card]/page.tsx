@@ -8,6 +8,7 @@ import { SLOTS, displayName } from "@/lib/teams";
 import ResultCard from "@/components/ResultCard";
 import Beacon from "@/components/Beacon";
 import ShareHeader from "@/components/ShareHeader";
+import SkipLink from "@/components/SkipLink";
 
 // Pick'Em share permalink: /pe/<y>.<n>.<vote|x>.<lineup>. Same deterministic rebuild as
 // /r/<lineup>, plus the crowd snapshot frozen at share time (counts keep moving in Redis;
@@ -42,8 +43,10 @@ export default async function SharedPickem({ params }: Props) {
   const { card } = await params;
   const data = loadCard(card);
   if (!data) notFound();
+  const names = data.players.map((p) => displayName(p.name)).join(", ");
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      <SkipLink href="#share-content" />
       {/* Share-loop close: count each view of a shared Pick'Em permalink (once per page view). */}
       <Beacon name="share_view" />
       {/* Count share-link arrivals as visitors too (device-scoped, shared key with home) so the
@@ -51,7 +54,10 @@ export default async function SharedPickem({ params }: Props) {
       <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <ShareHeader tagline="a friend took on the crowd" cta="Beat the crowd →" />
+        <div id="share-content" tabIndex={-1} className="outline-none">
+        <h1 className="sr-only">{`Pick'Em: ${names}, ${data.result.wins}-${data.result.losses} (${data.result.grade})`}</h1>
         <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared prime={data.prime} blueprint={data.blueprint ?? undefined} pickem={data.view} />
+        </div>
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">
         engine calibrated to real NBA team-seasons
