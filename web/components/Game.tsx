@@ -374,7 +374,7 @@ export default function Game() {
   return (
     <Shell roundNum={roundNum} mode={mode} label={archiveLabel} onRestart={restart} onModeSelect={goToModes} showRestart={filled > 0 || !!current}>
       <DraftView mode={mode} roster={roster} current={current} reel={reel} lockedReel={lockedReel} spinning={spinning} blueprint={blueprint}
-        projAllowed={projAllowed} projection={projection} skips={skips} selPlayer={selPlayer} selSlot={selSlot} hintsUsed={hintsUsed}
+        projAllowed={projAllowed} prime={seed.startsWith("prime-")} projection={projection} skips={skips} selPlayer={selPlayer} selSlot={selSlot} hintsUsed={hintsUsed}
         crowdNote={crowdNote} error={error} loading={loading} fhFetching={fhFetching}
         onSpin={spin} onReSpinTeam={reSpinTeam} onReSpinEra={reSpinEra} onRevealHint={revealHint}
         onSelectCandidate={(c) => { setSelSlot(null); setSelPlayer((p) => (p?.id === c.id ? null : c)); }}

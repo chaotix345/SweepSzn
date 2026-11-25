@@ -387,6 +387,11 @@ export function duelSpin(seed: string, round: number, taken: string[], open: Slo
 // Pool-only spin for leaderboard verification: same (team, decade) selection, candidate ids only
 // (skips the per-candidate fit calc, which verification doesn't need).
 export function spinPool(seed: string, round: number, opts: SpinOptions = {}): { team: string; decade: string; ids: string[] } {
+  // a Prime result shared as a challenge replays its prime- seed (team-only, peak-variant pools)
+  if (seed.startsWith("prime-")) {
+    const { team, pool } = selectPrimeSpin(seed, round, opts);
+    return { team, decade: "PRIME", ids: pool.map((p) => p.id) };
+  }
   const { team, decade, pool } = selectSpin(seed, round, opts);
   return { team, decade, ids: pool.map((p) => p.id) };
 }

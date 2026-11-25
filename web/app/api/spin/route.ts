@@ -5,6 +5,7 @@ import { SLOTS } from "@/lib/teams";
 import type { Slot } from "@/lib/types";
 import { rateLimit, ipOf } from "@/lib/redis";
 import { isFitLockedSeed } from "@/lib/challengeStore";
+import { isFitLockableSeed } from "@/lib/challenge";
 
 export const runtime = "nodejs";
 
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
   // Refuse fit for a classic seed that's been converted into a challenge — its seed is exposed to
   // responders, so a crafted fit:true spin must not hand them optimal-draft grades over the creator.
   let wantFit = body?.fit === true;
-  if (wantFit && seed.startsWith("classic") && await isFitLockedSeed(seed)) wantFit = false;
+  if (wantFit && isFitLockableSeed(seed) && await isFitLockedSeed(seed)) wantFit = false;
   const opts: SpinOptions = {
     exclude,
     lockedTeam: typeof body?.lockedTeam === "string" ? body.lockedTeam : null,

@@ -47,7 +47,7 @@ export function useReelSpin(opts: {
     const churn = () => setReel({
       team: locked === "team" ? spinOpts.lockedTeam! : FRANCHISES[Math.floor(Math.random() * FRANCHISES.length)],
       // Prime Draft: the era reel never cycles — it's permanently locked to PRIME
-      era: mode === "prime" ? "PRIME" : locked === "era" ? eraLabel(spinOpts.lockedDecade!) : eraLabel(DECADES[Math.floor(Math.random() * DECADES.length)]),
+      era: mode === "prime" || seed.startsWith("prime-") ? "PRIME" : locked === "era" ? eraLabel(spinOpts.lockedDecade!) : eraLabel(DECADES[Math.floor(Math.random() * DECADES.length)]),
     });
     let decel = false;
     let step = 0;
