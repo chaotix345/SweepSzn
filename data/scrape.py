@@ -29,7 +29,8 @@ def fetch(url, dest):
         time.sleep(THROTTLE)
         return f"ERR {e}"
 
-YEARS = range(1950, 2026)
+# optional year span: python data/scrape.py 2015 2026 (season-ending years, inclusive)
+YEARS = range(int(sys.argv[1]), int(sys.argv[2]) + 1) if len(sys.argv) == 3 else range(1950, 2027)
 total = 0; done = 0
 for y in YEARS:
     targets = [

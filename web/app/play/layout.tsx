@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import SiteHeader from "@/components/SiteHeader";
+import SkipLink from "@/components/SkipLink";
 import Beacon from "@/components/Beacon";
 
 // The game route: shared header for navigation, but no footer — keep the play view focused.
@@ -16,7 +17,7 @@ export default function PlayLayout({ children }: { children: React.ReactNode }) 
           visitor→first-play denominator — and sourceSplit.visit per utm channel — isn't missing the
           deep-link path. Device-scoped key shared with home, so landing → play is one visit. */}
       <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-orange-500 focus:px-4 focus:py-2 focus:font-bold focus:text-black">Skip to content</a>
+      <SkipLink />
       <SiteHeader />
       <main id="main-content" className="flex-1">{children}</main>
     </div>

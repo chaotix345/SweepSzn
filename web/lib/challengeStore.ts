@@ -4,6 +4,7 @@ import { KEEP_BEST_ROW_LUA } from "./score";
 import { logError } from "./log";
 import { challengeSeed, buildOwnerView } from "./challenge";
 import { getPlayersByIds } from "./data";
+import { LEGACY_AS_OF } from "./poolDate";
 import type { ChallengeInfo, ChallengePublic, ChallengeBoard, ChallengeBoardRow, ChallengeOwnerView, LineupResult, LeaderboardRow } from "./types";
 
 // Per-challenge persistence. Keys: chal:<id> (sorted set, ranking), chal:<id>:meta (hash,
@@ -62,6 +63,7 @@ export async function getChallengePublic(id: string): Promise<ChallengePublic | 
       responders: Math.max(0, attempts - 1), // the creator occupies one board slot; count only friends
       seed: info.seed ?? challengeSeed(id),  // legacy challenges (no stored seed) used h2h-<id>
       hinted: !!info.hinted,
+      asOf: info.asOf ?? LEGACY_AS_OF, // the responder replays the creator's pool date
     };
   } catch (e) {
     logError("challenge.public", e);
@@ -98,9 +100,15 @@ export async function getChallengeOwnerView(id: string, uid: string): Promise<Ch
 // a finished game) vs. falling back to h2h-<id>. A legacy creator row (predates seed storage) drafted
 // on h2h-<id> — return that, never null, or a responder could supply their own seed.
 export async function getChallengeSeed(id: string): Promise<string | null> {
+  return (await getChallengeDraft(id))?.seed ?? null;
+}
+
+// The stored draft (seed + pool date) the creator faced. Records written before pool dating carry no
+// asOf: they were drafted on the pool before the first release (LEGACY_AS_OF).
+export async function getChallengeDraft(id: string): Promise<{ seed: string; asOf: string } | null> {
   if (!redis) return null;
   const info = await redis.get<ChallengeInfo>(keyInfo(id));
-  return info ? (info.seed ?? challengeSeed(id)) : null;
+  return info ? { seed: info.seed ?? challengeSeed(id), asOf: info.asOf ?? LEGACY_AS_OF } : null;
 }
 
 // Submit a verified attempt. The first submitter claims the creator slot (write-once via set-nx);
@@ -112,10 +120,10 @@ export async function submitChallenge(
   row: StoredRow,
   result: LineupResult,
   grade: string,
-  meta: { seed: string; hinted: boolean },
+  meta: { seed: string; hinted: boolean; asOf: string },
 ): Promise<{ role: "creator" | "responder"; creator: ChallengeInfo; improved: boolean; board: ChallengeBoard } | null> {
   if (!redis) return null;
-  const info: ChallengeInfo = { uid: row.uid, name: row.name, wins: row.wins, losses: row.losses, net: row.net, grade, lineup: row.lineup, seed: meta.seed, hinted: meta.hinted };
+  const info: ChallengeInfo = { uid: row.uid, name: row.name, wins: row.wins, losses: row.losses, net: row.net, grade, lineup: row.lineup, seed: meta.seed, hinted: meta.hinted, asOf: meta.asOf };
   const claimed = await redis.set(keyInfo(id), info, { nx: true, ex: TTL });
   let role: "creator" | "responder";
   let creator: ChallengeInfo;

@@ -10,7 +10,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const PLAYERS = path.join(ROOT, "web", "public", "data", "players.json");
+// optional path: data/add_season.py enriches just its new cards in a temp file
+const PLAYERS = process.argv[2] ? path.resolve(process.argv[2]) : path.join(ROOT, "web", "public", "data", "players.json");
 const META = path.join(ROOT, "data", "820_player_meta.json");
 const SLOTS = ["PG", "SG", "SF", "PF", "C"];
 const SLOTSET = new Set(SLOTS);

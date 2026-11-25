@@ -37,6 +37,15 @@ export function compareResults(a: Scoreish, b: Scoreish): { winner: "a" | "b" | 
   return { winner, winsMargin, netMargin };
 }
 
+// One-line verdict for a head-to-head (the /compare header + OG card): who wins and by how much.
+export function compareHeadline(a: Scoreish, b: Scoreish, names: [string, string] = ["Five A", "Five B"]): string {
+  const { winner, winsMargin, netMargin } = compareResults(a, b);
+  if (winner === "tie" || (winsMargin === 0 && Math.abs(netMargin) < 0.05)) return "Dead even";
+  const who = winner === "a" ? names[0] : names[1];
+  const m = Math.abs(winsMargin);
+  return m > 0 ? `${who} wins by ${m} game${m === 1 ? "" : "s"}` : `${who} edges it on net rating (+${Math.abs(netMargin).toFixed(1)})`;
+}
+
 // ---- Creator dashboard assembly (pure; the store injects the real player lookup) ----
 
 type OwnerInfo = { uid: string; name: string; wins: number; losses: number; net: number; grade: string; lineup: string; hinted?: boolean };

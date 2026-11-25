@@ -5,6 +5,7 @@ import type { RankCard } from "./rankShare";
 import { pickemVerdict, type PickemView } from "./pickem";
 import { GRADE_HEX } from "./grades";
 import type { MarketingOgCard } from "./marketingMeta";
+import { compareHeadline } from "./challenge";
 
 // Shared building blocks for the dynamic Open Graph cards (next/og + satori).
 // Satori only supports flexbox + a CSS subset, so every multi-child node sets display:flex
@@ -367,7 +368,7 @@ export function rankOgElement(c: RankCard) {
       <div style={{ display: "flex", flexDirection: "column", marginTop: "auto", marginBottom: "auto" }}>
         <span style={{ display: "flex", fontSize: 34, fontWeight: 700, color: "#e4e4e7" }}>{ascii(c.name)} is</span>
         <div style={{ display: "flex", alignItems: "baseline", gap: 24, marginTop: 6 }}>
-          <span style={{ display: "flex", fontSize: 170, fontWeight: 900, lineHeight: 1, color: "#ff6a00" }}>#{c.rank}</span>
+          <span style={{ display: "flex", fontSize: 170, fontWeight: 900, lineHeight: 1, color: c.rank === 1 ? "#ffc53d" : "#ff6a00" }}>#{c.rank}</span>
           <span style={{ display: "flex", fontSize: 34, color: "#a1a1aa" }}>of {c.total.toLocaleString()}</span>
         </div>
         <span style={{ display: "flex", marginTop: 14, fontSize: 30, color: "#e4e4e7" }}>{metric}</span>
@@ -376,6 +377,45 @@ export function rankOgElement(c: RankCard) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ display: "flex", fontSize: 30, fontWeight: 700, color: "#fafafa" }}>Can you rank higher?</span>
         <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#ff6a00" }}>Build your five →</span>
+      </div>
+    </div>
+  );
+}
+
+// /compare/<a>/<b>: two fives head to head. Records in grade colors, the five names under each, and the
+// winner/margin verdict. A/B identity dots match the page's radar colors.
+export function compareOgElement(a: { result: LineupResult; players: Player[] }, b: { result: LineupResult; players: Player[] }) {
+  const side = (s: { result: LineupResult; players: Player[] }, tag: string, dot: string) => (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 20, fontWeight: 700, letterSpacing: 2, color: "#a1a1aa" }}>
+        <div style={{ display: "flex", width: 14, height: 14, borderRadius: 7, background: dot }} />{tag}
+      </div>
+      <span style={{ display: "flex", fontSize: 110, fontWeight: 900, lineHeight: 1, marginTop: 8, color: GRADE_HEX[s.result.grade] ?? "#e4e4e7" }}>
+        {s.result.wins}–{s.result.losses}
+      </span>
+      <span style={{ display: "flex", fontSize: 24, fontWeight: 700, marginTop: 6, color: GRADE_HEX[s.result.grade] ?? "#e4e4e7" }}>{s.result.grade} · {s.result.label}</span>
+      <span style={{ display: "flex", fontSize: 20, marginTop: 14, color: "#a1a1aa", lineHeight: 1.35 }}>
+        {s.players.map((p) => ascii(displayName(p.name))).join(", ")}
+      </span>
+    </div>
+  );
+  return (
+    <div style={shell}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "baseline" }}>
+          <Wordmark />
+          <span style={{ marginLeft: 16, fontSize: 22, color: "#a1a1aa", fontWeight: 600 }}>lineup compare</span>
+        </div>
+        <span style={{ display: "flex", fontSize: 22, color: "#71717a" }}>head to head</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 40, marginTop: 36 }}>
+        {side(a, "FIVE A", "#ff6a00")}
+        <span style={{ display: "flex", alignSelf: "center", fontSize: 40, fontWeight: 900, color: "#3f3f46" }}>vs</span>
+        {side(b, "FIVE B", "#38bdf8")}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto" }}>
+        <span style={{ display: "flex", fontSize: 34, fontWeight: 800, color: "#fafafa" }}>{compareHeadline(a.result, b.result)}</span>
+        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#ff6a00" }}>Build your own →</span>
       </div>
     </div>
   );

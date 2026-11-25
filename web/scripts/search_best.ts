@@ -4,7 +4,12 @@ import { evaluateLineup, quickScore, playerFeatures, DEFAULT_COEFFICIENTS } from
 import type { Player, Coefficients, Slot } from "../lib/types";
 
 const D = path.join(process.cwd(), "public", "data");
-const players: Player[] = JSON.parse(fs.readFileSync(path.join(D, "players.json"), "utf-8"));
+// Pool releases (lib/poolDate.ts): search the newest pool by default (superseded `until` cards out);
+// --pool=pre searches the pool before any release (every `since` card out).
+const pre = process.argv.includes("--pool=pre");
+const players: Player[] = (JSON.parse(fs.readFileSync(path.join(D, "players.json"), "utf-8")) as Player[])
+  .filter((p) => (pre ? !p.since : !p.until));
+console.log(`pool: ${pre ? "pre-release" : "latest"} (${players.length} cards)`);
 const c: Coefficients = { ...DEFAULT_COEFFICIENTS, ...JSON.parse(fs.readFileSync(path.join(D, "coefficients.json"), "utf-8")) };
 
 const feat = players.map((p) => ({ p, person: p.person_id ?? p.name, ...playerFeatures(p, c) }));

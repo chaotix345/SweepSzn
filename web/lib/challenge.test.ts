@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { newChallengeId, challengeSeed, compareResults, buildOwnerView } from "./challenge";
+import { newChallengeId, challengeSeed, compareResults, compareHeadline, buildOwnerView } from "./challenge";
 
 // newChallengeId: 8 chars, [a-z0-9], comma-free, won't collide with the daily seed format
 describe("newChallengeId", () => {
@@ -112,5 +112,16 @@ describe("buildOwnerView", () => {
   it("wins-tie decided on net -> loss with 0 wins margin", () => {
     const ovTie = buildOwnerView("x", cInfo, [{ uid: "u_t", name: "Ty", wins: 70, losses: 12, net: 5.9, lineup: "f,g,h,i,j", rank: 2 }], 2, getPlayer);
     expect(ovTie.responders[0].outcome === "loss" && ovTie.responders[0].winsMargin === 0).toBe(true);
+  });
+});
+
+describe("compareHeadline", () => {
+  it("names the winner and the win margin", () => {
+    expect(compareHeadline({ wins: 78, netRtg: 20 }, { wins: 72, netRtg: 15 })).toBe("Five A wins by 6 games");
+    expect(compareHeadline({ wins: 60, netRtg: 5 }, { wins: 61, netRtg: 1 })).toBe("Five B wins by 1 game");
+  });
+  it("falls back to the net-rating tiebreak, then a dead heat", () => {
+    expect(compareHeadline({ wins: 70, netRtg: 8.1 }, { wins: 70, netRtg: 8.4 })).toBe("Five B edges it on net rating (+0.3)");
+    expect(compareHeadline({ wins: 70, netRtg: 8 }, { wins: 70, netRtg: 8 })).toBe("Dead even");
   });
 });

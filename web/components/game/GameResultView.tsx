@@ -34,8 +34,8 @@ export function SurgeonResultView({ mode, seed, sgResult, onRestart, onModeSelec
   );
 }
 
-export function GameResultView({ mode, seed, result, roundNum, onRestart, onModeSelect, onCreateChallenge, pickem, fhPrediction, blueprint, challengeId, challengeRole }: {
-  mode: Mode; seed: string; result: GameResult; roundNum: number;
+export function GameResultView({ mode, seed, asOf, result, roundNum, onRestart, onModeSelect, onCreateChallenge, pickem, fhPrediction, blueprint, challengeId, challengeRole }: {
+  mode: Mode; seed: string; asOf: string; result: GameResult; roundNum: number;
   onRestart: () => void; onModeSelect: () => void; onCreateChallenge: () => void;
   pickem: { vote: PickemVote | null; crowd: { y: number; n: number } | null; subject: string | null };
   fhPrediction: string | null; blueprint: BlueprintKey | null;
@@ -70,7 +70,7 @@ export function GameResultView({ mode, seed, result, roundNum, onRestart, onMode
       {mode === "factorhunt" && <FhLeaderboard date={seed.replace("fh-", "")} trace={result.trace} prediction={fhPrediction} readOnly={result.trace.length === 0} />}
       {mode === "blueprint" && blueprint && <BpLeaderboard date={seed.replace("bp-", "")} trace={result.trace} blueprint={blueprint} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
       {mode === "challenge" && challengeId && challengeRole && (
-        <ChallengeResult id={challengeId} role={challengeRole} seed={seed} usedHints={false} result={result.result} players={result.players}
+        <ChallengeResult id={challengeId} role={challengeRole} seed={seed} asOf={asOf} usedHints={false} result={result.result} players={result.players}
           trace={result.trace} onCreateOwn={onCreateChallenge} />
       )}
       {/* FH/Prime/Blueprint/Surgeon seeds can't convert to H2H challenges (the challenge store only
@@ -78,7 +78,7 @@ export function GameResultView({ mode, seed, result, roundNum, onRestart, onMode
       {mode !== "challenge" && mode !== "factorhunt" && mode !== "prime" && mode !== "blueprint" && mode !== "surgeon" && (convertedId ? (
         // Convert THIS finished five into a real H2H challenge in place, carrying the original seed:
         // the friend drafts the same teams/eras and tries to beat this exact record — no re-draft.
-        <ChallengeResult id={convertedId} role="create" seed={seed} usedHints={result.usedHints}
+        <ChallengeResult id={convertedId} role="create" seed={seed} asOf={asOf} usedHints={result.usedHints}
           result={result.result} players={result.players} trace={result.trace} />
       ) : (
         <button onClick={() => setConvertedId(newChallengeId())}

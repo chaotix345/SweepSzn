@@ -1,44 +1,62 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { BADGES, type BadgeKey, type DexPlayer } from "@/lib/dex";
+import { BADGES } from "@/lib/dex";
+import { fetchDex, type DexData } from "@/lib/dexClient";
+import { useSession } from "@/lib/useSession";
+import { AUTH_ENABLED } from "@/lib/authClient";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { eraLabel } from "@/lib/teams";
 import { TRAIT_META } from "@/lib/traits";
 import { encodeDexShare } from "@/lib/share";
 import { X_HANDLE } from "@/lib/site";
 import { getOwnRefCode } from "@/lib/referral";
 
-// The Drafted Dex collection screen. Fetches /api/dex (auth-gated), then renders a completion
+// The Drafted Dex collection screen. Local-first: built from this device's result history (lib/dexClient),
+// unioned with the account's Dex when signed in, so it works without an account. Renders a completion
 // counter, the milestone shelf, filters, and the player-card grid — all descriptive (DESIGN.md §12).
 
-interface DexData { players: DexPlayer[]; total: number; badges: BadgeKey[] }
 const TOTAL_PEOPLE = 2304; // unique real people in the draftable dataset
 
-const Empty = ({ msg }: { msg: string }) => (
+// Signed out (and auth configured): the Dex is saved on this device; signing in syncs it everywhere.
+function SyncPrompt({ onSignIn, empty }: { onSignIn: () => void; empty?: boolean }) {
+  return (
+    <div className="mt-5 flex flex-col items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 text-center sm:flex-row sm:justify-between sm:text-left">
+      <p className="text-sm text-zinc-400">
+        {empty ? "Played on another device? Sign in to bring that Dex here." : "Saved on this device. Sign in to sync your Dex across devices."}
+      </p>
+      <Button variant="secondary" size="md" onClick={onSignIn} className="shrink-0">Sign in to sync</Button>
+    </div>
+  );
+}
+
+const Empty = ({ msg, children }: { msg: string; children?: React.ReactNode }) => (
   <div className="py-16 text-center">
     <h1 className="font-display text-3xl">Drafted Dex</h1>
     <p className="mt-2 text-zinc-400">{msg}</p>
-    <Link href="/play" className="mt-5 inline-block rounded-xl bg-orange-500 px-5 py-2.5 font-bold text-black hover:bg-orange-400">Play a round →</Link>
+    <ButtonLink href="/play" variant="secondary" className="mt-5">Play a round →</ButtonLink>
+    {children}
   </div>
 );
 
 export function DexBoard() {
   const [data, setData] = useState<DexData | null>(null);
-  const [phase, setPhase] = useState<"loading" | "signedOut" | "error" | "ok">("loading");
+  const [phase, setPhase] = useState<"loading" | "error" | "ok">("loading");
+  const { user, loading: sessionLoading, promptSignIn } = useSession();
+  const uid = user?.uid ?? null;
   const [decade, setDecade] = useState("All");
   const [pos, setPos] = useState("All");
   const [shareState, setShareState] = useState<"idle" | "copied">("idle");
 
+  // Refetch when the account changes (signing in merges the account's Dex into the local one).
   useEffect(() => {
+    if (sessionLoading) return;
     let alive = true;
-    fetch("/api/dex").then(async (r) => {
-      if (r.status === 401) { if (alive) setPhase("signedOut"); return; }
-      if (!r.ok) { if (alive) setPhase("error"); return; }
-      const d: DexData = await r.json();
-      if (alive) { setData(d); setPhase("ok"); }
-    }).catch(() => { if (alive) setPhase("error"); });
+    fetchDex().then((d) => {
+      if (!alive) return;
+      if (d) { setData(d); setPhase("ok"); } else setPhase("error");
+    });
     return () => { alive = false; };
-  }, []);
+  }, [uid, sessionLoading]);
 
   const decades = useMemo(() => (data ? [...new Set(data.players.map((p) => p.decade))].sort() : []), [data]);
   const filtered = useMemo(() => (data?.players ?? []).filter((p) =>
@@ -47,9 +65,15 @@ export function DexBoard() {
 
   if (phase === "loading") return <p className="py-16 text-center text-sm text-zinc-500">Loading your Dex…</p>;
   if (phase === "error") return <p className="py-16 text-center text-sm text-zinc-500">Couldn&apos;t load your Dex. Try again.</p>;
-  if (phase === "signedOut") return <Empty msg="Sign in (by playing) to save every player you've drafted across devices." />;
   if (!data) return null;
-  if (!data.players.length) return <Empty msg="You haven't drafted anyone yet." />;
+  const showSync = AUTH_ENABLED && !data.signedIn;
+  if (!data.players.length) {
+    return (
+      <Empty msg="You haven't drafted anyone yet. Every player you field is saved here.">
+        {showSync && <div className="mx-auto max-w-lg"><SyncPrompt onSignIn={promptSignIn} empty /></div>}
+      </Empty>
+    );
+  }
 
   const earned = new Set(data.badges);
   // Share the collection: top players by fame (descriptive) + the collection/badge counts → /dex/s card.
@@ -73,12 +97,13 @@ export function DexBoard() {
           <p className="mt-1 text-sm text-zinc-500">{data.players.length} cards · {data.total} recent games</p>
         </div>
         <div className="text-right">
-          <div className="font-display text-4xl leading-none text-orange-400">{people}</div>
+          <div className="font-display text-4xl leading-none tabular-nums text-orange-400">{people}</div>
           <div className="text-xs text-zinc-500">of {TOTAL_PEOPLE.toLocaleString()} players</div>
         </div>
       </div>
+      {showSync && <SyncPrompt onSignIn={promptSignIn} />}
       <button onClick={shareDex} aria-label="Share your Dex"
-        className="mt-4 inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-4 py-2 text-sm font-bold text-zinc-200 transition hover:border-orange-500 hover:text-orange-300">
+        className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-zinc-700 px-4 py-2 text-sm font-bold text-zinc-200 transition hover:border-orange-500 hover:text-orange-300">
         {shareState === "copied" ? "Link copied ✓" : "📤 Share your Dex"}
       </button>
 
@@ -99,12 +124,12 @@ export function DexBoard() {
 
       <div className="mt-6 flex flex-wrap items-center gap-2 text-xs">
         <select value={decade} onChange={(e) => setDecade(e.target.value)} aria-label="Filter by decade"
-          className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-300">
+          className="min-h-11 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-300">
           <option value="All">All decades</option>
           {decades.map((d) => <option key={d} value={d}>{eraLabel(d)}</option>)}
         </select>
         <select value={pos} onChange={(e) => setPos(e.target.value)} aria-label="Filter by position"
-          className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-300">
+          className="min-h-11 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-zinc-300">
           {["All", "PG", "SG", "SF", "PF", "C"].map((p) => <option key={p} value={p}>{p === "All" ? "All positions" : p}</option>)}
         </select>
         <span className="text-zinc-500">{filtered.length} shown</span>

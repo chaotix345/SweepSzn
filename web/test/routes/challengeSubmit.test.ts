@@ -12,6 +12,7 @@ import {
 } from "@/test/routeHarness";
 import type { DraftStep } from "@/lib/types";
 import { dayUTC } from "@/lib/day";
+import { LEGACY_AS_OF, isoDay } from "@/lib/poolDate";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -47,12 +48,13 @@ const BASE_POOLS: Record<number, string[]> = {
   4: ["p4c"],
 };
 
+// every spinPool call's pinned pool date, so the pool-by-date tests can see what verifyTrace replays with
+const spinAsOf = vi.hoisted(() => [] as (string | undefined)[]);
 vi.mock("@/lib/data", () => ({
-  spinPool: (seed: string, round: number) => ({
-    team: "GSW",
-    decade: "2010s",
-    ids: BASE_POOLS[round] ?? [],
-  }),
+  spinPool: (seed: string, round: number, opts?: { asOf?: string }) => {
+    spinAsOf.push(opts?.asOf);
+    return { team: "GSW", decade: "2010s", ids: BASE_POOLS[round] ?? [] };
+  },
   getPlayersByIds: (ids: string[]) => ids.map((id) => PLAYERS[id]).filter(Boolean),
   getCoefficients: () => ({}),
 }));
@@ -604,5 +606,45 @@ describe("POST /api/challenge/submit — Google-namespace uid on the anon path",
     expect(status).toBe(400);
     expect(body.error).toMatch(/bad uid/i);
     expect(ctx.redis!.strings.has(`chal:${VALID_ID}:info`)).toBe(false);
+  });
+});
+
+// Pool by date (DESIGN.md §12, lib/poolDate.ts): a challenge replays against the pool its creator drafted on.
+describe("POST /api/challenge/submit — pool date", () => {
+  const info = () => JSON.parse(ctx.redis!.strings.get(`chal:${VALID_ID}:info`)!);
+
+  it("the creator's game day is stored and replayed", async () => {
+    spinAsOf.length = 0;
+    expect((await post({ id: VALID_ID, uid: anonUid, trace: LEGIT_TRACE, seed: "classic-123", asOf: "2026-11-01" })).status).toBe(200);
+    expect(info().asOf).toBe("2026-11-01");
+    expect(new Set(spinAsOf)).toEqual(new Set(["2026-11-01"]));
+  });
+
+  it("a missing, malformed or future creator day becomes today", async () => {
+    for (const asOf of [undefined, "2026-13-01", "nope", "2099-01-01"]) {
+      freshFake();
+      await post({ id: VALID_ID, uid: anonUid, trace: LEGIT_TRACE, seed: "classic-123", asOf });
+      expect(info().asOf, String(asOf)).toBe(isoDay());
+    }
+  });
+
+  it("a dated seed always uses its own day", async () => {
+    await post({ id: VALID_ID, uid: anonUid, trace: LEGIT_TRACE, seed: "daily-2026-6-10", asOf: "2026-11-01" });
+    expect(info().asOf).toBe("2026-06-10");
+  });
+
+  it("a responder is verified with the STORED day, whatever they send", async () => {
+    await post({ id: VALID_ID, uid: anonUid, trace: LEGIT_TRACE, seed: "classic-123", asOf: "2026-11-01" });
+    spinAsOf.length = 0;
+    expect((await post({ id: VALID_ID, uid: "responder-uid-001", trace: LEGIT_TRACE, asOf: "2026-11-20" })).status).toBe(200);
+    expect(new Set(spinAsOf)).toEqual(new Set(["2026-11-01"]));
+  });
+
+  it("a record from before pool dating replays on the pre-release pool", async () => {
+    const legacy = { uid: "old-creator", name: "Old", wins: 50, losses: 32, net: 3, grade: "C", lineup: "p0pg,p1sg,p2sf,p3pf,p4c", seed: "classic-9" };
+    ctx.redis!.strings.set(`chal:${VALID_ID}:info`, JSON.stringify(legacy));
+    spinAsOf.length = 0;
+    expect((await post({ id: VALID_ID, uid: "responder-uid-001", trace: LEGIT_TRACE })).status).toBe(200);
+    expect(new Set(spinAsOf)).toEqual(new Set([LEGACY_AS_OF]));
   });
 });

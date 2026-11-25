@@ -2,26 +2,14 @@
 // crawlable HTML for the landing hero. Reuses the exact engine + explanation path the live
 // /r/[lineup] page uses, so the numbers are the real product output — not a mock. Mirrors the
 // "Why this record" markup from ResultCard.tsx without the client-only roster/share UI.
-import { getPlayersByIds, getCoefficients } from "@/lib/data";
-import { evaluateLineup } from "@/lib/engine";
 import { factorViews } from "@/lib/explain";
 import { GRADE_COLOR } from "@/lib/grades";
+import { heroExample } from "@/lib/heroExample";
 
-// A balanced two-way GOAT five (slot order PG/SG/SF/PF/C). Verified output (engine v4): 78-4, A+
-// HISTORIC, Net +23.4 — Star offense/defense/Spacing help; Usage overload (-6.9) hurts even this lineup,
-// which is the whole pitch. Rendered live so it self-corrects if coefficients.json is recalibrated.
-export const HERO_IDS = [
-  "stephen_curry_gsw_2010s_2016",
-  "michael_jordan_chi_1990s_1991",
-  "lebron_james_mia_2010s_2013",
-  "giannis_antetokounmpo_mil_2020s_2022",
-  "nikola_joki_den_2020s_2024",
-];
-
-
+// The example five lives in lib/heroExample (shared with LandingSection's copy). Rendered live so it
+// self-corrects if coefficients.json is recalibrated.
 export default function ResultPreview({ reveal = false }: { reveal?: boolean } = {}) {
-  const players = getPlayersByIds(HERO_IDS);
-  const result = evaluateLineup(players, getCoefficients());
+  const { result, chips } = heroExample();
   const factors = factorViews(result);
   const helps = factors.filter((f) => f.value > 0);
   const hurts = factors.filter((f) => f.value < 0);
@@ -53,6 +41,13 @@ export default function ResultPreview({ reveal = false }: { reveal?: boolean } =
             color={result.netRtg >= 0 ? "text-green-400" : "text-red-400"}
           />
         </div>
+        <ul aria-label="The five" className="mt-4 flex flex-wrap justify-center gap-1.5">
+          {chips.map((c) => (
+            <li key={c.id} className="rounded-full border border-zinc-800 bg-zinc-950/60 px-2.5 py-1 text-xs text-zinc-300">
+              <span className="font-mono text-[10px] font-bold text-zinc-500">{c.slot}</span> {c.name}
+            </li>
+          ))}
+        </ul>
       </div>
 
       {/* why this record */}

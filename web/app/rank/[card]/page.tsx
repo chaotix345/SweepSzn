@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { X_HANDLE, SITE_NAME } from "@/lib/site";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { decodeRankCard, type RankCard } from "@/lib/rankShare";
-import { ButtonLink } from "@/components/ui/Button";
+import ShareHeader from "@/components/ShareHeader";
+import SkipLink from "@/components/SkipLink";
 import Beacon from "@/components/Beacon";
 
 type Props = { params: Promise<{ card: string }> };
@@ -33,21 +33,21 @@ export default async function RankPage({ params }: Props) {
   if (!c) notFound();
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      <SkipLink href="#share-content" />
       {/* Share-loop close + first-arrival visit (feeds sourceSplit.visit; device key shared with home). */}
       <Beacon name="share_view" />
       <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
-        <Link href="/" className="flex items-baseline text-2xl tracking-tight">
-          <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
-          <span className="ml-3 text-sm font-semibold text-zinc-500">a friend shared their rank</span>
-        </Link>
-        <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center">
-          <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{scopeLabel(c)}</div>
-          <div className="mt-2 font-display text-7xl tabular-nums text-orange-500">#{c.rank}</div>
-          <div className="mt-1 text-sm text-zinc-400">of {c.total.toLocaleString()} players</div>
+        <ShareHeader tagline="a friend shared their rank" cta="Can you rank higher? →" />
+        <div id="share-content" tabIndex={-1} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-8 text-center outline-none">
+          <h1>
+            <span className="block text-xs font-semibold uppercase tracking-widest text-zinc-500">{scopeLabel(c)}</span>
+            {/* #1 is the trophy spot: gold is reserved for it (DESIGN.md), every other rank stays orange */}
+            <span className={`mt-2 block font-display text-7xl tabular-nums ${c.rank === 1 ? "text-gold" : "text-orange-500"}`}>#{c.rank}</span>
+            <span className="mt-1 block text-sm font-normal tabular-nums text-zinc-400">of {c.total.toLocaleString()} players</span>
+          </h1>
           <div className="mt-5 text-lg font-bold text-zinc-100">{c.name}</div>
-          <div className="mt-1 text-zinc-300">{metric(c)}</div>
-          <ButtonLink href="/play?mode=daily" size="md" className="mt-7">Build your five →</ButtonLink>
+          <div className="mt-1 font-mono tabular-nums text-zinc-300">{metric(c)}</div>
         </div>
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">engine calibrated to real NBA team-seasons</footer>

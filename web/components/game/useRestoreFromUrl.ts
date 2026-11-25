@@ -1,13 +1,14 @@
 import { useEffect } from "react";
 import { parseModeParam } from "@/lib/modeParam";
 import { encodeLineup, decodeShare } from "@/lib/share";
-import { readLastResult } from "@/lib/resultHistory";
+import { readLastResult, listResults } from "@/lib/resultHistory";
+import { legacyResultAsOf } from "@/lib/poolDate";
 import { bpCode, bpFromCode, type BlueprintKey } from "@/lib/blueprint";
 import type { Mode } from "@/components/game/types";
 import { todaySeed, type GameResult, type LastResult } from "@/components/game/gameState";
 import type { SgResult } from "@/components/game/useSurgeon";
 
-type StartFn = (m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string }) => void;
+type StartFn = (m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string; asOf?: string }) => void;
 
 // Bootstrap the view from the URL (hold-your-place restore on refresh). Priority: a joiner deep link
 // (?c=<id>) → respond mode; then a creator dashboard (?own=<id>); then a finished-result restore
@@ -19,6 +20,7 @@ export function useRestoreFromUrl(
   setRestoring: (v: boolean) => void,
   setMode: (m: Mode | null) => void,
   setSeed: (s: string) => void,
+  setAsOf: (d: string) => void,
   setResult: (r: GameResult | null) => void,
   setFhPrediction: (p: string | null) => void,
   setBlueprint: (b: BlueprintKey | null) => void,
@@ -35,12 +37,17 @@ export function useRestoreFromUrl(
           // fetch the challenge's draft seed so respond mode replays the SAME spins the creator faced
           // (a daily/classic-originated challenge does NOT use the h2h-<id> default seed)
           let seedOverride: string | undefined;
+          let asOfOverride: string | undefined;
           try {
             const r = await fetch(`/api/challenge/${cid}`);
-            if (r.ok) { const info = await r.json(); if (typeof info?.seed === "string") seedOverride = info.seed; }
+            if (r.ok) {
+              const info = await r.json();
+              if (typeof info?.seed === "string") seedOverride = info.seed;
+              if (typeof info?.asOf === "string") asOfOverride = info.asOf; // replay the creator's pool date
+            }
           } catch { /* offline — fall back to the h2h-<id> default below */ }
           if (cancelled) return; // effect re-ran (or unmounted) while the seed fetch was in flight
-          start("challenge", { id: cid, role: "respond", seed: seedOverride });
+          start("challenge", { id: cid, role: "respond", seed: seedOverride, asOf: asOfOverride });
           params.delete("c");
           const qs = params.toString();
           window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
@@ -89,7 +96,9 @@ export function useRestoreFromUrl(
           const last = readLastResult<LastResult>();
           if (last && last.mode === m && last.result && encodeLineup(last.result.players.map((p) => p.id), last.result.usedHints, m === "prime", m === "blueprint" && last.bp ? bpCode(last.bp) : null) === enc) {
             if (cancelled) return;
-            setMode(m); setSeed(last.seed); setResult(last.result); setFhPrediction(last.fh ?? null); setBlueprint(last.bp ?? null); setRestoring(false); return;
+            // the pool the five was drafted from, so converting it to a challenge replays against it
+            const ts = listResults().find((e) => e.mode === m && e.encoded === enc)?.ts;
+            setMode(m); setSeed(last.seed); setAsOf(last.asOf ?? legacyResultAsOf(ts)); setResult(last.result); setFhPrediction(last.fh ?? null); setBlueprint(last.bp ?? null); setRestoring(false); return;
           }
           // cold restore (other device / cleared storage): rebuild from the five's ids. No trace, so the
           // Daily leaderboard renders read-only (still shows your standing, just no re-submit).
@@ -113,5 +122,5 @@ export function useRestoreFromUrl(
       } catch { /* no query / no history API */ }
     })();
     return () => { cancelled = true; };
-  }, [start, setOwnerId, setRestoring, setMode, setSeed, setResult, setFhPrediction, setBlueprint, setSgResult]);
+  }, [start, setOwnerId, setRestoring, setMode, setSeed, setAsOf, setResult, setFhPrediction, setBlueprint, setSgResult]);
 }

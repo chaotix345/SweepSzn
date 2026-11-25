@@ -4,6 +4,7 @@ import { cache } from "react";
 import Link from "next/link";
 import { getChallengePublic } from "@/lib/challengeStore";
 import ChallengeSpectatorBoard from "@/components/ChallengeSpectatorBoard";
+import SkipLink from "@/components/SkipLink";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -29,6 +30,7 @@ export default async function ChallengePage({ params }: Props) {
   const net = info ? `${info.net > 0 ? "+" : ""}${info.net.toFixed(1)}` : "";
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      <SkipLink href="#share-content" />
       <div className="mx-auto max-w-xl px-4 py-10">
         <Link href="/" className="flex items-baseline text-2xl tracking-tight">
           <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
@@ -37,7 +39,7 @@ export default async function ChallengePage({ params }: Props) {
 
         {info ? (
          <>
-          <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center">
+          <div id="share-content" tabIndex={-1} className="mt-8 rounded-2xl outline-none border border-zinc-800 bg-zinc-900 p-6 text-center">
             <div className="text-sm font-semibold uppercase tracking-widest text-zinc-500">You&apos;ve been challenged</div>
             <h1 className="mt-3 text-2xl font-black">
               Can you beat <span className="text-orange-400">{info.creatorName}</span>?
@@ -61,7 +63,7 @@ export default async function ChallengePage({ params }: Props) {
           <ChallengeSpectatorBoard id={info.id} />
          </>
         ) : (
-          <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center">
+          <div id="share-content" tabIndex={-1} className="mt-8 rounded-2xl outline-none border border-zinc-800 bg-zinc-900 p-6 text-center">
             <h1 className="text-xl font-black">This challenge isn&apos;t available</h1>
             <p className="mx-auto mt-3 max-w-sm text-sm text-zinc-400">
               It may have expired, or challenges aren&apos;t configured right now. Build your own all-time five instead.

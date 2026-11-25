@@ -54,9 +54,23 @@ def rim_score(p, c):
     return size
 
 
+def usage_demand(p, c):
+    """Mirror of engine usageDemand: USG%, else (pre-1978) the fitted z-model, clamped to [5, 40].
+    Without a usgModel in `c` a missing USG% counts as 20."""
+    u = p.get("usg")
+    if u is None or (isinstance(u, float) and np.isnan(u)):
+        m = c.get("usgModel")
+        if m is None:
+            u = 20.0
+        else:
+            cap = c["zCap"]
+            u = m["intercept"] + m["pts"] * _clamp(_z(p, "pts"), -cap, cap) + m["ast"] * _clamp(_z(p, "ast"), -cap, cap)
+    return _clamp(float(u), 5, 40)
+
+
 def lineup_penalties(five, c):
     """Mirror of the reasoned terms in web/lib/engine.ts lineupTerms (points per 100)."""
-    usage = sum(_clamp(float(p.get("usg") or 20.0), 5, 40) for p in five)
+    usage = sum(usage_demand(p, c) for p in five)
     pw = c.get("overloadPow", 1.0)
     over = c["overloadGamma"] * max(0.0, usage - c["usageBudget"]) ** pw
     short = c.get("shortfallGamma", 0.0) * max(0.0, c.get("usageFloor", 0.0) - usage) ** pw

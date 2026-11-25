@@ -12,9 +12,9 @@ import { SLOTS } from "@/lib/teams";
 import FiveStrip from "@/components/FiveStrip";
 import ChallengeOwner from "@/components/ChallengeOwner";
 
-export default function ChallengeResult({ id, role, result, players, trace, seed, usedHints, onCreateOwn }: {
+export default function ChallengeResult({ id, role, result, players, trace, seed, asOf, usedHints, onCreateOwn }: {
   id: string; role: "create" | "respond"; result: LineupResult; players: Player[]; trace: DraftStep[];
-  seed: string; usedHints?: boolean; onCreateOwn?: () => void;
+  seed: string; asOf?: string; usedHints?: boolean; onCreateOwn?: () => void;
 }) {
   const { user } = useSessionContext();
   const [resp, setResp] = useState<ChallengeSubmitResponse | null>(null);
@@ -35,9 +35,9 @@ export default function ChallengeResult({ id, role, result, players, trace, seed
     try {
       const r = await fetch("/api/challenge/submit", {
         method: "POST", headers: { "content-type": "application/json" },
-        // `seed` + `usedHints` are honored only when this submit CREATES the challenge — they carry the
-        // finished game's draft so a friend faces the same teams/eras and beats this exact record.
-        body: JSON.stringify({ id, uid: user?.uid ?? getUid(), name: nm.trim(), trace, seed, usedHints: !!usedHints }),
+        // `seed` + `asOf` + `usedHints` are honored only when this submit CREATES the challenge — they
+        // carry the finished game's draft so a friend faces the same pool, teams and eras.
+        body: JSON.stringify({ id, uid: user?.uid ?? getUid(), name: nm.trim(), trace, seed, asOf, usedHints: !!usedHints }),
       });
       if (r.status === 503) { setEnabled(false); return; }
       const v = await r.json();
@@ -52,7 +52,7 @@ export default function ChallengeResult({ id, role, result, players, trace, seed
       if (user) void pushResult(saved); // signed in: mirror this game to the account history
       track("challenge_submit", { role: role2 ?? role });
     } catch { setErr("network error"); } finally { setBusy(false); submittingRef.current = false; }
-  }, [id, trace, role, seed, usedHints, resp, players, result, user]);
+  }, [id, trace, role, seed, asOf, usedHints, resp, players, result, user]);
 
   // Pre-fill the player's known name. We deliberately do NOT auto-submit: the responder must click
   // "Reveal" (consent before the matchup is shown + recorded), and the creator's name must be captured
