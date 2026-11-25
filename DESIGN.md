@@ -280,8 +280,10 @@ ceiling copy: the engine's theoretical max is **80-2** (`scripts/search_best.ts`
 and exact to the engine) — but that five needs two C-only bigs (Jokić + Wilt) and is slot-illegal,
 so the ceiling a player can actually reach is the best DRAFTABLE five at **79-3** (Stockton /
 McMillan / LeBron '13 / Magic '90 / Jokić '24; the script's slot-legal search section). Product
-copy cites the draftable number; the S grade (80+) is engine-theoretical and unreachable on any
-leaderboard (it always was — the pre-fix ceiling was also 79). "82-0 achievable" copy was replaced
+copy cites the draftable number; under that engine the S grade (80+) was engine-theoretical and
+unreachable on any leaderboard (the pre-fix ceiling was also 79). **Superseded by engine v4 (§14):**
+the best draftable five is now 80-2, equal to the theoretical max, so S is reachable and the result
+card's grade ladder says so. "82-0 achievable" copy was replaced
 with the chase framing; golden tests pin both numbers. Factor Hunt's label list and Surgeon's need mapping ("Era adjustment" → modern-era star,
 "Thin perimeter defense" → perimeter stopper) were extended to cover the new factors.
 

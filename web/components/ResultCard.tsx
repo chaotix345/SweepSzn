@@ -552,10 +552,9 @@ function GradeLadder({ wins, grade }: { wins: number; grade: string }) {
       </div>
       {next && next.min - wins <= 5 && (
         <p className="mt-1 text-[11px] text-zinc-500">
-          {next.grade === "S"
-            // the draftable ceiling is 79 — "1 win from S" would taunt an impossible chase
-            ? "S (80+) is theoretical — no draftable five has reached it"
-            : `${next.min - wins} win${next.min - wins === 1 ? "" : "s"} from ${next.grade} (${next.label})`}
+          {`${next.min - wins} win${next.min - wins === 1 ? "" : "s"} from ${next.grade} (${next.label})`}
+          {/* engine v4: the best draftable five reaches S, so S is a real (if brutal) chase */}
+          {next.grade === "S" && ` · the best draftable five goes ${BEST_DRAFTABLE_RECORD}`}
         </p>
       )}
     </div>

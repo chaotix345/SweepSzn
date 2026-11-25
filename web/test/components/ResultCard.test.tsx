@@ -277,10 +277,13 @@ describe("ResultCard — context & explanation layer", () => {
     expect(container.textContent).toMatch(/best draftable five projects 80-2/i);
   });
 
-  it("at the draftable ceiling, the ladder says S is theoretical instead of taunting '1 win from S'", () => {
+  // D10: under engine v4 the best draftable five is 80-2, so S is reachable — the ladder must not
+  // call it theoretical or unreachable.
+  it("one win short of S, the ladder names the real 80-2 ceiling instead of calling S unreachable", () => {
     const { container } = renderCard({ result: makeResult({ wins: 79, losses: 3, grade: "A+", label: "HISTORIC" }) });
-    expect(container.textContent).toMatch(/S .*theoretical — no draftable five has reached it/i);
-    expect(container.textContent).not.toMatch(/1 win from S/i);
+    expect(container.textContent).toMatch(/1 win from S \(PERFECT\)/);
+    expect(container.textContent).toMatch(/best draftable five goes 80-2/i);
+    expect(container.textContent).not.toMatch(/theoretical|unreachable|no draftable five/i);
   });
 
   it("renders the grade ladder with a next-grade hint when close", () => {
