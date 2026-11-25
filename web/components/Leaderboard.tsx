@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
-import type { DraftStep, LeaderboardView, LeaderboardRow, AggBoardView, AggLeaderboardRow } from "@/lib/types";
+import type { DraftStep, LeaderboardView, DailyBoardRow, AggBoardView, AggLeaderboardRow } from "@/lib/types";
 import type { RankCard } from "@/lib/rankShare";
 import { getUid, getName, setName as persistName, recordDailyDone, getStreak, msToNextUtcMidnight } from "@/lib/streak";
 import { useSession } from "@/lib/useSession";
@@ -308,20 +308,22 @@ function Board({ view }: { view: LeaderboardView }) {
 
 // `mine` = the caller's own posted lineup (view.you): once you're on the board, every other row gets a
 // sibling "vs you" link to the head-to-head compare page (post-commit only — DESIGN.md §12).
-function Row({ r, me, mine }: { r: LeaderboardRow; me?: boolean; mine?: string }) {
+// A row without a lineup (a live Daily the viewer hasn't submitted — D2 anti-spoiler) isn't a link.
+function Row({ r, me, mine }: { r: DailyBoardRow; me?: boolean; mine?: string }) {
   const lead = r.rank === 1;
-  const row = (
-    <Link href={`/r/${r.lineup}`}
-      className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : lead ? "bg-gold/5 ring-1 ring-gold/25" : "bg-zinc-950/50 hover:bg-zinc-800/60"}`}>
+  const cls = `flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2.5 py-1.5 text-sm ${me ? "bg-orange-500/15 ring-1 ring-orange-500/40" : lead ? "bg-gold/5 ring-1 ring-gold/25" : r.lineup ? "bg-zinc-950/50 hover:bg-zinc-800/60" : "bg-zinc-950/50"}`;
+  const body = (
+    <>
       <span className={`w-7 shrink-0 text-right text-xs font-bold tabular-nums ${medalText(r.rank)}`}>{r.rank}</span>
       <span className="min-w-0 flex-1 truncate font-semibold text-zinc-200">{r.name}{me && <span className="ml-1 text-[10px] text-orange-300">you</span>}</span>
       <span className={`shrink-0 tabular-nums font-bold ${lead ? "font-display text-base" : ""}`}>
         <span className="text-green-400">{r.wins}</span><span className="text-zinc-600">-</span><span className="text-red-400">{r.losses}</span>
       </span>
       <span title="Net rating — per-100 scoring margin; breaks ties when wins are equal" className="w-12 shrink-0 text-right text-xs tabular-nums text-zinc-500">{r.net > 0 ? "+" : ""}{r.net.toFixed(1)}</span>
-    </Link>
+    </>
   );
-  if (!mine || me) return row;
+  const row = r.lineup ? <Link href={`/r/${r.lineup}`} className={cls}>{body}</Link> : <div className={cls}>{body}</div>;
+  if (!mine || me || !r.lineup) return row;
   return (
     <div className="flex items-center gap-1">
       {row}

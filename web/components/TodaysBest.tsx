@@ -32,7 +32,9 @@ export default function TodaysBest() {
       <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 font-mono text-sm text-zinc-400 lg:justify-start">
         <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
         <span className="uppercase tracking-wide text-zinc-500">Today&apos;s best</span>
-        <Link href={`/r/${leader.lineup}`} className="font-bold text-zinc-100 hover:text-orange-300">
+        {/* links to the board, never the leader's /r/ lineup: today's lineup is the Daily's answer
+            key until it rolls over at 00:00 UTC (D2 — the server omits it from this read anyway) */}
+        <Link href="/leaderboards" className="font-bold text-zinc-100 hover:text-orange-300">
           <span className="text-green-400">{leader.wins}</span>
           <span className="text-zinc-600">–</span>
           <span className="text-red-400">{leader.losses}</span>

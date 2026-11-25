@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dayUTC, recentDays } from "./day";
+import { dayUTC, recentDays, isLiveDaily } from "./day";
 
 // dayUTC formats UTC as YYYY-M-D with NO zero padding (matches existing lb:<date> keys)
 describe("dayUTC", () => {
@@ -33,4 +33,18 @@ describe("recentDays", () => {
     const r2 = recentDays(2, new Date("2026-03-01T06:00:00Z"));
     expect(r2[0] === "2026-3-1" && r2[1] === "2026-2-28").toBe(true);
   });
+});
+
+// D2: a Daily is "live" from its own UTC day onward; rolled-over (past) days are not.
+describe("isLiveDaily", () => {
+  const now = new Date("2026-11-25T12:00:00Z");
+  it("today is live", () => expect(isLiveDaily("2026-11-25", now)).toBe(true));
+  it("a future date is live", () => expect(isLiveDaily("2026-11-26", now)).toBe(true));
+  it("yesterday is not live", () => expect(isLiveDaily("2026-11-24", now)).toBe(false));
+  it("parses zero-padded spellings numerically", () => expect(isLiveDaily("2026-06-09", new Date("2026-06-09T12:00:00Z"))).toBe(true));
+  it("rolls over at 00:00 UTC", () => {
+    expect(isLiveDaily("2026-11-25", new Date("2026-11-25T23:59:59Z"))).toBe(true);
+    expect(isLiveDaily("2026-11-25", new Date("2026-11-26T00:00:00Z"))).toBe(false);
+  });
+  it("fails closed on a malformed date", () => expect(isLiveDaily("garbage", now)).toBe(true));
 });

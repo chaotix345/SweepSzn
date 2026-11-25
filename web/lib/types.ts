@@ -111,7 +111,10 @@ export interface DailySubmission { date: string; uid: string; name: string; trac
 // Board rows on the wire never carry a uid (bearer identity — DESIGN.md §12); the server marks the
 // caller's own row(s) `me` instead. The stored meta row (with uid) is lib/redis.ts StoredRow.
 export interface LeaderboardRow { rank: number; name: string; wins: number; losses: number; net: number; lineup: string; me?: true }
-export interface LeaderboardView { date: string; total: number; top: LeaderboardRow[]; you?: LeaderboardRow }
+// A daily board row as sent to a client: `lineup` is absent on a live Daily for a viewer without a
+// verified submission that day (D2 anti-spoiler). `you` only exists for a viewer who submitted.
+export type DailyBoardRow = Omit<LeaderboardRow, "lineup"> & { lineup?: string };
+export interface LeaderboardView { date: string; total: number; top: DailyBoardRow[]; you?: LeaderboardRow }
 
 // Weekly + all-time boards rank by CUMULATIVE wins (a single number), not a W-L record — so the
 // row deliberately omits losses/net/lineup (don't reuse StoredRow, whose fields would be undefined).

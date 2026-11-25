@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   enableRedisEnv,
   freshFake,
@@ -280,5 +280,63 @@ describe("daily leaderboard — personalized reads are POST-only", () => {
     exhaustRateLimit("rl:dlboard:7.7.7.7", 120);
     const { status } = await readJson(await post({ date: DATE, uid: "uid-bob-123456789" }, "7.7.7.7"));
     expect(status).toBe(429);
+  });
+});
+
+// D2 anti-spoiler: while a Daily is live, a lineup is the day's answer key. The public (CDN-cached)
+// GET never carries today's lineups; the per-viewer POST carries them only to a viewer who has a
+// verified submission on today's board. Past days are unaffected.
+describe("daily leaderboard — D2 anti-spoiler", () => {
+  const ROWS = [
+    { uid: "uid-alice-12345678", name: "Alice", wins: 70, net: 12 },
+    { uid: "uid-bob-123456789", name: "Bob", wins: 60, net: 8 },
+  ];
+  const TODAY = "2026-11-25";
+  const YESTERDAY = "2026-11-24";
+  const lineups = (body: Record<string, unknown>) => [
+    ...(body.top as Array<{ lineup?: string }>).map((r) => r.lineup),
+    (body.you as { lineup?: string } | undefined)?.lineup,
+  ].filter((l) => l !== undefined);
+
+  beforeEach(() => { vi.useFakeTimers({ now: new Date("2026-11-25T12:00:00Z"), toFake: ["Date"] }); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("GET omits every lineup on today's board", async () => {
+    seedBoard(TODAY, ROWS);
+    const { status, body } = await readJson(await get(`date=${TODAY}`));
+    expect(status).toBe(200);
+    expect((body.top as unknown[]).length).toBe(2);
+    expect(lineups(body)).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain("lineup");
+  });
+
+  it("GET keeps lineups on a past day's board", async () => {
+    seedBoard(YESTERDAY, ROWS);
+    const { body } = await readJson(await get(`date=${YESTERDAY}`));
+    expect(lineups(body)).toEqual(["p0,p1,p2,p3,p4", "p0,p1,p2,p3,p4"]);
+  });
+
+  it("POST omits today's lineups for a viewer without a submission today", async () => {
+    seedBoard(TODAY, ROWS);
+    const { status, body } = await readJson(await post({ date: TODAY, uid: "uid-ghost-12345678" }));
+    expect(status).toBe(200);
+    expect(body.you).toBeUndefined();
+    expect(lineups(body)).toEqual([]);
+  });
+
+  it("POST returns today's lineups to a viewer with a verified submission today", async () => {
+    seedBoard(TODAY, ROWS);
+    const { body } = await readJson(await post({ date: TODAY, uid: "uid-bob-123456789" }));
+    expect(body.you).toMatchObject({ name: "Bob", lineup: "p0,p1,p2,p3,p4" });
+    expect((body.top as Array<{ lineup?: string }>).every((r) => r.lineup === "p0,p1,p2,p3,p4")).toBe(true);
+  });
+
+  it("POST for a signed-in viewer keys the gate off the session, not the body uid", async () => {
+    const { signIn } = await import("@/test/routeHarness");
+    seedBoard(TODAY, ROWS);
+    await signIn({ uid: "uid-carol-12345678", name: "Carol" }); // Carol has not played today
+    const { body } = await readJson(await post({ date: TODAY, uid: "uid-bob-123456789" }));
+    expect(body.you).toBeUndefined();
+    expect(lineups(body)).toEqual([]);
   });
 });

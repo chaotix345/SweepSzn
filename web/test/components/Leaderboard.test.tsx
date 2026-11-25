@@ -94,6 +94,14 @@ describe("Leaderboard 'vs you' compare links", () => {
     act(() => root.unmount());
   });
 
+  it("D2: a row without a lineup (live Daily, viewer hasn't submitted) renders with no /r/ or compare link", async () => {
+    const { container, root } = await renderWith({ date: "2026-6-15", total: 2, top: [{ rank: 1, name: "P1", wins: 70, losses: 12, net: 5 }, { rank: 2, name: "P2", wins: 60, losses: 22, net: 2 }] });
+    expect(container.textContent).toContain("P1");
+    const hrefs = [...container.querySelectorAll("a")].map((a) => a.getAttribute("href") ?? "");
+    expect(hrefs.some((h) => h.startsWith("/r/") || h.startsWith("/compare/"))).toBe(false);
+    act(() => root.unmount());
+  });
+
   it("offers no compare before you've posted (pre-commit)", async () => {
     const { container, root } = await renderWith({ date: "2026-6-15", total: 1, top: [row(1, THEIRS)] });
     expect([...container.querySelectorAll("a")].some((a) => a.getAttribute("href")?.startsWith("/compare/"))).toBe(false);

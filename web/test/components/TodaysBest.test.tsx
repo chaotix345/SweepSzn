@@ -30,7 +30,9 @@ describe("TodaysBest", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => view })));
     render(<TodaysBest />);
     const link = await screen.findByRole("link");
-    expect(link.getAttribute("href")).toBe("/r/abc");
+    // D2: today's leader links to the board, never to their (spoiler) lineup
+    expect(link.getAttribute("href")).toBe("/leaderboards");
+    expect(document.body.innerHTML).not.toContain("/r/");
     expect(link.textContent).toContain("74");
     expect(link.textContent).toContain("JordanGOAT");
     expect(screen.getByText(/1,240 lineups today/i)).toBeTruthy();
