@@ -684,3 +684,31 @@ describe("SaveCardImage — hydrates cleanly where the browser can copy images",
     await act(async () => { root?.unmount(); });
   });
 });
+
+// W3: an archive replay is unranked and never feeds the Dex, so the card must not show (or fetch) the
+// "every player you field is saved" strip; it renders the come-back / reveal slot under Share instead.
+describe("ResultCard — W3 archive replay and the afterActions slot", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const dexCalls = (f: ReturnType<typeof vi.fn>) => f.mock.calls.filter(([u]) => String(u).startsWith("/api/dex")).length;
+
+  it("skips the Dex strip for an archive replay, keeps it otherwise", async () => {
+    for (const [modeKey, expected] of [["archive", 0], ["daily", 1]] as const) {
+      const f = vi.fn(() => new Promise(() => {}));
+      vi.stubGlobal("fetch", f);
+      const { unmount } = render(<ResultCard result={makeResult()} players={makePlayers()} slots={SLOTS} mode="x" modeKey={modeKey} onReset={() => {}} />);
+      await act(async () => {});
+      expect(dexCalls(f)).toBe(expected);
+      unmount();
+    }
+  });
+
+  it("renders afterActions right under Share / Build Another", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    const { container } = render(<ResultCard result={makeResult()} players={makePlayers()} slots={SLOTS} mode="daily" modeKey="daily" onReset={() => {}}
+      afterActions={<div data-testid="after">come back</div>} />);
+    const text = container.textContent ?? "";
+    const after = text.indexOf("come back");
+    expect(after).toBeGreaterThan(text.indexOf("Build Another"));
+    expect(after).toBeLessThan(text.indexOf("Beats"));
+  });
+});

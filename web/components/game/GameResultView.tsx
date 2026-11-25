@@ -113,8 +113,10 @@ export function ArchiveResultView({ date, result, onRestart, onModeSelect, onPla
   return (
     <Shell roundNum={5} mode="daily" label={label} onRestart={onRestart} onModeSelect={onModeSelect} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={label} modeKey="archive" usedHints={result.usedHints} onReset={onRestart}
-        afterActions={<p className="mt-3 text-center text-xs text-zinc-400" data-testid="archive-unranked">Unranked replay: no leaderboard, streak or weekly credit.</p>} />
-      <CeilingReveal date={date} yourWins={result.result.wins} />
+        afterActions={<>
+          <p className="mt-3 text-center text-xs text-zinc-400" data-testid="archive-unranked">Unranked replay: no leaderboard, streak or weekly credit.</p>
+          <CeilingReveal date={date} yourWins={result.result.wins} />
+        </>} />
       <div className="mt-4 grid gap-2 sm:flex sm:gap-3">
         <ButtonLink href="/archive" variant="secondary" className="flex-1">← All past Dailies</ButtonLink>
         <Button variant="primary" onClick={onPlayToday} className="flex-1">Play today&apos;s Daily →</Button>

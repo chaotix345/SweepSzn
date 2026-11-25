@@ -267,7 +267,8 @@ export default function ResultCard({
         <RarityBadge ids={players.map((p) => p.person_id ?? p.id).join(",")} />
       </div>
 
-      <div className="px-6 pb-2"><DexStrip lineupIds={players.map((p) => p.id)} /></div>
+      {/* an unranked archive replay (W3) never feeds the Dex, so don't promise it does */}
+      {modeKey !== "archive" && <div className="px-6 pb-2"><DexStrip lineupIds={players.map((p) => p.id)} /></div>}
 
       {/* "Dig deeper": the full roster with dossiers, the scouting report, the What-If Lab and Compare.
           Collapsed + lazy-mounted (a cold permalink viewer never fires their /api fetches); the
