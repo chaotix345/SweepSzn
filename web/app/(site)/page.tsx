@@ -74,7 +74,7 @@ export default function Home() {
           <Stat n="1,170" label="real NBA team-seasons" />
           <Stat n="24,687" label="player-seasons" />
           <Stat n="5.6" label="win RMSE, out-of-sample" />
-          <Stat n="8" label="ways to play" />
+          <Stat n="80-2" label="best draftable five" />
         </div>
         <details className="mt-6">
           <summary className="cursor-pointer text-sm font-semibold text-orange-400 hover:text-orange-300">

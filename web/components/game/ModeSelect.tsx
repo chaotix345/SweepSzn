@@ -19,7 +19,8 @@ const ACCENT = {
 type AccentKey = keyof typeof ACCENT;
 
 // The six "pick a discipline" modes (Daily is featured above, Challenge is a full-width invite below).
-const MODES: { id: Mode; title: string; desc: string; accent: AccentKey; diff: 1 | 2 | 3 }[] = [
+type ModeCard = { id: Mode; title: string; desc: string; accent: AccentKey; diff: 1 | 2 | 3 };
+const MODES: ModeCard[] = [
   { id: "classic", title: "Classic", desc: "Full stats visible — draft on what you can see.", accent: "orange", diff: 1 },
   { id: "factorhunt", title: "Factor Hunt", desc: "Draft your five, then guess what the engine rewards or punishes most. Call it right, earn a bonus.", accent: "violet", diff: 2 },
   { id: "prime", title: "Prime Draft", desc: "No eras — every legend at his peak. Build cross-era fives.", accent: "violet", diff: 2 },
@@ -27,6 +28,13 @@ const MODES: { id: Mode; title: string; desc: string; accent: AccentKey; diff: 1
   { id: "blueprint", title: "Blueprint", desc: "Pick a game plan before the spin. The engine grades how well you follow it.", accent: "cyan", diff: 3 },
   { id: "surgeon", title: "Surgeon", desc: "The engine finds your lineup's weakest link. One swap to fix it.", accent: "rose", diff: 3 },
 ];
+
+// Sharper core (W1): Classic and Prime sit at the top level with Daily and the Challenge bar; the rest
+// live in the collapsed "More modes" drawer. Every ?mode= deep link still starts any of them directly.
+const TOP_LEVEL = new Set<Mode>(["classic", "prime"]);
+const TOP_MODES = MODES.filter((m) => TOP_LEVEL.has(m.id));
+const MORE_MODES = MODES.filter((m) => !TOP_LEVEL.has(m.id));
+const MORE_KEY = "szn_more_modes_open";
 
 const DIFF_LABEL = ["", "Beginner", "Intermediate", "Expert"] as const;
 
@@ -37,6 +45,28 @@ function DiffDots({ level, dot }: { level: 1 | 2 | 3; dot: string }) {
         <span key={i} className={`h-1.5 w-1.5 rounded-full ${i <= level ? dot : "bg-zinc-700"}`} />
       ))}
     </span>
+  );
+}
+
+function ModeTile({ m, onPick }: { m: ModeCard; onPick: (m: Mode) => void }) {
+  const a = ACCENT[m.accent];
+  return (
+    <button
+      onClick={() => onPick(m.id)}
+      aria-label={`Play ${m.title} mode`}
+      className="group flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-left transition hover:-translate-y-0.5 hover:border-zinc-600 hover:shadow-[0_10px_28px_rgba(0,0,0,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+    >
+      <div className="flex items-center justify-between">
+        <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${a.tile} ${a.text}`}>
+          <ModeGlyph mode={m.id} className="h-5 w-5" />
+        </span>
+        <DiffDots level={m.diff} dot={a.dot} />
+      </div>
+      <div className="mt-3 font-bold text-zinc-100">{m.title}</div>
+      <p className="mt-1 flex-1 text-sm text-zinc-400">{m.desc}</p>
+      {/* CTA stays the action orange (DESIGN.md): the mode accent lives on the icon + dots only */}
+      <div className="mt-3 text-sm font-bold text-orange-400 group-hover:underline">Play →</div>
+    </button>
   );
 }
 
@@ -62,6 +92,17 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
   const dismissIntro = () => {
     try { localStorage.setItem("sweepszn_seen_modes", "1"); } catch { /* private mode */ }
     setShowIntro(false);
+  };
+
+  // "More modes" drawer: closed by default (and on the server), the viewer's last choice restored after mount.
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => {
+    (async () => { try { if (localStorage.getItem(MORE_KEY) === "1") setMoreOpen(true); } catch { /* private mode */ } })();
+  }, []);
+  const toggleMore = () => {
+    const next = !moreOpen;
+    setMoreOpen(next);
+    try { localStorage.setItem(MORE_KEY, next ? "1" : "0"); } catch { /* private mode */ }
   };
 
   const [history, setHistory] = useState<ResultEntry[] | null>(null);
@@ -105,7 +146,7 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
           <div className="min-w-0">
             <div className="font-display text-2xl tracking-tight">Daily</div>
             <p className="mt-1 text-sm text-zinc-400">
-              Everyone gets the same spins today — a pure test of judgment. Post a score on the verified leaderboard.
+              Everyone gets the same spins today — a pure test of judgment. Your score posts to the verified leaderboard.
             </p>
           </div>
         </div>
@@ -125,30 +166,9 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
         </button>
       )}
 
-      {/* The six disciplines */}
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {MODES.map((m) => {
-          const a = ACCENT[m.accent];
-          return (
-            <button
-              key={m.id}
-              onClick={() => onPick(m.id)}
-              aria-label={`Play ${m.title} mode`}
-              className="group flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-left transition hover:-translate-y-0.5 hover:border-zinc-600 hover:shadow-[0_10px_28px_rgba(0,0,0,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
-            >
-              <div className="flex items-center justify-between">
-                <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${a.tile} ${a.text}`}>
-                  <ModeGlyph mode={m.id} className="h-5 w-5" />
-                </span>
-                <DiffDots level={m.diff} dot={a.dot} />
-              </div>
-              <div className="mt-3 font-bold text-zinc-100">{m.title}</div>
-              <p className="mt-1 flex-1 text-sm text-zinc-400">{m.desc}</p>
-              {/* CTA stays the action orange (DESIGN.md): the mode accent lives on the icon + dots only */}
-              <div className="mt-3 text-sm font-bold text-orange-400 group-hover:underline">Play →</div>
-            </button>
-          );
-        })}
+      {/* Top-level disciplines */}
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        {TOP_MODES.map((m) => <ModeTile key={m.id} m={m} onPick={onPick} />)}
       </div>
 
       {/* Invite: Challenge a Friend — full-width, distinct from the solo disciplines */}
@@ -166,6 +186,21 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
         </div>
         <span className="shrink-0 text-sm font-bold text-orange-400 group-hover:underline">Play →</span>
       </button>
+
+      {/* More modes: the specialist disciplines, one tap away */}
+      <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/40">
+        <button onClick={toggleMore} aria-expanded={moreOpen} aria-controls="more-modes-panel"
+          className="flex w-full items-center justify-between gap-3 rounded-2xl px-5 py-4 text-left transition hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
+          <span>
+            <span className="block font-bold text-zinc-100">More modes</span>
+            <span className="mt-0.5 block text-sm text-zinc-400">{MORE_MODES.map((m) => m.title).join(" · ")}</span>
+          </span>
+          <span aria-hidden className="shrink-0 text-zinc-500">{moreOpen ? "▴" : "▾"}</span>
+        </button>
+        <div id="more-modes-panel" hidden={!moreOpen} className="grid gap-4 px-4 pb-4 sm:grid-cols-2">
+          {moreOpen && MORE_MODES.map((m) => <ModeTile key={m.id} m={m} onPick={onPick} />)}
+        </div>
+      </div>
 
       <ResultsHistory onOpenChallenge={onOpenChallenge} />
 
