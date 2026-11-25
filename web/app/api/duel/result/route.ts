@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   if (!isDuelSeed(body?.seed) || !isPersona(body?.persona) || !picks || picks.length !== 5) {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
-  const r = replayDuel(body.seed, body.persona, picks);
+  const r = replayDuel(body.seed, body.persona, picks, body?.asOf);
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
   if (r.next !== null) return NextResponse.json({ error: "duel not finished" }, { status: 400 });
   const c = getCoefficients();

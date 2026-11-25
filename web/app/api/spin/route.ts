@@ -28,7 +28,8 @@ export async function POST(req: Request) {
     // `open` = the asking side's open slots; the deal re-routes to a fallback spin if none of them fit
     const open = (Array.isArray(body?.open) ? body.open : []).filter((s: unknown): s is Slot => typeof s === "string" && SLOTS.includes(s as Slot));
     const r = Number.isInteger(round) ? Math.max(0, Math.min(4, round)) : 0;
-    return NextResponse.json(duelSpin(seed, r, exclude, open.length ? [...new Set<Slot>(open)] : [...SLOTS]));
+    const asOf = typeof body?.asOf === "string" ? body.asOf : undefined;
+    return NextResponse.json(duelSpin(seed, r, exclude, open.length ? [...new Set<Slot>(open)] : [...SLOTS], asOf));
   }
   // Fit grades are a Classic-only UI assist; only Classic free-play requests them (see lib/data.ts).
   // Refuse fit for a classic seed that's been converted into a challenge — its seed is exposed to

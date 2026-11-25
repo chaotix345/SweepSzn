@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   if (!isDuelSeed(body?.seed) || !isPersona(body?.persona) || !picks) {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
-  const r = replayDuel(body.seed, body.persona, picks);
+  const r = replayDuel(body.seed, body.persona, picks, body?.asOf);
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
   const c = getCoefficients();
   const bot = r.turns.filter((t) => t.side === "bot").map((t) => ({

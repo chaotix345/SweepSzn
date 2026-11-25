@@ -353,19 +353,21 @@ export function spin(seed: string, round: number, opts: SpinOptions = {}, wantFi
 // Duel spins never carry fit grades (DESIGN.md §12).
 const eligibleSlots = (p: Player): Slot[] => (p.eligible && p.eligible.length ? p.eligible : [p.pos as Slot]);
 
-export function duelDeal(seed: string, round: number, taken: string[], open: Slot[]): { team: string; decade: string; pool: Player[]; fallback: boolean } {
-  const { byId, draftIndex, draftKeys } = load();
+export function duelDeal(seed: string, round: number, taken: string[], open: Slot[], asOf?: string): { team: string; decade: string; pool: Player[]; fallback: boolean } {
+  const { byId } = load();
+  const day = resolveAsOf(seed, asOf);
+  const { draftIndex, draftKeys } = poolIndex(day);
   const takenIds = new Set(taken);
   const takenPeople = new Set(taken.map((id) => byId.get(id)?.person_id ?? id));
   const available = (p: Player) => !takenIds.has(p.id) && !takenPeople.has(p.person_id ?? p.id);
   const fits = (p: Player) => eligibleSlots(p).some((s) => open.includes(s));
   const poolOf = (key: string) => (draftIndex.get(key) ?? []).filter(available).sort(compareSzn);
 
-  const base = selectSpin(seed, round, {});
+  const base = selectSpin(seed, round, { asOf: day });
   const basePool = poolOf(`${base.team}|${base.decade}`);
   if (basePool.some(fits)) return { team: base.team, decade: base.decade, pool: basePool, fallback: false };
   for (let k = 1; k <= 64; k++) {
-    const s = selectSpin(seed, round, { exclude: taken, salt: 1000 + k });
+    const s = selectSpin(seed, round, { exclude: taken, salt: 1000 + k, asOf: day });
     if (s.pool.some(fits)) return { team: s.team, decade: s.decade, pool: s.pool, fallback: true };
   }
   for (const key of [...draftKeys].sort()) {
@@ -375,9 +377,9 @@ export function duelDeal(seed: string, round: number, taken: string[], open: Slo
   return { team: base.team, decade: base.decade, pool: basePool, fallback: false };
 }
 
-export function duelSpin(seed: string, round: number, taken: string[], open: Slot[]): SpinResult & { fallback: boolean } {
+export function duelSpin(seed: string, round: number, taken: string[], open: Slot[], asOf?: string): SpinResult & { fallback: boolean } {
   const { coeff } = load();
-  const { team, decade, pool, fallback } = duelDeal(seed, round, taken, open);
+  const { team, decade, pool, fallback } = duelDeal(seed, round, taken, open, asOf);
   const candidates = pool.map((p, i) => toCandidate(p, undefined, playerFeatures(p, coeff).usage, i));
   return { team, decade, candidates, era: decadeEraContext(decade) ?? undefined, fallback };
 }

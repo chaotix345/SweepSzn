@@ -3,6 +3,7 @@ import { enableRedisEnv, freshFake, req, readJson, exhaustRateLimit, ctx } from 
 import { playDuelViaRoutes } from "@/test/duelHarness";
 import { decodeDuelCard } from "@/lib/duel";
 import { compareResults } from "@/lib/challenge";
+import { LEGACY_AS_OF } from "@/lib/poolDate";
 
 vi.mock("@upstash/redis", async () => (await import("@/test/routeHarness")).upstashRedisMockModule());
 vi.mock("next/headers", async () => (await import("@/test/routeHarness")).nextHeadersMockModule());
@@ -55,5 +56,31 @@ describe("POST /api/duel/result", () => {
     const keys = [r.strings, r.hashes, r.zsets, r.lists, r.sets].flatMap((m) => [...(m as Map<string, unknown>).keys()]);
     expect(keys.length).toBeGreaterThan(0);
     expect(keys.every((k) => k.startsWith("rl:"))).toBe(true);
+  });
+
+  it("a duel started before a release replays (bot picks + result) after it against the same pool", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      let checked = 0;
+      for (let i = 0; i < 12 && checked < 3; i++) {
+        const seed = `duel-pin${i}`;
+        vi.setSystemTime(new Date(`${LEGACY_AS_OF}T23:00:00Z`)); // the evening before the release
+        const { picks, bot } = await playDuelViaRoutes(route, seed, "analyst", LEGACY_AS_OF);
+        const before = await readJson(await post({ seed, persona: "analyst", picks, asOf: LEGACY_AS_OF }));
+        expect(before.status).toBe(200);
+        vi.setSystemTime(new Date(Date.parse(`${LEGACY_AS_OF}T00:00:00Z`) + 2 * 86_400_000)); // after it
+        const replayBot = await readJson(await botRoute.POST(req("/api/duel/bot-pick", { body: { seed, persona: "analyst", picks, asOf: LEGACY_AS_OF }, ip: "9.9.9.9" })));
+        expect(replayBot.status).toBe(200);
+        expect((replayBot.body.bot as { player: { id: string } }[]).map((b) => b.player.id)).toEqual(bot.map((b) => b.player.id));
+        const after = await readJson(await post({ seed, persona: "analyst", picks, asOf: LEGACY_AS_OF }));
+        expect(after).toEqual(before);
+        // only count seeds where the unpinned (today's) pool would have replayed differently
+        const unpinned = await readJson(await post({ seed, persona: "analyst", picks }));
+        if (JSON.stringify(unpinned) !== JSON.stringify(before)) checked++;
+      }
+      expect(checked).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

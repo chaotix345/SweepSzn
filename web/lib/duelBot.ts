@@ -4,6 +4,7 @@ import { evaluateLineup } from "./engine";
 import { compareResults } from "./challenge";
 import { SLOTS } from "./teams";
 import { duelDeal, getCoefficients, getPlayersByIds, marginalNet } from "./data";
+import { resolveAsOf } from "./poolDate";
 import { DUEL_TURNS, decodeDuelCard, outcomeFromWinner, turnRound, type DuelOutcome, type Persona } from "./duel";
 
 // Draft Duel bot. Server-only by design (DESIGN.md §12): the client only ever sees the bot's finished
@@ -64,7 +65,10 @@ export type DuelReplay =
 // Rebuild a duel from the seed, the persona and your picks (in order). Walks the snake order: each
 // bot turn is computed here; each of your turns must name a player from YOUR deal for that turn, at an
 // open slot he is eligible for. Stops at your next turn (`next`) or at the end (`next: null`).
-export function replayDuel(seed: string, persona: Persona, picks: DuelPick[]): DuelReplay {
+// `asOf` is the duel's pinned pool date (its start day), so a duel that crosses a release midnight
+// replays against one pool end to end; resolveAsOf caps it at today.
+export function replayDuel(seed: string, persona: Persona, picks: DuelPick[], asOf?: unknown): DuelReplay {
+  const day = resolveAsOf(seed, asOf);
   const you = emptyRoster(), bot = emptyRoster();
   const turns: DuelTurn[] = [];
   const taken: string[] = [];
@@ -74,7 +78,7 @@ export function replayDuel(seed: string, persona: Persona, picks: DuelPick[]): D
     const round = turnRound(t);
     const roster = side === "you" ? you : bot;
     if (side === "you" && i >= picks.length) return { ok: true, you, bot, turns, next: t };
-    const deal = duelDeal(seed, round, taken, openSlots(roster));
+    const deal = duelDeal(seed, round, taken, openSlots(roster), day);
     let player: Player, slot: Slot;
     if (side === "bot") {
       const choice = botChoose(persona, deal.pool, roster);
