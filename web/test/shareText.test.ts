@@ -48,7 +48,7 @@ describe("slotCells — the Daily's Wordle-style row", () => {
 });
 
 describe("dailyShareText — spoiler-free while the Daily is live", () => {
-  const players = [pb(5), pb(3), pb(3), pb(2), pb(4.5)];
+  const players = [pb(5), pb(3), pb(3), pb(1.5), pb(4.5)];
   const names = ["Jordan", "Magic", "Bird", "Duncan", "Shaq"];
 
   it("carries the date, record, grade, grid and percentile — and no player names while live", () => {

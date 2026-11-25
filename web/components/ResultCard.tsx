@@ -45,7 +45,8 @@ const BEST_DRAFTABLE_RECORD = "80-2";
 
 // Grade-aware nudge above the share/replay row — frames sharing as a social act, not a chore. On a
 // challenge or Daily share it says what the friend will get instead.
-function shareNudge(result: LineupResult, kind: "challenge" | "daily" | null): string {
+function shareNudge(result: LineupResult, kind: "challenge" | "daily" | "shared" | null): string {
+  if (kind === "shared") return "Think you'd draft better? The engine scores yours the same way.";
   if (kind === "challenge") return "Share sends your exact spins. Your five stays hidden until they've played.";
   if (kind === "daily") return "Share posts a spoiler-free grid. No names until tomorrow's Daily.";
   if (isEliteGrade(result.grade)) return "All-time tier. Show it off →";
@@ -154,6 +155,7 @@ export default function ResultCard({
   const names = players.map((p) => displayName(p.name));
 
   const elite = isEliteGrade(result.grade);
+  const [challengeDown, setChallengeDown] = useState(false); // the challenge share fell back to /r/
   // one roster row's dossier open at a time (tap ⓘ) — reuses the draft-board Dossier, post-commit
   const [openRosterId, setOpenRosterId] = useState<string | null>(null);
   // teaser for the collapsed "Dig deeper" zone (What-If Lab is gated off Prime — see below)
@@ -213,13 +215,13 @@ export default function ResultCard({
       </div>
 
       <div className="px-6 pb-5">
-        <p className="mb-2.5 text-center text-xs font-medium text-zinc-400">{shareNudge(result, shared ? null : challengeShare ? "challenge" : daily ? "daily" : null)}</p>
+        <p className="mb-2.5 text-center text-xs font-medium text-zinc-400">{shareNudge(result, shared ? "shared" : challengeShare && !challengeDown ? "challenge" : daily ? "daily" : null)}</p>
         {/* F02: one primary pair (Share + Build Another, stacked on phones) and one secondary row
             (X · Bluesky · Save image). On a shared permalink the cold viewer's "build your own" is
             the conversion that matters, so it takes the orange and Share drops to secondary.
             (DESIGN.md: exactly one orange CTA per row.) */}
         <ShareButton primary={!shared} result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint}
-          challenge={shared ? undefined : challengeShare} daily={shared ? undefined : daily} cardPath={sharePath}
+          challenge={shared ? undefined : challengeShare} daily={shared ? undefined : daily} cardPath={sharePath} onChallengeFallback={() => setChallengeDown(true)}
           companion={shared ? (
             <ButtonLink href="/play?mode=daily" variant="primary" className="w-full">Build your own five →</ButtonLink>
           ) : (
@@ -394,7 +396,7 @@ const intentLinks = (text: string, url: string): [string, string][] => {
 // `challenge` (Classic/Prime, D6): the first share creates a Challenge and every target shares /c/;
 // if that fails (no Redis, offline) the share falls back to the /r/ permalink. `daily`: the
 // spoiler-free grid, linking to /play?mode=daily.
-export function ShareButton({ result, path, names, usedHints, pickem, prime, blueprint, text: textOverride, primary, challenge, daily, companion, cardPath }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp; prime?: boolean; blueprint?: BlueprintView; text?: string; primary?: boolean; challenge?: ChallengeShareProp; daily?: DailyShareProp; companion?: ReactNode; cardPath?: string }) {
+export function ShareButton({ result, path, names, usedHints, pickem, prime, blueprint, text: textOverride, primary, challenge, daily, companion, cardPath, onChallengeFallback }: { result: LineupResult; path: string; names: string[]; usedHints?: boolean; pickem?: PickemProp; prime?: boolean; blueprint?: BlueprintView; text?: string; primary?: boolean; challenge?: ChallengeShareProp; daily?: DailyShareProp; companion?: ReactNode; cardPath?: string; onChallengeFallback?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -445,7 +447,7 @@ export function ShareButton({ result, path, names, usedHints, pickem, prime, blu
     const got = await pending.current;
     setCreating(false);
     if (got) setChalPath(got);
-    else { setChalFailed(true); pending.current = null; }
+    else { setChalFailed(true); pending.current = null; onChallengeFallback?.(); }
     return got;
   };
   const needsCreate = !!challenge && !chalPath && !chalFailed;

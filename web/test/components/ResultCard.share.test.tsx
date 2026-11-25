@@ -70,6 +70,8 @@ describe("Classic/Prime share is a Challenge (D6)", () => {
     expect(x).toContain("Engine says Star PG · Star SG · Star SF · Star PF · Star C go 58-24.");
     fireEvent.click(within(container).getByRole("menuitem", { name: "Reddit" }));
     expect(track).toHaveBeenCalledWith("share", { target: "Reddit", variant: "fallback" });
+    // the nudge stops promising the same spins once the share fell back
+    expect(container.textContent).not.toContain("Share sends your exact spins");
   });
 
   it("X before Share: opens the tab inside the tap, then points it at the challenge intent", async () => {
@@ -171,6 +173,8 @@ describe("F13 — a shared permalink speaks about 'this five', not 'your five'",
     expect(container.textContent).toMatch(/Lowest-value pick: the /);
     expect(container.querySelector('[title="Drafted with the engine\'s fit hints"]')).toBeTruthy();
     expect(container.querySelector('[aria-label$="this five\'s grade"]')).toBeTruthy();
+    expect(container.textContent).toContain("Think you'd draft better?");
+    expect(container.textContent).not.toContain("worth sharing");
   });
 
   it("in-game keeps the Dex strip and 'your' copy", () => {

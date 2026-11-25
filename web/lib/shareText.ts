@@ -17,10 +17,11 @@ export function claimText({ wins, losses, names, prime, usedHints, challenge }: 
   return `Engine says ${who}. ${historyPercentileText(wins)}. Wrong? ${dare}`;
 }
 
-// Per-slot value cut-offs (points per 100, offScale·off + defScale·def — the weakestSlot metric):
-// the 75th and 25th percentiles of the 250-card draftable pool. Top quarter green, bottom quarter red.
-export const SLOT_CELL_TOP = 4.1;
-export const SLOT_CELL_LOW = 2.6;
+// Per-slot value cut-offs (points per 100, offScale·off + defScale·def — the weakestSlot metric),
+// measured on the best candidate of 1,500 real Daily spins: green = at least a typical spin's best
+// pick (median 3.3), red = the bottom tenth of best picks (under 2.0), yellow between.
+export const SLOT_CELL_TOP = 3.3;
+export const SLOT_CELL_LOW = 2.0;
 
 export function slotCells(players: PlayerBreakdown[], c = DEFAULT_COEFFICIENTS): string {
   return players
