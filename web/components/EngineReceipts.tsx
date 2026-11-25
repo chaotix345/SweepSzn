@@ -125,11 +125,11 @@ function Receipt({ n, label }: { n: string; label: string }) {
 function TopList({ title, rows }: { title: string; rows: { id: string; name: string; v: number }[] }) {
   return (
     <div>
-      <div className="text-sm font-black uppercase tracking-wide text-zinc-300">{title}</div>
+      <h3 className="text-sm font-black uppercase tracking-wide text-zinc-300">{title}</h3>
       <ol className="mt-2 space-y-1 text-sm">
         {rows.map((r, i) => (
           <li key={r.id} className="flex justify-between gap-3 border-b border-zinc-900 py-1">
-            <span className="text-zinc-300"><span className="mr-2 font-mono text-zinc-600">{i + 1}</span>{r.name}</span>
+            <span className="text-zinc-300"><span className="mr-2 font-mono text-zinc-400">{i + 1}</span>{r.name}</span>
             <span className="font-mono tabular-nums text-zinc-400">{r.v.toFixed(1)}</span>
           </li>
         ))}

@@ -17,6 +17,12 @@ export const metadata: Metadata = {
 // engine at build time. Rendered visibly and mirrored as FAQPage JSON-LD.
 const ANSWERS = [bestFiveAnswer(), perfectSeasonAnswer(), recordAnswer(), bullsWarriorsAnswer()].filter((a) => a !== null);
 
+// F27: jump pills for a long page (section ids below; #receipts lives in EngineReceipts)
+const JUMPS: [string, string][] = [
+  ["answers", "Straight answers"], ["play", "Playing a round"], ["modes", "Modes"], ["example", "Example"],
+  ["engine", "What it models"], ["calibration", "Calibration"], ["receipts", "Receipts"],
+];
+
 const ldHtml = jsonLdHtml({
   "@context": "https://schema.org",
   "@graph": [breadcrumbLd([["Home", ""], ["How it works", "/how-it-works"]]), faqLd(ANSWERS)],
@@ -36,8 +42,21 @@ export default function HowItWorks() {
         all 82 games — and tells you, in plain English, why your five wins or loses.
       </p>
 
+      <nav aria-label="On this page" className="mt-6">
+        <ul className="flex flex-wrap gap-2">
+          {JUMPS.map(([id, label]) => (
+            <li key={id}>
+              <a href={`#${id}`}
+                className="inline-flex min-h-11 items-center rounded-full border border-zinc-800 bg-zinc-900 px-3.5 text-xs font-semibold text-zinc-300 transition hover:border-zinc-600 hover:text-white sm:min-h-9">
+                {label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
       {/* direct answers */}
-      <section aria-labelledby="answers-heading" className="mt-12">
+      <section id="answers" aria-labelledby="answers-heading" className="mt-12 scroll-mt-20">
         <h2 id="answers-heading" className="font-display text-2xl tracking-tight">Straight answers</h2>
         <dl className="mt-5 space-y-3">
           {ANSWERS.map((f) => (
@@ -54,7 +73,7 @@ export default function HowItWorks() {
       </section>
 
       {/* How to play */}
-      <section className="mt-12">
+      <section id="play" className="mt-12 scroll-mt-20">
         <h2 className="font-display text-2xl tracking-tight">Playing a round</h2>
         <ol className="mt-5 space-y-4">
           <Step n="1" title="Spin the reels">
@@ -78,7 +97,7 @@ export default function HowItWorks() {
       </section>
 
       {/* game modes */}
-      <section className="mt-14">
+      <section id="modes" className="mt-14 scroll-mt-20">
         <h2 className="font-display text-2xl tracking-tight">Nine ways to play</h2>
         <p className="mt-2 max-w-2xl text-sm text-zinc-400">
           The same engine drives every mode. Four of them are only possible because the engine explains itself —
@@ -104,7 +123,7 @@ export default function HowItWorks() {
             and learn the engine&apos;s vocabulary as you play.
           </Principle>
           <Principle term="Prime Draft">
-            The era reel is gone. Each franchise offers its all-time pool with every player at his statistical peak,
+            The era reel is gone. Each franchise offers its all-time pool with every player in his best season with that franchise,
             so you can build cross-era fives. A fantasy simulation, not a historical one.
           </Principle>
           <Principle term="Blueprint">
@@ -123,7 +142,7 @@ export default function HowItWorks() {
       </section>
 
       {/* live example */}
-      <section className="mt-14">
+      <section id="example" className="mt-14 scroll-mt-20">
         <h2 className="font-display text-2xl tracking-tight">A real example</h2>
         <p className="mt-2 max-w-2xl text-sm text-zinc-400">
           This is a live engine result — a balanced two-way GOAT five. Even this lineup loses wins to usage overload,
@@ -135,7 +154,7 @@ export default function HowItWorks() {
       </section>
 
       {/* the model */}
-      <section className="mt-14">
+      <section id="engine" className="mt-14 scroll-mt-20">
         <h2 className="font-display text-2xl tracking-tight">What the engine models</h2>
         <div className="mt-6 space-y-5">
           <Principle term="Finite possessions">
@@ -175,7 +194,7 @@ export default function HowItWorks() {
       </section>
 
       {/* calibration */}
-      <section className="mt-14 rounded-2xl border border-zinc-800 border-t-2 border-t-orange-500/50 bg-zinc-900 p-6">
+      <section id="calibration" className="mt-14 scroll-mt-20 rounded-2xl border border-zinc-800 border-t-2 border-t-orange-500/50 bg-zinc-900 p-6">
         <h2 className="font-display text-2xl tracking-tight">Calibrated, not guessed</h2>
         <p className="mt-3 text-sm text-zinc-400">
           The core of the model is fit to real history: <strong className="text-zinc-200">{meta.team_seasons.toLocaleString()} NBA

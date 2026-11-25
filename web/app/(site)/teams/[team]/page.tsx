@@ -74,8 +74,24 @@ export default async function TeamPage({ params }: Props) {
       </p>
 
       {five ? (
-        <section aria-labelledby="five-heading" className="mt-10">
+        <section aria-labelledby="five-heading" className="mt-10 flex flex-col">
           <h2 id="five-heading" className="sr-only">The starting five</h2>
+          {/* F21: the record leads on phones (five tall cards would bury it); desktop keeps it under the row */}
+          <div className="mb-4 flex flex-col items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center sm:flex-row sm:justify-between sm:text-left lg:order-last lg:mt-4 lg:mb-0">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Projected record</div>
+              <div className={`mt-1 font-display text-6xl tabular-nums ${grade}`}>
+                {five.record.wins}<span className="text-zinc-600">–</span>{five.record.losses}
+              </div>
+              <p className="mt-1 text-sm text-zinc-400">
+                The SweepSzn engine projects this five at{" "}
+                <strong className="text-zinc-200">{five.record.wins}-{five.record.losses}</strong>{" "}
+                (<span className={`font-bold ${grade}`}>{five.record.grade}</span> {five.record.label.toLowerCase()}).
+              </p>
+            </div>
+            <ButtonLink href={five.href} variant="secondary">See the full breakdown →</ButtonLink>
+          </div>
+
           <ol className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {five.slots.map(({ slot, player: p }) => (
               <li key={p.id} className="flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
@@ -100,22 +116,7 @@ export default async function TeamPage({ params }: Props) {
             ))}
           </ol>
 
-          <div className="mt-4 flex flex-col items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center sm:flex-row sm:justify-between sm:text-left">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Projected record</div>
-              <div className={`mt-1 font-display text-6xl tabular-nums ${grade}`}>
-                {five.record.wins}<span className="text-zinc-600">–</span>{five.record.losses}
-              </div>
-              <p className="mt-1 text-sm text-zinc-400">
-                The SweepSzn engine projects this five at{" "}
-                <strong className="text-zinc-200">{five.record.wins}-{five.record.losses}</strong>{" "}
-                (<span className={`font-bold ${grade}`}>{five.record.grade}</span> {five.record.label.toLowerCase()}).
-              </p>
-            </div>
-            <ButtonLink href={five.href} variant="secondary">See the full breakdown →</ButtonLink>
-          </div>
-
-          <p className="mt-4 max-w-3xl text-xs leading-relaxed text-zinc-500">
+          <p className="mt-4 max-w-3xl text-xs leading-relaxed text-zinc-400 lg:order-last">
             How this five was picked: by career accolades, one per position. Players are ranked by All-Star selections
             plus MVP, All-NBA and All-Defense voting, weighted toward what they did for the {nick}, with full-time
             starters (30+ minutes a night) first. Each position goes to the best-ranked player who can play it, one
