@@ -78,7 +78,7 @@ export interface CandidateFit {
   delta: number;        // marginal net-rating swing if added to the current roster now
   tier: "elite" | "strong" | "solid" | "marginal"; // relative to this spin's candidates
   best: boolean;        // the single best fit available in this spin
-  adds: string[];       // gaps this player fills for YOUR roster, e.g. ["Rim protection", "Spacing"]
+  adds: string[];       // gaps this player fills for YOUR roster, e.g. ["Size", "Spacing"]
 }
 
 // Trimmed player projection sent to the client during the draft (full stats stay server-side).

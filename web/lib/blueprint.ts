@@ -35,6 +35,8 @@ export interface BlueprintDef {
   // metric thresholds for A+, A, B, C, D (F below/above). Calibrated against 400 simulated seeded
   // drafts per strategy (scripts probe, 2026-06-10): each A+ sits near the 90th percentile of a
   // draft that deliberately chases the blueprint, so no objective is free and none is unreachable.
+  // Engine v4 (2026-11-25): re-banded by running one greedy chasing-draft probe on both engines and
+  // moving each band to the SAME percentile of the v4 distribution it held under v3.
   bands: [number, number, number, number, number];
   format: (v: number) => string;
 }
@@ -44,28 +46,28 @@ export const BLUEPRINTS: BlueprintDef[] = [
   {
     key: "spacing", label: "SPACING BOMB", emoji: "💣",
     desc: "Surround the floor with shooters — the spacing factor is your grade.",
-    metricLabel: "Spacing factor", lowerIsBetter: false, bands: [2.5, 2.0, 1.5, 0.8, 0.1], format: f1,
+    metricLabel: "Spacing factor", lowerIsBetter: false, bands: [3.0, 2.6, 1.9, 1.0, 0.4], format: f1,
   },
   {
     key: "fortress", label: "DEFENSIVE FORTRESS", emoji: "🏰",
     desc: "Stack defensive impact — the Star defense factor is your grade.",
-    metricLabel: "Star defense", lowerIsBetter: false, bands: [10.5, 9.5, 8.0, 6.5, 5.0], format: f1,
+    metricLabel: "Star defense", lowerIsBetter: false, bands: [9.5, 8.4, 7.0, 5.8, 4.8], format: f1,
   },
   {
     key: "discipline", label: "USAGE DISCIPLINE", emoji: "⚖️",
-    desc: "No ball-dominant pileups — keep total usage demand under 95.",
-    metricLabel: "Total usage demand", lowerIsBetter: true, bands: [90, 95, 100, 108, 118],
+    desc: "No ball-dominant pileups — keep total usage demand near 100, but someone still has to create.",
+    metricLabel: "Total usage demand", lowerIsBetter: true, bands: [100, 104, 109, 118, 128],
     format: (v) => `${Math.round(v)}%`,
   },
   {
     key: "rim", label: "RIM DOMINANCE", emoji: "🛡️",
     desc: "Anchor the paint — the defensive impact carried by your rim protectors is your grade.",
-    metricLabel: "Interior anchor impact", lowerIsBetter: false, bands: [6.0, 5.0, 4.0, 2.8, 1.5], format: f1,
+    metricLabel: "Interior anchor impact", lowerIsBetter: false, bands: [6.0, 5.0, 4.2, 3.1, 2.5], format: f1,
   },
   {
     key: "balanced", label: "BALANCED", emoji: "🎯",
     desc: "The pure game — highest net rating, no constraint.",
-    metricLabel: "Net rating", lowerIsBetter: false, bands: [14, 11.5, 9, 6, 2.5], format: f1,
+    metricLabel: "Net rating", lowerIsBetter: false, bands: [14.5, 12, 9, 5.5, 4], format: f1,
   },
 ];
 export const blueprintDef = (k: BlueprintKey): BlueprintDef => BLUEPRINTS.find((b) => b.key === k)!;
@@ -78,7 +80,9 @@ export const BP_MULT: Record<string, number> = { "A+": 1.3, A: 1.22, B: 1.15, C:
 // The committed metric, read straight off the engine result (no recomputation):
 // - spacing:    the "Spacing" factor value (0 when the engine suppressed a |spacing| <= 0.2 factor)
 // - fortress:   the "Star defense" factor value (defScale × summed defensive impact)
-// - discipline: exact total usage demand (sum of the per-player breakdown the engine already ships)
+// - discipline: exact total usage demand (sum of the per-player breakdown the engine already ships),
+//               folded at the engine's usageFloor (v4): going D below the floor costs the same as going
+//               D above it, so the objective never rewards a five the engine charges for no shot creation
 // - rim:        defScale-weighted defensive impact summed over rim protectors. Deliberate deviation
 //               from the spec's "best-big rimScore × defScale": that value saturates at its 0.74
 //               ceiling for ~75% of CASUAL drafts (probe, n=400), so it cannot grade dominance —
@@ -93,7 +97,11 @@ export function blueprintMetric(key: BlueprintKey, r: LineupResult): number {
   switch (key) {
     case "spacing": return factorValue(r, "Spacing");
     case "fortress": return factorValue(r, "Star defense");
-    case "discipline": return r.players.reduce((a, p) => a + p.usage, 0);
+    case "discipline": {
+      const u = r.players.reduce((a, p) => a + p.usage, 0);
+      const floor = DEFAULT_COEFFICIENTS.usageFloor;
+      return u < floor ? 2 * floor - u : u;
+    }
     case "rim": return r.players.reduce((a, p) => a + (p.rimProtector ? p.def : 0), 0) * DEF_SCALE;
     case "balanced": return r.netRtg;
   }

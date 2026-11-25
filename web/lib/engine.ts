@@ -2,10 +2,10 @@ import type { Player, Coefficients, DefModel, LineupResult, PlayerBreakdown, Slo
 
 // Defaults mirror the fitted coefficients.json so the engine is sane even if the file is missing.
 export const DEFAULT_COEFFICIENTS: Coefficients = {
-  ortgBase: 105.21,
+  ortgBase: 105.209,
   drtgBase: 107.969,
-  offScale: 0.8934,
-  defScale: 1.0055,
+  offScale: 0.8935,
+  defScale: 1.0054,
   pythK: 13.75,
   zCap: 3.3,
   eraStrength: { floor: 0.85, gamma: 0.7, startYear: 1950, fullYear: 1985 },
@@ -23,7 +23,7 @@ export const DEFAULT_COEFFICIENTS: Coefficients = {
   usageFloor: 95.5,
   overloadPow: 1,
   shortfallGamma: 0.13,
-  spacing: { perShooter: 1.293, diminish: 0.55, noneFloor: -3, baseline: 1.6 },
+  spacing: { perShooter: 1.294, diminish: 0.55, noneFloor: -3, baseline: 1.6 },
   rim: { blkLo: 0.4, blkSpan: 1.4, trbProxyLo: 0.8, trbProxySpan: 1.6 },
   coverage: { trbLo: -0.2, trbSpan: 1, stlLo: 0.5, stlSpan: 2.5, htLo: 78, htSpan: 3 },
   frontcourt: { h2Floor: 77, h2Span: 2, penalty: 12 },

@@ -314,6 +314,8 @@ Basketball-Reference's player index via `data/scrape_heights.py`):
 - **Starter translation**: positive impact from a card under 36 mpg is scaled by (mpg/36)^0.5, because the
   game always plays a card as a starter. Real-team accuracy can't reward this (it scores teams at their
   actual minutes), so it is reasoned. It costs 0.04 wins of Track B, and Track B still beats its baseline.
+- **Namesakes** (34 names cover more than one player) are separated by birth year (season minus age,
+  within a year) before any seasons are pooled.
 - Pre-1974 seasons substitute the engine's own fallback models for OBPM/DBPM, so every era shares one
   scale (no step at the 1974 or 1997 seams; acceptance-tested). DWS is not counted twice for them.
 
@@ -322,8 +324,9 @@ Basketball-Reference's player index via `data/scrape_heights.py`):
 - **Track A** (unchanged core, raw same-season BPM): 5.557 wins RMSE vs luck-free Pythagorean wins (was
   5.565), 6.066 vs actual. It can't see card changes, because same-season BPM is already team-adjusted.
 - **Track B** (new, the honest card test): every player on every real top five is rated from his OTHER
-  seasons only, the team map is refit per fold, year-grouped 10-fold CV. 8.095 vs 8.142 for a naive
-  adjacent-season baseline. The shipped team map (offScale 0.893, defScale 1.006) is fitted on these
+  seasons only, the team map is refit per fold, year-grouped 10-fold CV. 8.098 vs 8.145 for a naive
+  adjacent-season baseline. Caveat: the RAPM weights and the grid are chosen on the same folds the score
+  is reported on, so the margin is optimistic; nested CV is the follow-up. The shipped team map (offScale 0.893, defScale 1.006) is fitted on these
   ratings. Diminishing returns (ΣOBPM², ΣDBPM²) were tested and rejected (5.655, worse).
 
 ### Lineup terms: fitted bounds, reasoned sizes
@@ -387,11 +390,26 @@ teams (engine ratings, cold ratings, actual record; `web/public/data/famous_team
 panel, top-10 lists, and which parts are fitted vs reasoned. The "every coefficient is fit, not
 hand-tuned" claim was removed from `/how-it-works`, `/about` and the landing section.
 
+### Modes that read the factors
+
+- **Blueprint** bands were re-set by running one greedy chasing-draft probe on both engines and moving each
+  band to the percentile it held under v3 (spacing 3.0/2.6/1.9/1.0/0.4, fortress 9.5/8.4/7.0/5.8/4.8, rim
+  6.0/5.0/4.2/3.1/2.5, balanced 14.5/12/9/5.5/4). Usage Discipline is folded at the usage floor (demand
+  below 95.5 grades as far off as the same distance above it), bands 100/104/109/118/128, so it never
+  rewards a five the engine charges for no shot creation.
+- **Surgeon** ranks "rim anchor" by size coverage and height, "perimeter stopper" by perimeter coverage,
+  and the new "Not enough shot creation" factor deals an "on-ball creator" ranked by usage.
+- **Draft fit** chips read "Size" / "Perimeter" off the same coverage the engine charges for.
+- Deploy-day caveat: Factor Hunt decoys and Surgeon pools are deterministic per seed, so predictions or
+  pools dealt before the deploy can fail validation after it, for that UTC day only.
+
 ### Stored scores
 
-`web/scripts/rescore_v4.ts`, run once after the deploy's Daily rollover, rescores profile histories and
-live challenges from their stored lineups and archives the cumulative weekly and all-time boards under
-`:v3`, so they restart on the new engine.
+`web/scripts/rescore_v4.ts`, run once after the deploy, rescores profile histories (under the same
+`results:lock` + MULTI protocol as profile sync), live challenges (keeping their three keys' TTLs in step)
+and today's open Daily board from their stored lineups, and RENAMEs the cumulative weekly and all-time
+boards to `:v3` in one MULTI so they restart on the new engine. Every step is idempotent and retryable;
+closed daily boards and today's mode boards are left as they were.
 
 ### Pipeline order
 

@@ -23,9 +23,9 @@ export function factorBlurb(label: string, value = 0): string {
     ? "Enough outside shooting to bend the defense and open driving lanes."
     : "Cramped floor — not enough shooting, so the paint stays clogged.";
   if (l.startsWith("no interior size")) return "No real big — the lineup concedes the rim, the post, and the defensive glass to anyone with size.";
-  if (l.startsWith("thin interior size")) return "Undersized inside — limited rim protection and rebounding against bigger frontlines.";
+  if (l.startsWith("thin interior size")) return "Undersized inside — a smaller frontcourt than any real NBA starting five, so bigger lineups own the glass and the rim.";
   if (l.startsWith("no perimeter defender")) return "No on-ball stopper on the wing — opposing guards get downhill too easily.";
-  if (l.startsWith("thin perimeter defense")) return "Light on perimeter stoppers — partial credit for borderline defenders, but guards still get downhill.";
+  if (l.startsWith("thin perimeter defense")) return "No true perimeter player — bigs are chasing guards, so ball-handlers get downhill.";
   if (l.startsWith("era adjustment")) return "Pre-1985 stars are discounted for the thinner league they dominated — this is the estimated cost of translating them to the modern game.";
   return "Contribution to the team rating.";
 }

@@ -32,7 +32,9 @@ def rate_cards(players, seasons, coeff, heights=None):
         by_person[normalize_name(s["name"])].append(s)
     out = []
     for card in players:
-        o, d = rate(by_person[normalize_name(card["name"])], card["year"], p, coeff, card_mpg=card.get("mp") or 30.0)
+        birth = card["year"] - card["age"] if card.get("age") is not None else None
+        o, d = rate(by_person[normalize_name(card["name"])], card["year"], p, coeff, card_mpg=card.get("mp") or 30.0,
+                    card_birth=birth)
         c = dict(card)
         c["off_rating"] = round(o, 3)
         c["def_rating"] = round(d, 3)

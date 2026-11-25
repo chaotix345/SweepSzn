@@ -101,3 +101,10 @@ def test_pre1974_dws_is_not_double_counted():
     hi = season(1965, obpm=None, dbpm=None, z=z, tier="partial", dws=12.0)
     p = params(def_w={"dws48": 10.0})
     assert season_inputs(hi, p, COEFF)[1] == season_inputs(dict(hi, dws=1.0), p, COEFF)[1]
+
+
+def test_namesakes_are_separated_by_birth_year():
+    jr = season(2012, obpm=5.0, age=24)
+    sr = season(2011, obpm=-4.0, age=55)  # same name, different person (born 1956 vs 1988)
+    off, _ = rate([jr, sr], 2012, params(decay=1.0), COEFF, card_birth=1988)
+    assert math.isclose(off, 5.0)

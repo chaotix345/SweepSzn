@@ -1,7 +1,7 @@
 """Helpers for calibrate.py's v4 sections (Track B, usage bounds, OOD fire rates)."""
 import numpy as np
 
-from card_model import rate, box_off, box_def
+from card_model import rate, box_off, box_def, same_person
 
 PERIM_POS = {"PG", "SG", "SF", "G"}
 BIG_POS = {"C", "PF", "F"}
@@ -14,14 +14,14 @@ def year_folds(years, k=10, seed=7):
     return [list(map(int, f)) for f in np.array_split(perm, k)]
 
 
-def track_b_rating(seasons, year, mpg, p, coeff):
+def track_b_rating(seasons, year, mpg, p, coeff, birth=None):
     """Out-of-season card rating: the target season contributes nothing (no leakage)."""
-    return rate(seasons, year, p, coeff, exclude_year=year, card_mpg=mpg)
+    return rate(seasons, year, p, coeff, exclude_year=year, card_mpg=mpg, card_birth=birth)
 
 
-def baseline_rating(seasons, year, coeff, min_g=20):
+def baseline_rating(seasons, year, coeff, min_g=20, birth=None):
     """Naive out-of-season baseline: mean raw OBPM/DBPM of year-1 and year+1 seasons (any team)."""
-    adj = [x for x in seasons if abs(x["year"] - year) == 1 and (x.get("g") or 0) >= min_g]
+    adj = [x for x in seasons if abs(x["year"] - year) == 1 and (x.get("g") or 0) >= min_g and same_person(x, birth)]
     if not adj:
         return 0.0, 0.0
     return (sum(box_off(x, coeff) for x in adj) / len(adj), sum(box_def(x, coeff) for x in adj) / len(adj))

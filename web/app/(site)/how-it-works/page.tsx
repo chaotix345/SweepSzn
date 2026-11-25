@@ -156,16 +156,16 @@ export default function HowItWorks() {
         <h2 className="font-display text-2xl tracking-tight">Calibrated, not guessed</h2>
         <p className="mt-3 text-sm text-zinc-400">
           The core of the model is fit to real history: <strong className="text-zinc-200">{meta.team_seasons.toLocaleString()} NBA
-          team-seasons</strong> (1985–2025) across <strong className="text-zinc-200">24,687 player-seasons</strong>. Out-of-sample,
-          it misses real teams by <strong className="text-zinc-200">{meta.cv_wins_rmse.toFixed(1)} wins</strong> on average
-          against luck-adjusted win totals ({meta.cv_wins_rmse_vs_actual.toFixed(1)} against raw records, which carry about 2.4
-          wins of close-game luck). The penalties for lineups real teams never field are reasoned rather than fitted, and the
-          receipts below say exactly which is which.
+          team-seasons</strong> (1985–2025) across <strong className="text-zinc-200">24,687 player-seasons</strong>. Given each
+          player&apos;s actual season, the team model misses held-out real teams by <strong className="text-zinc-200">{meta.cv_wins_rmse.toFixed(1)} wins</strong> on
+          average against luck-adjusted win totals. The card ratings the game uses are tested harder: rated only from each
+          player&apos;s other seasons, they miss by {(meta.track_b_cv ?? 0).toFixed(1)}, which beats a naive baseline. The penalties for
+          lineups real teams never field are reasoned rather than fitted, and the receipts below say exactly which is which.
         </p>
         <div className="mt-5 grid grid-cols-2 gap-3 border-t border-zinc-800 pt-5 sm:grid-cols-4">
           <Stat n={meta.team_seasons.toLocaleString()} label="real NBA team-seasons" />
           <Stat n="24,687" label="player-seasons" />
-          <Stat n={meta.cv_wins_rmse.toFixed(1)} label="win RMSE, out-of-sample" />
+          <Stat n={meta.cv_wins_rmse.toFixed(1)} label="win RMSE, team model out-of-sample" />
           <Stat n={`k ≈ ${Math.round(meta.pythK ?? 14)}`} label="Pythagorean exponent" />
         </div>
       </section>

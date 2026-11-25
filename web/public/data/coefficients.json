@@ -1,8 +1,8 @@
 {
-  "ortgBase": 105.21,
+  "ortgBase": 105.209,
   "drtgBase": 107.969,
-  "offScale": 0.8934,
-  "defScale": 1.0055,
+  "offScale": 0.8935,
+  "defScale": 1.0054,
   "pythK": 13.75,
   "zCap": 3.3,
   "eraStrength": {
@@ -78,7 +78,7 @@
     }
   },
   "spacing": {
-    "perShooter": 1.293,
+    "perShooter": 1.294,
     "diminish": 0.55,
     "noneFloor": -3.0,
     "baseline": 1.6
@@ -118,7 +118,7 @@
     "zdef_r2_est": 0.153,
     "zusg_r2": 0.343,
     "gamma_fit": -0.0224,
-    "spacing_fit": 1.293,
+    "spacing_fit": 1.294,
     "box_team_terms_help_cv": false,
     "engine_version": 4,
     "track_a_scales": {
@@ -127,9 +127,9 @@
       "drtgBase": 107.5877,
       "defScale": 0.7447
     },
-    "track_b_cv": 8.095,
-    "track_b_cv_vs_actual": 8.267,
-    "track_b_baseline_cv": 8.142,
+    "track_b_cv": 8.098,
+    "track_b_cv_vs_actual": 8.269,
+    "track_b_baseline_cv": 8.145,
     "card_weights": "rapm",
     "rapm_used": true,
     "rapm_match_rate": 0.9901,

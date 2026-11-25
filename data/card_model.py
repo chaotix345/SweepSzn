@@ -100,14 +100,22 @@ def season_inputs(s, p: CardParams, coeff):
     return _lin(p.off_w, f), _lin(p.def_w, f)
 
 
-def rate(seasons, card_year, p: CardParams, coeff, exclude_year=None, card_mpg=None):
+def same_person(s, card_birth):
+    """Namesake guard: a season belongs to the card's player only if its birth year (season year minus
+    age) is within a year of the card's. Seasons or cards without an age are kept."""
+    if card_birth is None or s.get("age") is None:
+        return True
+    return abs((s["year"] - s["age"]) - card_birth) <= 1
+
+
+def rate(seasons, card_year, p: CardParams, coeff, exclude_year=None, card_mpg=None, card_birth=None):
     if card_mpg is None:
         same = [s for s in seasons if s["year"] == card_year and s.get("mp")]
         card_mpg = max((s["mp"] for s in same), default=30.0)
     num_o = num_d = den = 0.0
     for s in seasons:
         dy = abs(s["year"] - card_year)
-        if dy > p.max_gap or s["year"] == exclude_year:
+        if dy > p.max_gap or s["year"] == exclude_year or not same_person(s, card_birth):
             continue
         x = season_inputs(s, p, coeff)
         if x is None:

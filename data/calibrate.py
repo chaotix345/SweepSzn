@@ -374,12 +374,13 @@ def sums_for(rate_fn):
     for r in rows:
         o = d = 0.0
         for p in r["top5"]:
-            ro, rd = rate_fn(by_person[normalize_name(p["name"])], r["year"], p.get("mp") or 30.0)
+            birth = r["year"] - p["age"] if p.get("age") is not None else None
+            ro, rd = rate_fn(by_person[normalize_name(p["name"])], r["year"], p.get("mp") or 30.0, birth)
             o += ro; d += rd
         so.append(o); sd.append(d)
     return np.array(so), np.array(sd)
 
-bO, bD = sums_for(lambda ss, y, mpg: baseline_rating(ss, y, fb))
+bO, bD = sums_for(lambda ss, y, mpg, b: baseline_rating(ss, y, fb, birth=b))
 track_b_baseline = cv_sums(bO, bD, WP)
 print(f"\n=== Track B (out-of-season card ratings) ===\n  baseline (adjacent-season raw BPM mean): RMSE={track_b_baseline:.3f}")
 
@@ -394,7 +395,7 @@ for wname, (off_w, def_w) in weight_sets.items():
             for prior_k in (0, 50, 100, 200, 400):
                 P = CardParams(decay=decay, prior_k=float(prior_k), prior_off=prior_off, prior_def=prior_def,
                                off_w=off_w, def_w=def_w, max_gap=max_gap, minutes_alpha=alpha)
-                sO_, sD_ = sums_for(lambda ss, y, mpg: track_b_rating(ss, y, mpg, P, fb))
+                sO_, sD_ = sums_for(lambda ss, y, mpg, b: track_b_rating(ss, y, mpg, P, fb, b))
                 e = cv_sums(sO_, sD_, WP)
                 if best is None or e < best[0]:
                     best = (e, wname, P, sO_, sD_)
@@ -406,7 +407,7 @@ for wname, (off_w, def_w) in weight_sets.items():
 _e0, _w0, _P0 = best[0], best[1], best[2]
 for alpha in (0.5, 1.0, 1.5):
     P = CardParams(**{**_P0.__dict__, "minutes_alpha": alpha})
-    sO_, sD_ = sums_for(lambda ss, y, mpg: track_b_rating(ss, y, mpg, P, fb))
+    sO_, sD_ = sums_for(lambda ss, y, mpg, b: track_b_rating(ss, y, mpg, P, fb, b))
     e = cv_sums(sO_, sD_, WP)
     print(f"  starter translation alpha={alpha}: RMSE={e:.3f} (alpha=0: {_e0:.3f})")
     if e <= _e0 + 0.05 and e < track_b_baseline:
@@ -452,7 +453,7 @@ def spacing_pts(su_):
     eff = su_ if su_ <= 3 else 3 + (su_ - 3) * 0.55
     return max(-3.0, min(3.0, per_shooter_fit * (eff - 1.6)))
 from card_model import rate as card_rate
-sOC, sDC = sums_for(lambda ss, y, mpg: card_rate(ss, y, CARD, fb, card_mpg=mpg))   # the ratings the game uses
+sOC, sDC = sums_for(lambda ss, y, mpg, b: card_rate(ss, y, CARD, fb, card_mpg=mpg, card_birth=b))   # the ratings the game uses
 famous = []
 for (yr, ab, label) in FAMOUS:
     i = next((j for j, r in enumerate(rows) if r["year"] == yr and r["abbr"] == ab), None)
