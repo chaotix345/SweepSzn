@@ -4,7 +4,7 @@ import Link from "next/link";
 import { track } from "@vercel/analytics";
 import type { DraftStep, LeaderboardView, DailyBoardRow, AggBoardView, AggLeaderboardRow } from "@/lib/types";
 import type { RankCard } from "@/lib/rankShare";
-import { getUid, getName, setName as persistName, recordDailyDone, getStreak, msToNextUtcMidnight } from "@/lib/streak";
+import { getUid, getName, recordDailyDone, getStreak, msToNextUtcMidnight } from "@/lib/streak";
 import { useSession } from "@/lib/useSession";
 import RankShareButton from "@/components/RankShareButton";
 import PushPrompt from "@/components/PushPrompt";
@@ -46,10 +46,7 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
   useEffect(() => { onView?.(view); }, [view, onView]);
   const [agg, setAgg] = useState<Partial<Record<Tab, AggBoardView | null>>>({});
   const [enabled, setEnabled] = useState(true);
-  const [anonUid, setAnonUid] = useState("");
-  const [name, setNameState] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
   const [serverStreak, setServerStreak] = useState<number | null>(null);
@@ -58,16 +55,46 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
 
   const stale = !readOnly && date !== serverDate(); // this game's daily date rolled past UTC midnight
 
+  // D1: a finished Daily posts itself — once per mount, on the result screen only (never readOnly, never
+  // a game that straddled UTC midnight). The submit response IS the board view, so it replaces the plain
+  // read below rather than racing it. Keep-best + server replay make a repeat (a same-session refresh)
+  // harmless. The request is shared through a ref and never aborted: an effect re-run (StrictMode, a
+  // sign-in mid-flight) awaits the same submit, and only the first run that survives applies it.
+  const autoSubmit = useRef<{ res: Promise<{ status: number; body: { error?: string; you?: { rank: number } } | null }>; applied: boolean } | null>(null);
+
   useEffect(() => {
     const ctl = new AbortController();
     (async () => {
       const id = getUid();
-      setAnonUid(id);
-      setNameState(getName());
       // Show the EXISTING streak on mount, but don't credit today — that happens only on a successful
       // submit (so quitting, going offline, or a stale-date 400 doesn't inflate the streak/history).
       if (!readOnly) setStreak(getStreak());
       try {
+        if (!autoSubmit.current && !readOnly && trace.length === 5 && date === serverDate()) {
+          autoSubmit.current = {
+            applied: false,
+            res: fetch("/api/daily/submit", {
+              method: "POST", headers: { "content-type": "application/json" },
+              // current display name: the account handle when signed in, else this device's saved name;
+              // blank falls back server-side ("Anonymous" / the session name)
+              body: JSON.stringify({ date, uid: id, name: (user?.name || getName()).trim(), trace, usedHints }),
+            }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) })),
+          };
+        }
+        const pending = autoSubmit.current;
+        if (pending && !pending.applied) {
+          const { status, body: v } = await pending.res;
+          if (ctl.signal.aborted) return; // a newer run of this effect applies it
+          pending.applied = true;
+          if (status === 503) { setEnabled(false); return; }
+          if (status === 200) {
+            recordDailyDone(date); setStreak(getStreak()); // credit the streak only now that the score has landed
+            setView(v as LeaderboardView); setSubmitted(true); setReload((n) => n + 1);
+            track("daily_submit", { rank: v?.you?.rank ?? 0, authed: !!user, auto: true });
+            return;
+          }
+          setErr(v?.error === "stale date" ? "Today's daily just reset — start today's game to post a score." : "Couldn't post your score — your result is still saved on this device.");
+        }
         // POST: the anon uid rides the body, never a URL (DESIGN.md §12); signed in, the server keys
         // "you" off the session instead
         const r = await fetch("/api/daily/leaderboard", {
@@ -76,10 +103,16 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
         });
         if (r.status === 503) { setEnabled(false); return; }
         if (r.ok) { const v = await r.json(); setView(v); setSubmitted(!!v?.you); }
-      } catch (e) { if (e instanceof DOMException && e.name === "AbortError") return; /* offline — leave board hidden */ }
+      } catch {
+        if (ctl.signal.aborted) return;
+        // offline — leave the board hidden; a failed auto-submit says so once
+        if (autoSubmit.current && !autoSubmit.current.applied) { autoSubmit.current.applied = true; setErr("Couldn't post your score — check your connection."); }
+      }
     })();
     return () => ctl.abort();
-  }, [date, user?.uid, readOnly]);
+    // user (name/authed flag) is read only by the once-per-mount auto-submit; keying on uid is enough
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, user?.uid, readOnly, trace, usedHints]);
 
   // Weekly / all-time are sign-in gated: only fetch when signed in (the GET 401s otherwise). The
   // server keys "you" off the session, so no uid query is sent or trusted.
@@ -114,43 +147,25 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
     return () => clearInterval(t);
   }, []);
 
-  const submit = useCallback(async () => {
-    if (date !== serverDate()) { setErr("Today's daily just reset — this game was for an earlier day. Start today's daily to post a score."); return; }
-    setBusy(true); setErr(null);
-    try {
-      const r = await fetch("/api/daily/submit", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ date, uid: anonUid, name: name.trim(), trace, usedHints }),
-      });
-      if (r.status === 503) { setEnabled(false); return; }
-      const v = await r.json();
-      if (!r.ok) { setErr(v?.error === "stale date" ? "Today's daily just reset — start today's game to post a score." : v?.error ?? "submit failed"); return; }
-      if (name.trim()) persistName(name.trim());
-      recordDailyDone(date); setStreak(getStreak()); // credit the streak only now that the score has landed
-      setView(v); setSubmitted(true); setReload((n) => n + 1);
-      track("daily_submit", { rank: v?.you?.rank ?? 0, authed: !!user });
-    } catch { setErr("network error"); } finally { setBusy(false); }
-  }, [date, anonUid, name, trace, user, usedHints]);
-
   // Fired once per fresh sign-in (via signInNonce): auto-claim today's result under the Google identity
   // so it immediately credits the daily + weekly + all-time boards. The generic streak/result migration
   // already ran in SessionProvider.onSignedIn.
   const claimOnSignIn = useCallback(async () => {
     if (readOnly) { setReload((n) => n + 1); return; } // browsing the board: just highlight my rows, don't claim
     if (date !== serverDate()) { setErr("Today's daily just reset — start today's game to post a score."); return; } // don't claim a rolled-over game
-    setBusy(true); setErr(null);
+    setErr(null);
     try {
       const r = await fetch("/api/daily/submit", {
         method: "POST", headers: { "content-type": "application/json" },
         // prefer the account handle (synced across devices) over this device's localStorage name
-        body: JSON.stringify({ date, name: (user?.name || name).trim(), trace, usedHints }),
+        body: JSON.stringify({ date, name: (user?.name || getName()).trim(), trace, usedHints }),
       });
       if (r.status === 503) { setEnabled(false); return; }
       const v = await r.json();
       if (r.ok) { recordDailyDone(date); setStreak(getStreak()); setView(v); setSubmitted(true); setReload((n) => n + 1); track("daily_claim", { rank: v?.you?.rank ?? 0 }); }
       // surfaced (was a silent swallow): a network miss here lost the claim AND the streak credit with no feedback
-    } catch { setErr("network error"); } finally { setBusy(false); }
-  }, [date, name, trace, readOnly, usedHints, user]);
+    } catch { setErr("network error"); }
+  }, [date, trace, readOnly, usedHints, user]);
 
   // Run the claim exactly once per fresh sign-in (signInNonce bumps in SessionProvider). Comparing to a
   // ref of the last-seen nonce means a claimOnSignIn identity change (name/trace edits) can't re-fire it.
@@ -195,16 +210,6 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
             <div className="mt-3 rounded-lg border border-amber-600/40 bg-amber-500/10 p-3 text-xs text-amber-300">
               Today&apos;s daily just reset — this game was for an earlier day, so it can&apos;t be posted.{" "}
               <a href="/play?mode=daily" className="font-bold underline hover:text-amber-200">Play today&apos;s daily →</a>
-            </div>
-          )}
-          {tab === "daily" && !submitted && !readOnly && !stale && (
-            <div className="mt-3 flex gap-2">
-              <input value={name} onChange={(e) => setNameState(e.target.value)} maxLength={24} placeholder={user ? user.name : "Your name"}
-                className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-orange-500" />
-              <button onClick={submit} disabled={busy}
-                className="shrink-0 rounded-lg bg-orange-500 px-4 py-2 text-sm font-bold text-black hover:bg-orange-400 disabled:opacity-60">
-                {busy ? "…" : "🏆 Submit"}
-              </button>
             </div>
           )}
 
