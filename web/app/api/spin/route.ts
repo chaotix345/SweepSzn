@@ -30,6 +30,8 @@ export async function POST(req: Request) {
     excludeTeam: typeof body?.excludeTeam === "string" ? body.excludeTeam : null,
     excludeDecade: typeof body?.excludeDecade === "string" ? body.excludeDecade : null,
     salt: Number.isFinite(body?.salt) ? body.salt : 0,
+    // the game's pinned pool date; ignored for dated seeds, clamped to today (lib/poolDate.ts)
+    asOf: typeof body?.asOf === "string" ? body.asOf : undefined,
   };
   // Prime Draft seeds spin team-only over all-time peak-variant pools (era locked to PRIME)
   if (seed.startsWith("prime-")) return NextResponse.json(primeSpin(seed, round, opts, wantFit));

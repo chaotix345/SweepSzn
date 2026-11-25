@@ -7,6 +7,7 @@ import { decadeEraContext } from "./leagueContext";
 import { buildPrimePools, compareSzn, type PrimePools } from "./prime";
 import { playerTraits } from "./traits";
 import { mulberry32, strSeed } from "./rng";
+import { isoDay, releaseDate, resolveAsOf } from "./poolDate";
 
 const DATA_DIR = path.join(process.cwd(), "public", "data");
 
@@ -23,16 +24,33 @@ function readJson<T>(file: string, fallback: T): T {
   }
 }
 
-let _cache: {
-  players: Player[];
-  byId: Map<string, Player>;
+// One draftable pool per pool date (lib/poolDate.ts): the current-franchise, canonical-decade cards
+// present on that day, grouped for spins. Cards with no `since` are always present; a superseded card
+// (`until`) leaves the pool but stays in byId, so every id-based surface keeps resolving it.
+interface PoolIndex {
+  cards: Player[];
   draftIndex: Map<string, Player[]>; // "TEAM|DECADE" -> players
   draftKeys: string[];
   teamsByDecade: Map<string, string[]>;
   decadesByTeam: Map<string, string[]>;
+  prime?: PrimePools;
+  top: Map<string, Player[]>; // getDraftablePool memo
+}
+
+interface Window { since: string | null; until: string | null; unknown: boolean }
+
+let _cache: {
+  players: Player[];
+  byId: Map<string, Player>;
   personNames: Map<string, string>;
   coeff: Coefficients;
+  windows: Map<string, Window>;
+  bounds: string[]; // sorted distinct since/until dates: the pool only changes at these
+  pools: Map<number, PoolIndex>;
 } | null = null;
+
+// Reference pages (/teams, receipts) show the newest pool: every released card, no superseded ones.
+const LATEST_AS_OF = "9999-12-31";
 
 function load() {
   if (_cache) return _cache;
@@ -42,41 +60,76 @@ function load() {
 
   const byId = new Map<string, Player>();
   const personNames = new Map<string, string>();
-  const draftIndex = new Map<string, Player[]>();
-  const teamsByDecade = new Map<string, string[]>();
-  const decadesByTeam = new Map<string, string[]>();
-  const teamSeen = new Map<string, Set<string>>();
-  const decSeen = new Map<string, Set<string>>();
-
+  const windows = new Map<string, Window>();
+  const bounds = new Set<string>();
   for (const p of players) {
     p.person_id ??= p.name.toLowerCase().replace(/['.]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
     byId.set(p.id, p);
     personNames.set(p.person_id, p.name);
+    if (p.since || p.until) {
+      const since = p.since ? releaseDate(p.since) : null;
+      const until = p.until ? releaseDate(p.until) : null;
+      windows.set(p.id, { since, until, unknown: (!!p.since && !since) || (!!p.until && !until) });
+      if (since) bounds.add(since);
+      if (until) bounds.add(until);
+    }
+  }
+  _cache = { players, byId, personNames, coeff, windows, bounds: [...bounds].sort(), pools: new Map() };
+  return _cache;
+}
+
+function presentOn(w: Window | undefined, asOf: string): boolean {
+  if (!w) return true;
+  if (w.unknown) return false; // a release key with no date in POOL_RELEASES never goes live
+  return (!w.since || w.since <= asOf) && (!w.until || w.until > asOf);
+}
+
+// The draftable pool on `asOf` (YYYY-MM-DD). Built once per pool epoch (the span between two release
+// dates), so the cache holds a handful of indexes however many distinct dates are asked for.
+function poolIndex(asOf: string): PoolIndex {
+  const c = load();
+  const epoch = c.bounds.filter((b) => b <= asOf).length;
+  const hit = c.pools.get(epoch);
+  if (hit) return hit;
+  const cards: Player[] = [];
+  const draftIndex = new Map<string, Player[]>();
+  const teamSeen = new Map<string, Set<string>>();
+  const decSeen = new Map<string, Set<string>>();
+  for (const p of c.players) {
     // 82-0 parity: only current franchises, only the 1960s–2020s decades are draftable
-    if (!CURRENT.has(p.team) || !DECADES.has(p.decade)) continue;
+    if (!CURRENT.has(p.team) || !DECADES.has(p.decade) || !presentOn(c.windows.get(p.id), asOf)) continue;
+    cards.push(p);
     const key = `${p.team}|${p.decade}`;
     if (!draftIndex.has(key)) draftIndex.set(key, []);
     draftIndex.get(key)!.push(p);
-
     if (!teamSeen.has(p.decade)) teamSeen.set(p.decade, new Set());
     teamSeen.get(p.decade)!.add(p.team);
     if (!decSeen.has(p.team)) decSeen.set(p.team, new Set());
     decSeen.get(p.team)!.add(p.decade);
   }
-  for (const [dec, set] of teamSeen) teamsByDecade.set(dec, [...set]);
-  for (const [team, set] of decSeen) decadesByTeam.set(team, [...set]);
-  const draftKeys = [...draftIndex.keys()];
-
-  _cache = { players, byId, draftIndex, draftKeys, teamsByDecade, decadesByTeam, personNames, coeff };
-  return _cache;
+  const idx: PoolIndex = {
+    cards, draftIndex, draftKeys: [...draftIndex.keys()],
+    teamsByDecade: new Map([...teamSeen].map(([d, set]) => [d, [...set]])),
+    decadesByTeam: new Map([...decSeen].map(([t, set]) => [t, [...set]])),
+    top: new Map(),
+  };
+  c.pools.set(epoch, idx);
+  return idx;
 }
 
 export function getCoefficients(): Coefficients {
   return load().coeff;
 }
 
+// Every card ever released, superseded ones included (id lookups, Dex, stored results).
 export function getAllPlayers(): Player[] {
   return load().players;
+}
+
+// The newest card for every bucket: superseded cards dropped, every release included.
+export function getLatestPlayers(): Player[] {
+  const { players, windows } = load();
+  return players.filter((p) => presentOn(windows.get(p.id), LATEST_AS_OF));
 }
 
 export function getPlayersByIds(ids: string[]): Player[] {
@@ -99,7 +152,8 @@ export function getPersonName(personId: string): string | undefined {
 // What-If Lab's swap options. Same descriptive candidate shape as a spin; it carries NO fit/engine
 // signal and is never ordered by outcome (the Lab re-scores only after the user picks). DESIGN.md §12.
 export function getSwapOptions(team: string, decade: string, slot: Slot): DraftCandidate[] {
-  const { draftIndex, coeff } = load();
+  const { coeff } = load();
+  const { draftIndex } = poolIndex(isoDay());
   const pool = (draftIndex.get(`${team}|${decade}`) ?? [])
     .filter((p) => ((p.eligible && p.eligible.length) ? p.eligible : [p.pos as Slot]).includes(slot))
     .sort(compareSzn);
@@ -109,7 +163,7 @@ export function getSwapOptions(team: string, decade: string, slot: Slot): DraftC
 // Every draftable card for one franchise across all its draftable decades (the union of its
 // TEAM|DECADE draft-index pools) — the /teams franchise pages' universe. Unsorted; callers order it.
 export function getFranchisePool(team: string): Player[] {
-  const { draftIndex, decadesByTeam } = load();
+  const { draftIndex, decadesByTeam } = poolIndex(LATEST_AS_OF);
   return (decadesByTeam.get(team) ?? []).flatMap((d) => draftIndex.get(`${team}|${d}`) ?? []);
 }
 
@@ -118,17 +172,14 @@ export function getFranchisePool(team: string): Player[] {
 // so it leaks nothing. Prime draws from the all-time peak-variant pools; everything else from the
 // regular current-franchise / canonical-decade universe. Pure over immutable per-process data, so
 // memoized — it was a ~5.3k filter+sort on every /api/project call. Callers must not mutate it.
-const _pools = new Map<string, Player[]>();
-export function getDraftablePool(prime: boolean, topK = 250): Player[] {
+export function getDraftablePool(prime: boolean, topK = 250, asOf: string = isoDay()): Player[] {
+  const idx = poolIndex(asOf);
   const key = `${prime}|${topK}`;
-  const hit = _pools.get(key);
+  const hit = idx.top.get(key);
   if (hit) return hit;
-  const { players } = load();
-  const pool = prime
-    ? [...loadPrime().byTeam.values()].flat()
-    : players.filter((p) => CURRENT.has(p.team) && DECADES.has(p.decade));
+  const pool = prime ? [...primeOf(idx).byTeam.values()].flat() : idx.cards;
   const out = [...pool].sort((a, b) => (b.peak_score ?? 0) - (a.peak_score ?? 0)).slice(0, topK);
-  _pools.set(key, out);
+  idx.top.set(key, out);
   return out;
 }
 
@@ -206,6 +257,7 @@ export interface SpinOptions {
   excludeTeam?: string | null;   // don't land on this team again (on team re-spin)
   excludeDecade?: string | null; // don't land on this decade again (on era re-spin)
   salt?: number;             // bump to vary a deterministic (Daily) re-spin
+  asOf?: string;             // pinned pool date for an undated seed (lib/poolDate.ts resolveAsOf)
 }
 
 export interface SpinResult {
@@ -220,7 +272,8 @@ export interface SpinResult {
 // Shared (team, decade, available pool) selection — the deterministic core of a spin.
 // Both spin() (adds draft-fit) and spinPool() (ids only, for leaderboard verification) use it.
 function selectSpin(seed: string, round: number, opts: SpinOptions): { team: string; decade: string; pool: Player[] } {
-  const { byId, draftIndex, draftKeys, teamsByDecade, decadesByTeam } = load();
+  const { byId } = load();
+  const { draftIndex, draftKeys, teamsByDecade, decadesByTeam } = poolIndex(resolveAsOf(seed, opts.asOf));
   const excludeIds = new Set(opts.exclude ?? []);
   const excludePeople = new Set([...excludeIds].map((id) => byId.get(id)?.person_id ?? id));
   const rng = mulberry32(strSeed(seed) ^ (round * 2654435761) ^ ((opts.salt ?? 0) * 40503));
@@ -292,18 +345,15 @@ export function spinPool(seed: string, round: number, opts: SpinOptions = {}): {
 // The per-person_id rule inverts here: instead of EXCLUDING a drafted player's other era
 // variants, the pool is pre-collapsed to each person's single best variant (lib/prime.ts).
 
-let _prime: PrimePools | null = null;
-function loadPrime(): PrimePools {
-  if (_prime) return _prime;
-  const { players } = load();
-  // mirror the draft-index filter: current franchises, canonical decades only
-  _prime = buildPrimePools(players.filter((p) => CURRENT.has(p.team) && DECADES.has(p.decade)));
-  return _prime;
+// Prime pools for one pool date: the same current-franchise / canonical-decade cards as the draft index.
+function primeOf(idx: PoolIndex): PrimePools {
+  idx.prime ??= buildPrimePools(idx.cards);
+  return idx.prime;
 }
 
 function selectPrimeSpin(seed: string, round: number, opts: SpinOptions): { team: string; pool: Player[] } {
   const { byId } = load();
-  const { teams, byTeam } = loadPrime();
+  const { teams, byTeam } = primeOf(poolIndex(resolveAsOf(seed, opts.asOf)));
   const excludeIds = new Set(opts.exclude ?? []);
   const excludePeople = new Set([...excludeIds].map((id) => byId.get(id)?.person_id ?? id));
   const rng = mulberry32(strSeed(seed) ^ (round * 2654435761) ^ ((opts.salt ?? 0) * 40503));

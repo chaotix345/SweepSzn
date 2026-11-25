@@ -1,7 +1,8 @@
 import { NextResponse, after } from "next/server";
 import { getPlayersByIds } from "@/lib/data";
 import { verifyTrace } from "@/lib/dailyVerify";
-import { isChallengeEnabled, submitChallenge, getChallengeSeed } from "@/lib/challengeStore";
+import { isChallengeEnabled, submitChallenge, getChallengeDraft } from "@/lib/challengeStore";
+import { resolveAsOf } from "@/lib/poolDate";
 import { compareResults, challengeSeed } from "@/lib/challenge";
 import { decodeLineup, encodeLineup } from "@/lib/share";
 import { cleanName } from "@/lib/clean";
@@ -64,15 +65,17 @@ export async function POST(req: Request) {
   // responder is verified against the EXACT draft the creator faced, never a client-supplied one).
   // If it doesn't exist yet, the first submitter may convert a finished game by supplying its seed
   // (e.g. "daily-2026-6-9" or "classic-123"); otherwise it's a fresh "Challenge a Friend" (h2h-<id>).
-  const stored = await getChallengeSeed(id);
-  const seed = stored ?? (isGameSeed(body.seed) ? body.seed : challengeSeed(id));
-  const v = verifyTrace(seed, trace, engineDeps());
+  // The pool date follows the same rule: stored for an existing challenge, else the creator's game day.
+  const stored = await getChallengeDraft(id);
+  const seed = stored?.seed ?? (isGameSeed(body.seed) ? body.seed : challengeSeed(id));
+  const asOf = stored?.asOf ?? resolveAsOf(seed, body.asOf);
+  const v = verifyTrace(seed, trace, engineDeps(), asOf);
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
 
   const row = { uid, name, wins: v.result.wins, losses: v.result.losses, net: v.result.netRtg, lineup: v.lineup };
   // `hinted` is recorded only when this submit creates the challenge (so the bar discloses whether
   // the creator drafted with hints); it's ignored by submitChallenge for an already-claimed challenge.
-  const out = await submitChallenge(id, row, v.result, v.result.grade, { seed, hinted: !stored && body.usedHints === true });
+  const out = await submitChallenge(id, row, v.result, v.result.grade, { seed, hinted: !stored && body.usedHints === true, asOf });
   if (!out) return NextResponse.json({ error: "challenges not configured" }, { status: 503 });
   after(() => bump(redis, "submit", { uid, mode: "challenge" }));
 

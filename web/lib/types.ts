@@ -70,6 +70,10 @@ export interface Player {
   defense_estimated?: boolean;
   peak_score?: number;
   fame?: number; // accolade-based recognizability score (data/build_fame.py); drives the "Top" sort
+  // pool-by-date release keys (lib/poolDate.ts, data/add_season.py): draftable from `since`'s date,
+  // no longer draftable from `until`'s date (still resolvable by id)
+  since?: string;
+  until?: string;
 }
 
 // Roster-aware "reveal before confirm" signal: how much this candidate would help the
@@ -128,14 +132,15 @@ export interface AggBoardView { scope: "week" | "alltime"; key: string; total: n
 // `seed` is the draft seed responders replay. For a challenge built fresh in "Challenge a Friend"
 // mode it is "h2h-<id>"; for one converted from a finished Daily/Classic/HoopIQ game it is that
 // game's original seed, so the friend drafts the SAME teams and eras and tries to beat THIS five.
-export interface ChallengeInfo { uid: string; name: string; wins: number; losses: number; net: number; grade: string; lineup: string; seed?: string; hinted?: boolean }
+// asOf: the pool date the creator drafted on (YYYY-MM-DD); records from before pool dating have none
+export interface ChallengeInfo { uid: string; name: string; wins: number; losses: number; net: number; grade: string; lineup: string; seed?: string; hinted?: boolean; asOf?: string }
 export interface ChallengeMiniPlayer { id: string; name: string; team: string; decade: string; slot: Slot }
 export interface ChallengeVerdict { outcome: "win" | "loss" | "tie"; winsMargin: number; netMargin: number }
 // no uid: the challenge board never exposes others' uids (so they can't be harvested + impersonated)
 // and never exposes anyone's five. "you" is identified server-side and returned as board.you.
 export interface ChallengeBoardRow { rank: number; name: string; wins: number; losses: number; net: number }
 export interface ChallengeBoard { total: number; top: ChallengeBoardRow[]; you?: ChallengeBoardRow }
-export interface ChallengePublic { id: string; creatorName: string; wins: number; losses: number; net: number; grade: string; responders: number; seed: string; hinted: boolean }
+export interface ChallengePublic { id: string; creatorName: string; wins: number; losses: number; net: number; grade: string; responders: number; seed: string; hinted: boolean; asOf: string }
 export type ChallengeSubmitResponse =
   | { role: "creator"; id: string; board: ChallengeBoard }
   | {

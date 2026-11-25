@@ -8,7 +8,7 @@ import { SLOTS, eligibleOf } from "./teams";
 
 export interface SpinPoolOpts {
   exclude?: string[]; lockedTeam?: string | null; lockedDecade?: string | null;
-  excludeTeam?: string | null; excludeDecade?: string | null; salt?: number;
+  excludeTeam?: string | null; excludeDecade?: string | null; salt?: number; asOf?: string;
 }
 export interface VerifyDeps {
   spinPool: (seed: string, round: number, opts: SpinPoolOpts) => { team: string; decade: string; ids: string[] };
@@ -20,7 +20,9 @@ export type VerifyResult =
   | { ok: true; players: Player[]; result: LineupResult; lineup: string }
   | { ok: false; error: string };
 
-export function verifyTrace(seed: string, trace: DraftStep[], deps: VerifyDeps): VerifyResult {
+// `asOf` pins the pool date for an undated seed (a challenge's stored creation day); dated seeds
+// (daily-/fh-/bp-/surgeon-<day>) always replay against their own day's pool (lib/poolDate.ts).
+export function verifyTrace(seed: string, trace: DraftStep[], deps: VerifyDeps, asOf?: string): VerifyResult {
   if (!Array.isArray(trace) || trace.length !== 5) return { ok: false, error: "trace must have 5 picks" };
   const exclude: string[] = [];
   const usedSlots = new Set<string>();
@@ -32,11 +34,11 @@ export function verifyTrace(seed: string, trace: DraftStep[], deps: VerifyDeps):
     if (!step || typeof step.pickedId !== "string" || !(SLOTS as readonly string[]).includes(step.slot) || !Array.isArray(step.respins))
       return { ok: false, error: `bad step ${r}` };
     if (step.respins.length > 2) return { ok: false, error: `too many re-spins ${r}` }; // bound work (≤1 team + ≤1 era total)
-    let cur = deps.spinPool(seed, r, { exclude });
+    let cur = deps.spinPool(seed, r, { exclude, asOf });
     for (const rs of step.respins) {
       const salt = ++totalRespins; // global sequential salt — matches the client's saltRef
-      if (rs === "team") { teamRespins++; cur = deps.spinPool(seed, r, { exclude, lockedDecade: cur.decade, excludeTeam: cur.team, salt }); }
-      else if (rs === "era") { eraRespins++; cur = deps.spinPool(seed, r, { exclude, lockedTeam: cur.team, excludeDecade: cur.decade, salt }); }
+      if (rs === "team") { teamRespins++; cur = deps.spinPool(seed, r, { exclude, lockedDecade: cur.decade, excludeTeam: cur.team, salt, asOf }); }
+      else if (rs === "era") { eraRespins++; cur = deps.spinPool(seed, r, { exclude, lockedTeam: cur.team, excludeDecade: cur.decade, salt, asOf }); }
       else return { ok: false, error: `bad respin ${r}` };
       if (teamRespins > 1 || eraRespins > 1) return { ok: false, error: "too many re-spins" };
     }

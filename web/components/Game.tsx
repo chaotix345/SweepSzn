@@ -38,6 +38,7 @@ import { pickemSeedOk, getPickemSkip, getLocalVote } from "@/lib/pickem";
 import { bpCode } from "@/lib/blueprint";
 import { applySwapToTrace } from "@/lib/trace";
 import { projectionAllowed, type RosterProjection } from "@/lib/projection";
+import { isoDay } from "@/lib/poolDate";
 
 const rand = () => Math.floor(Math.random() * 1e9);
 
@@ -45,6 +46,7 @@ export default function Game() {
   const { user } = useSessionContext();
   const [mode, setMode] = useState<Mode | null>(null);
   const [seed, setSeed] = useState("");
+  const [asOf, setAsOf] = useState(""); // pool date pinned at game start (a challenge's stored date for responders)
   const [roster, setRoster] = useState<Roster>(EMPTY);
   const [current, setCurrent] = useState<Spin | null>(null);
   const [crowdNote, setCrowdNote] = useState<string | null>(null); // post-lock "how others played this slot" reveal
@@ -94,7 +96,7 @@ export default function Game() {
   const projAllowed = mode !== "challenge" && projectionAllowed(seed); // a converted challenge carries its classic-<n> seed — responders stay blind (§12)
 
   const { runSpin, spinning, reel, setReel, lockedReel, setLockedReel, stopReel } = useReelSpin({
-    seed, mode, filled, drafted, genRef, saltRef, roundRespinsRef, setError, setCurrent, setSelPlayer, setSelSlot, setCrowdNote, setSkips,
+    seed, asOf, mode, filled, drafted, genRef, saltRef, roundRespinsRef, setError, setCurrent, setSelPlayer, setSelSlot, setCrowdNote, setSkips,
   });
 
   // Live projection (Classic / Prime / Blueprint only): after each placement, fetch the floor↔ceiling
@@ -176,7 +178,7 @@ export default function Game() {
   // start() placed after all per-mode hook calls so it can close over their stable reset functions
   // without triggering react-hooks/immutability (resetFh, resetPickem, resetBp, resetSg all have []
   // deps — but must be declared before start references them).
-  const start = useCallback((m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string }) => {
+  const start = useCallback((m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string; asOf?: string }) => {
     track("mode_start", { mode: m });
     ev("play", { uid: getUid(), mode: m });
     // once-ever-per-device first-play signal (distinct from replays), attributed to the utm channel.
@@ -197,7 +199,7 @@ export default function Game() {
       // daily/factorhunt/blueprint/surgeon share one deterministic seed per UTC day; free-play modes roll fresh
       s = m === "daily" ? `daily-${todaySeed()}` : m === "factorhunt" ? `fh-${todaySeed()}` : m === "blueprint" ? `bp-${todaySeed()}` : m === "surgeon" ? `surgeon-${todaySeed()}` : `${m}-${rand()}`;
     }
-    setChallengeId(cid); setChallengeRole(crole); setSeed(s);
+    setChallengeId(cid); setChallengeRole(crole); setSeed(s); setAsOf(challenge?.asOf ?? isoDay());
     setRoster(EMPTY); setCurrent(null); setResult(null); setError(null); setLoading(false); setProjection(null);
     setSelPlayer(null); setSelSlot(null); setSkips({ team: false, era: false });
     setReel(initialReel(m)); setLockedReel(null); saltRef.current = 0;
@@ -214,7 +216,7 @@ export default function Game() {
     abandonInFlight(); resetFh(); resetSg(); stripRestoreParams(); setMode(null);
   }, [abandonInFlight, resetFh, resetSg]);
 
-  useRestoreFromUrl(start, setOwnerId, setRestoring, setMode, setSeed, setResult, setFhPrediction, setBlueprint, setSgResult);
+  useRestoreFromUrl(start, setOwnerId, setRestoring, setMode, setSeed, setAsOf, setResult, setFhPrediction, setBlueprint, setSgResult);
 
   // Mode fork at "five locked": Factor Hunt detours through the prediction step; Surgeon detours
   // through the diagnosis/swap step; everyone else simulates immediately (pre-FH behavior).
@@ -323,7 +325,7 @@ export default function Game() {
     <SurgeonResultView mode={mode} seed={seed} sgResult={sgResult} onRestart={() => start("surgeon")} onModeSelect={goToModes} />
   );
   if (result) return (
-    <GameResultView mode={mode} seed={seed} result={result} roundNum={roundNum} onRestart={() => start(mode)} onModeSelect={goToModes}
+    <GameResultView mode={mode} seed={seed} asOf={asOf} result={result} roundNum={roundNum} onRestart={() => start(mode)} onModeSelect={goToModes}
       onCreateChallenge={() => start("challenge")} pickem={{ vote: pickemVote, crowd: pickemCrowd, subject: pickemSubject }}
       fhPrediction={fhPrediction} blueprint={blueprint} challengeId={challengeId} challengeRole={challengeRole} />
   );
