@@ -5,7 +5,7 @@ import { rateLimit, ipOf } from "@/lib/redis";
 import { PRIVATE_NO_STORE } from "@/lib/boardCache";
 import { getSession } from "@/lib/authServer";
 import { isAnonUid } from "@/lib/auth";
-import { dayUTC } from "@/lib/day";
+import { dayUTC, FIRST_DAILY_MS as FIRST_DAILY } from "@/lib/day";
 
 export const runtime = "nodejs";
 
@@ -14,9 +14,6 @@ export const runtime = "nodejs";
 //   verified Daily submission today (session first, else the anon uid in the body — never a URL).
 // - past days (the Daily has rolled over at 00:00 UTC): the full five, to anyone.
 // - future days: nothing, ever.
-
-// First Daily seed the app ever served; earlier dates have no Daily.
-const FIRST_DAILY = Date.UTC(2026, 5, 6);
 
 // "YYYY-M-D" (the lb:/seed key spelling), zero-padding tolerated but normalized: the seed string is
 // hashed, so "2026-06-09" must not silently become a different Daily than "2026-6-9".

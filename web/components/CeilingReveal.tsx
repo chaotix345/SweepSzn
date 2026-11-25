@@ -18,7 +18,8 @@ const shortDay = (date: string) => {
 // A rolled-over Daily's revealed best five ("best five from that day's spins", W2), plus how the
 // viewer did against it when they played that day. The server only reveals past days (DESIGN.md §12);
 // for today it answers 403 and this renders nothing. W3's archive and "see yesterday's perfect five"
-// mount it. `yourWins` covers a result the board no longer holds (boards expire after ~31 days).
+// mount it. `yourWins` is the result to compare when the caller has one (an archive replay, or a day the
+// board no longer holds — boards expire after ~31 days); otherwise the viewer's board row for that day.
 export default function CeilingReveal({ date, yourWins }: { date: string; yourWins?: number }) {
   const [state, setState] = useState<{ date: string; c: Revealed; you?: number } | null>(null);
   useEffect(() => {
@@ -38,7 +39,7 @@ export default function CeilingReveal({ date, yourWins }: { date: string; yourWi
 
   if (!state || state.date !== date) return null;
   const { c } = state;
-  const mine = state.you ?? yourWins;
+  const mine = yourWins ?? state.you;
   const gap = mine == null ? null : c.wins - mine;
   return (
     <section aria-label={`Perfect five for ${shortDay(date)}`} className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">

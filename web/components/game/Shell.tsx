@@ -9,12 +9,13 @@ const BADGE: Record<ModeAccent, string> = {
   rose: "bg-rose-500/15 text-rose-300",
 };
 
-export function Shell({ children, roundNum, mode, onRestart, showRestart, onModeSelect }: {
+export function Shell({ children, roundNum, mode, onRestart, showRestart, onModeSelect, label }: {
   children: React.ReactNode; roundNum: number; mode: Mode; onRestart: () => void; showRestart?: boolean;
   // Quiet escape hatch back to the picker: a deep-linked first-timer (/play?mode=daily) skips
   // ModeSelect, so this keeps mode discovery + the returning-user history one tap away. Zinc text,
   // not orange (DESIGN.md: orange is the play CTA only).
   onModeSelect?: () => void;
+  label?: string; // badge override (W3 archive: "Archive · Nov 19")
 }) {
   return (
     <div className="animate-rise-in mx-auto max-w-4xl px-4 py-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
@@ -23,7 +24,7 @@ export function Shell({ children, roundNum, mode, onRestart, showRestart, onMode
           {onModeSelect && (
             <button onClick={onModeSelect} className="text-xs text-zinc-400 transition hover:text-zinc-200">← Modes</button>
           )}
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${BADGE[MODE_ACCENT[mode]]}`}>{MODE_LABEL[mode]}</span>
+          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${BADGE[MODE_ACCENT[mode]]}`}>{label ?? MODE_LABEL[mode]}</span>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1" role="img" aria-label={`Round ${Math.min(roundNum, 5)} of 5`}>
               {[1, 2, 3, 4, 5].map((i) => (

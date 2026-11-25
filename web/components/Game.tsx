@@ -14,7 +14,7 @@ import { useSurgeon } from "@/components/game/useSurgeon";
 import { SurgeonDialog } from "@/components/game/SurgeonDialog";
 import { DraftView } from "@/components/game/DraftView";
 import { DuelGame } from "@/components/game/DuelGame";
-import { GameResultView, SurgeonResultView } from "@/components/game/GameResultView";
+import { GameResultView, SurgeonResultView, ArchiveResultView } from "@/components/game/GameResultView";
 import { useReelSpin, initialReel } from "@/components/game/useReelSpin";
 import { useRestoreFromUrl } from "@/components/game/useRestoreFromUrl";
 import { useHoldYourPlace } from "@/components/game/useHoldYourPlace";
@@ -39,7 +39,9 @@ import { pickemSeedOk, getPickemSkip, getLocalVote } from "@/lib/pickem";
 import { bpCode } from "@/lib/blueprint";
 import { applySwapToTrace } from "@/lib/trace";
 import { projectionAllowed, type RosterProjection } from "@/lib/projection";
-import { isoDay } from "@/lib/poolDate";
+import { isoDay, seedDay } from "@/lib/poolDate";
+import { saveArchiveRun } from "@/lib/archiveHistory";
+import { shortDay } from "@/lib/day";
 
 const rand = () => Math.floor(Math.random() * 1e9);
 
@@ -48,6 +50,9 @@ export default function Game() {
   const [mode, setMode] = useState<Mode | null>(null);
   const [seed, setSeed] = useState("");
   const [asOf, setAsOf] = useState(""); // pool date pinned at game start (a challenge's stored date for responders)
+  // W3: a past Daily replayed from the archive ("2026-11-19"), unranked. The mode stays "daily" (same
+  // blind draft, same §12 spin gating) on that day's seed, so the spins and pool are that day's (D4).
+  const [archiveDate, setArchiveDate] = useState<string | null>(null);
   const [roster, setRoster] = useState<Roster>(EMPTY);
   const [current, setCurrent] = useState<Spin | null>(null);
   const [crowdNote, setCrowdNote] = useState<string | null>(null); // post-lock "how others played this slot" reveal
@@ -73,7 +78,7 @@ export default function Game() {
   const roundRespinsRef = useRef<("team" | "era")[]>([]); // re-spins used in the current round
   const abortSimRef = useRef<AbortController | null>(null);             // cancels an in-flight simulate on restart
   // Pick'Em: one-tap crowd vote locked after the first reels settle, settled on the result card.
-  const { pickemVote, pickemDismissed, pickemCrowd, pickemSubject, pickemRef, votePickem, skipPickem, reset: resetPickem } = usePickem(seed, current, mode, result);
+  const { pickemVote, pickemDismissed, pickemCrowd, pickemSubject, pickemRef, votePickem, skipPickem, reset: resetPickem } = usePickem(seed, current, mode, archiveDate ? null : result); // an archive replay neither votes nor reads the crowd
   // Factor Hunt: prediction step between "five locked" and the reveal (hook called after simulate, see below).
   // Blueprint: the objective committed in the pre-spin modal (locks at confirm — gameplay psychology;
   // the server grades whatever the submit declares, see /api/blueprint/submit).
@@ -113,7 +118,7 @@ export default function Game() {
     return () => ctrl.abort();
   }, [seed, asOf, filled, projAllowed, rosterKey]);
 
-  useHoldYourPlace(mode, seed, result, blueprint, sgResult);
+  useHoldYourPlace(mode, seed, result, blueprint, sgResult, archiveDate);
 
   const spin = useCallback(() => runSpin({}), [runSpin]);
 
@@ -151,8 +156,11 @@ export default function Game() {
       setResult(full);
       // Persist so the result survives a refresh (full object, incl. trace) and shows under "Your
       // results". A challenge entry is upgraded with its challengeId later, when the link is created.
-      writeLastResult({ mode, seed, asOf, result: full, fh: fhPred, bp: blueprint });
-      if (mode) {
+      writeLastResult({ mode, seed, asOf, result: full, fh: fhPred, bp: blueprint, archive: archiveDate ?? undefined });
+      if (archiveDate) {
+        // unranked: kept out of the ranked history, so no stats, Dex, account sync or "played today"
+        saveArchiveRun(archiveDate, { encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints), wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
+      } else if (mode) {
         const saved = saveResult({ encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints, mode === "prime", mode === "blueprint" && blueprint ? bpCode(blueprint) : null), mode, wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
         if (user) void pushResult(saved); // signed in: mirror this game to the account history (cross-device)
       }
@@ -163,7 +171,7 @@ export default function Game() {
     } finally {
       if (!ctrl.signal.aborted) setLoading(false);
     }
-  }, [mode, seed, asOf, blueprint, user]);
+  }, [mode, seed, asOf, blueprint, user, archiveDate]);
 
   // Factor Hunt: hook placed after simulate so beginFhPrediction can close over the stable callback.
   const { fhStep, fhPick, setFhPick, fhPrediction, setFhPrediction, fhRef, beginFhPrediction, lockFh, fhFetching, reset: resetFh } = useFactorHunt(seed, simulate, setError);
@@ -179,9 +187,10 @@ export default function Game() {
   // start() placed after all per-mode hook calls so it can close over their stable reset functions
   // without triggering react-hooks/immutability (resetFh, resetPickem, resetBp, resetSg all have []
   // deps — but must be declared before start references them).
-  const start = useCallback((m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string; asOf?: string }) => {
-    track("mode_start", { mode: m });
-    ev("play", { uid: getUid(), mode: m });
+  const start = useCallback((m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string; asOf?: string }, archive?: string) => {
+    const arch = m === "daily" && archive ? archive : null;
+    track("mode_start", { mode: arch ? "archive" : m });
+    ev("play", { uid: getUid(), mode: arch ? undefined : m }); // an archive replay stays out of the Daily mode split
     // once-ever-per-device first-play signal (distinct from replays), attributed to the utm channel.
     // Read the URL FIRST (a cold /play?mode=…&utm_source=… deep-link fires this before UtmCapture's
     // layout effect has persisted the source), falling back to the stored first-touch source — same
@@ -198,9 +207,9 @@ export default function Game() {
       s = challenge?.seed ?? challengeSeed(cid); // a converted/legacy challenge replays its own carried seed
     } else {
       // daily/factorhunt/blueprint/surgeon share one deterministic seed per UTC day; free-play modes roll fresh
-      s = m === "daily" ? `daily-${todaySeed()}` : m === "factorhunt" ? `fh-${todaySeed()}` : m === "blueprint" ? `bp-${todaySeed()}` : m === "surgeon" ? `surgeon-${todaySeed()}` : `${m}-${rand()}`;
+      s = m === "daily" ? `daily-${arch ?? todaySeed()}` : m === "factorhunt" ? `fh-${todaySeed()}` : m === "blueprint" ? `bp-${todaySeed()}` : m === "surgeon" ? `surgeon-${todaySeed()}` : `${m}-${rand()}`;
     }
-    setChallengeId(cid); setChallengeRole(crole); setSeed(s); setAsOf(challenge?.asOf ?? isoDay());
+    setChallengeId(cid); setChallengeRole(crole); setSeed(s); setArchiveDate(arch); setAsOf(arch ? seedDay(s) ?? isoDay() : challenge?.asOf ?? isoDay());
     setRoster(EMPTY); setCurrent(null); setResult(null); setError(null); setLoading(false); setProjection(null);
     setSelPlayer(null); setSelSlot(null); setSkips({ team: false, era: false });
     setReel(initialReel(m)); setLockedReel(null); saltRef.current = 0;
@@ -211,13 +220,28 @@ export default function Game() {
     stripRestoreParams();
   }, [abandonInFlight, resetPickem, resetFh, resetBp, resetSg, setReel, setLockedReel]);
 
+  const restart = useCallback(() => { if (mode) start(mode, undefined, archiveDate ?? undefined); }, [mode, archiveDate, start]);
+  const playToday = useCallback(() => start("daily"), [start]);
+
   // "← Modes": abandon the game like start() does (in-flight spin/simulate/FH/Surgeon work) and drop
   // the restore params, or a refresh would resurrect the result the player just walked away from.
   const goToModes = useCallback(() => {
-    abandonInFlight(); resetFh(); resetSg(); stripRestoreParams(); setMode(null);
+    abandonInFlight(); resetFh(); resetSg(); stripRestoreParams(); setMode(null); setArchiveDate(null);
   }, [abandonInFlight, resetFh, resetSg]);
 
-  useRestoreFromUrl(start, setOwnerId, setRestoring, setMode, setSeed, setAsOf, setResult, setFhPrediction, setBlueprint, setSgResult);
+  // F15: "View today's result" on the picker reopens the player's own Daily result and standing in place
+  // (search params never remount /play, so rewrite the URL and re-run the restore).
+  const [restoreNonce, setRestoreNonce] = useState(0);
+  const viewDailyResult = useCallback((encoded: string) => {
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("r", encoded); u.searchParams.set("m", "daily"); u.searchParams.set("d", todaySeed());
+      for (const k of ["own", "sg", "a", "mode", "date"]) u.searchParams.delete(k);
+      window.history.replaceState(null, "", u.pathname + u.search + u.hash);
+    } catch { /* no history API */ }
+    setRestoreNonce((n) => n + 1);
+  }, []);
+  useRestoreFromUrl(start, setOwnerId, setRestoring, setMode, setSeed, setAsOf, setResult, setFhPrediction, setBlueprint, setSgResult, setArchiveDate, restoreNonce);
 
   // Mode fork at "five locked": Factor Hunt detours through the prediction step; Surgeon detours
   // through the diagnosis/swap step; everyone else simulates immediately (pre-FH behavior).
@@ -235,7 +259,8 @@ export default function Game() {
     // Silent crowd-signal beacon: count this pick for the (mode, spin) config. Fired AFTER the slot
     // is committed, so it can never act as a pre-commit hint (DESIGN.md §12). Best-effort, ignored on error.
     if (current) {
-      try {
+      // an archive replay is hindsight play on an old seed: it never feeds the crowd counts
+      if (!archiveDate) try {
         void fetch("/api/slot-pick", {
           method: "POST", headers: { "content-type": "application/json" }, keepalive: true,
           body: JSON.stringify({ mode, spinKey: `${current.team}|${current.decade}`, slot, personId: selPlayer.person_id ?? selPlayer.id }),
@@ -262,7 +287,7 @@ export default function Game() {
     // frame, after the collapse re-renders: shows the reels for the next spin, or the result reveal on
     // the final pick.
     if (typeof window !== "undefined") requestAnimationFrame(() => scrollToTop());
-  }, [selPlayer, roster, finishDraft, current, mode, setLockedReel]);
+  }, [selPlayer, roster, finishDraft, current, mode, setLockedReel, archiveDate]);
 
   const canSwap = useCallback((a: Slot, b: Slot) => {
     if (a === b) return false;
@@ -300,7 +325,7 @@ export default function Game() {
   // voted/skipped (this game, this seed via localStorage, or for good via the skip preference).
   // Suppressed in HoopIQ: the roster is hidden there, so "will the best five win 60+?" is a blind
   // guess with nothing to reason about.
-  const showPickem = !!current && filled === 0 && mode !== "challenge" && mode !== "hoopiq" && mode !== null &&
+  const showPickem = !!current && filled === 0 && mode !== "challenge" && mode !== "hoopiq" && mode !== null && !archiveDate &&
     !pickemDismissed && !pickemVote && pickemSeedOk(seed) && !getPickemSkip() && !getLocalVote(seed);
   const showBpModal = mode === "blueprint" && !blueprint && !restoring;
 
@@ -311,6 +336,8 @@ export default function Game() {
   useDialogFocus(showBpModal, bpRef);
   useDialogFocus(sgPool, sgRef);
 
+  const archiveLabel = archiveDate ? `Archive · ${shortDay(archiveDate)}` : undefined;
+
   if (restoring) return <div className="mx-auto max-w-4xl px-4 py-6"><ResultSkeleton label="Loading your result…" /></div>;
   if (!mode) {
     if (ownerId) return (
@@ -320,32 +347,35 @@ export default function Game() {
         <ChallengeOwner id={ownerId} />
       </div>
     );
-    return <ModeSelect onPick={start} onOpenChallenge={(cid) => setOwnerId(cid)} />;
+    return <ModeSelect onPick={start} onOpenChallenge={(cid) => setOwnerId(cid)} onViewDaily={viewDailyResult} />;
   }
   // Draft Duel runs its own draft (shared spins vs a server-side bot) — see components/game/DuelGame.
   if (mode === "duel") return <DuelGame onModeSelect={goToModes} />;
   if (mode === "surgeon" && sgResult) return (
     <SurgeonResultView mode={mode} seed={seed} sgResult={sgResult} onRestart={() => start("surgeon")} onModeSelect={goToModes} />
   );
+  if (result && archiveDate) return (
+    <ArchiveResultView date={archiveDate} result={result} onRestart={restart} onModeSelect={goToModes} onPlayToday={playToday} />
+  );
   if (result) return (
-    <GameResultView mode={mode} seed={seed} asOf={asOf} result={result} roundNum={roundNum} onRestart={() => start(mode)} onModeSelect={goToModes}
+    <GameResultView mode={mode} seed={seed} asOf={asOf} result={result} roundNum={roundNum} onRestart={restart} onModeSelect={goToModes}
       onCreateChallenge={() => start("challenge")} pickem={{ vote: pickemVote, crowd: pickemCrowd, subject: pickemSubject }}
       fhPrediction={fhPrediction} blueprint={blueprint} challengeId={challengeId} challengeRole={challengeRole} />
   );
   if (loading) return (
-    <Shell roundNum={5} mode={mode} onRestart={() => start(mode)} onModeSelect={goToModes} showRestart>
+    <Shell roundNum={5} mode={mode} label={archiveLabel} onRestart={restart} onModeSelect={goToModes} showRestart>
       <ResultSkeleton label={mode === "surgeon" ? "Diagnosing your lineup…" : mode === "factorhunt" ? "Building your question…" : "Running all 82 games…"} />
     </Shell>
   );
 
   return (
-    <Shell roundNum={roundNum} mode={mode} onRestart={() => start(mode)} onModeSelect={goToModes} showRestart={filled > 0 || !!current}>
+    <Shell roundNum={roundNum} mode={mode} label={archiveLabel} onRestart={restart} onModeSelect={goToModes} showRestart={filled > 0 || !!current}>
       <DraftView mode={mode} roster={roster} current={current} reel={reel} lockedReel={lockedReel} spinning={spinning} blueprint={blueprint}
         projAllowed={projAllowed} projection={projection} skips={skips} selPlayer={selPlayer} selSlot={selSlot} hintsUsed={hintsUsed}
         crowdNote={crowdNote} error={error} loading={loading} fhFetching={fhFetching}
         onSpin={spin} onReSpinTeam={reSpinTeam} onReSpinEra={reSpinEra} onRevealHint={revealHint}
         onSelectCandidate={(c) => { setSelSlot(null); setSelPlayer((p) => (p?.id === c.id ? null : c)); }}
-        onFinish={() => finishDraft(roster)} onRestart={() => start(mode)} onSlot={clickSlot} slotTarget={slotTarget}
+        onFinish={() => finishDraft(roster)} onRestart={restart} onSlot={clickSlot} slotTarget={slotTarget}
         onCancelSelection={() => { setSelPlayer(null); setSelSlot(null); }} />
 
       {/* Factor Hunt prediction — focus-trapped dialog between "five locked" and the reveal.

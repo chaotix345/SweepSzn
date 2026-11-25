@@ -13,6 +13,7 @@ vi.mock("next/link", () => ({
 }));
 
 import Leaderboard from "@/components/Leaderboard";
+import type { DraftStep } from "@/lib/types";
 
 const CLOCK = /\d{2}:\d{2}:\d{2}/;
 
@@ -211,5 +212,47 @@ describe("Leaderboard D1 auto-submit", () => {
     expect(m.container.textContent).toMatch(/warming up/i);
     expect(m.container.textContent).not.toContain("streak");
     act(() => m.root.unmount());
+  });
+});
+
+// F11 (UI/UX audit): "streak reads 0 after a Daily". Since D1 the finished Daily posts itself, and the
+// streak is credited the moment that verified submit lands — the board and the come-back block (via
+// onStreak) both show it without a manual submit or a reload.
+describe("Leaderboard streak after the D1 auto-submit (F11)", () => {
+  const TRACE: DraftStep[] = (["PG", "SG", "SF", "PF", "C"] as const).map((slot, i) => ({ slot, pickedId: "abcde"[i], respins: [] }));
+  const view = { date: "2026-6-15", total: 1, top: [{ rank: 1, name: "Me", wins: 60, losses: 22, net: 5, lineup: "a,b,c,d,e", me: true }], you: { rank: 1, name: "Me", wins: 60, losses: 22, net: 5 } };
+
+  async function play(submitStatus: number) {
+    localStorage.clear();
+    localStorage.setItem("82-0:daily:history", JSON.stringify(["2026-6-14"])); // played yesterday
+    vi.useFakeTimers({ now: Date.parse("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+    const fetchMock = vi.fn((url: string) => Promise.resolve(
+      url === "/api/daily/submit" ? new Response(JSON.stringify(submitStatus === 200 ? view : { error: "x" }), { status: submitStatus })
+        : url === "/api/daily/leaderboard" ? new Response(JSON.stringify(view), { status: 200 })
+          : new Response("{}", { status: 404 })));
+    vi.stubGlobal("fetch", fetchMock);
+    const streaks: number[] = [];
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => { root.render(<Leaderboard date="2026-6-15" trace={TRACE} onStreak={(n) => streaks.push(n)} />); });
+    await act(async () => {});
+    return { container, streaks, fetchMock, root };
+  }
+
+  it("credits today the moment the verified submit lands", async () => {
+    const { container, streaks, fetchMock, root } = await play(200);
+    expect(fetchMock.mock.calls.some(([u]) => u === "/api/daily/submit")).toBe(true);
+    expect(container.textContent).toContain("🔥 2-day streak");
+    expect(streaks.at(-1)).toBe(2);
+    expect(JSON.parse(localStorage.getItem("82-0:daily:history")!)).toContain("2026-6-15");
+    act(() => root.unmount());
+  });
+
+  it("does not credit a Daily whose submit failed", async () => {
+    const { streaks, root } = await play(400);
+    expect(streaks.at(-1)).toBe(1); // yesterday's streak still stands; today isn't credited
+    expect(JSON.parse(localStorage.getItem("82-0:daily:history")!)).not.toContain("2026-6-15");
+    act(() => root.unmount());
   });
 });

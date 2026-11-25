@@ -19,6 +19,10 @@ import SgLeaderboard from "@/components/SgLeaderboard";
 import type { GameResult } from "@/components/game/gameState";
 import type { SgResult } from "@/components/game/useSurgeon";
 import { useDailyCeiling } from "@/components/game/useDailyCeiling";
+import DailyComeback from "@/components/DailyComeback";
+import CeilingReveal from "@/components/CeilingReveal";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { dayUTC, shortDay } from "@/lib/day";
 
 // Surgeon reveal: its own before/after layout + delta board, not the single-lineup ResultCard.
 export function SurgeonResultView({ mode, seed, sgResult, onRestart, onModeSelect }: {
@@ -46,6 +50,9 @@ export function GameResultView({ mode, seed, asOf, result, roundNum, onRestart, 
   const [convertedId, setConvertedId] = useState<string | null>(null); // challenge minted from a finished game
   // W2: today's ceiling record, fetched only once the board shows a verified submission for this viewer
   const ceiling = useDailyCeiling(mode === "daily" ? seed.replace("daily-", "") : null, mode === "daily" && !!lbView?.you);
+  const [streak, setStreak] = useState(0); // the board's streak (server when signed in), for the come-back block
+  const dailyDate = mode === "daily" ? seed.replace("daily-", "") : null;
+  const dailyToday = dailyDate !== null && dailyDate === dayUTC();
 
   // Pick'Em crowd-vs-you strip data for the result card (vote falls back to the per-seed local
   // copy so a Daily replay in the same browser still shows your pick when the API is dark).
@@ -67,9 +74,12 @@ export function GameResultView({ mode, seed, asOf, result, roundNum, onRestart, 
   return (
     <Shell roundNum={roundNum} mode={mode} onRestart={onRestart} onModeSelect={onModeSelect} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} modeKey={mode} usedHints={result.usedHints} onReset={onRestart} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView}
-        lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} ceiling={ceiling} />
+        lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} ceiling={ceiling}
+        afterActions={dailyToday ? <DailyComeback streak={streak} /> : undefined} />
       <InviteFriend />
-      {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} onView={setLbView} />}
+      {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} onView={setLbView} onStreak={setStreak} />}
+      {/* a past day's Daily result (restored from its permalink): that day's revealed perfect five */}
+      {dailyDate !== null && !dailyToday && <CeilingReveal date={dailyDate} yourWins={result.result.wins} />}
       {mode === "factorhunt" && <FhLeaderboard date={seed.replace("fh-", "")} trace={result.trace} prediction={fhPrediction} readOnly={result.trace.length === 0} />}
       {mode === "blueprint" && blueprint && <BpLeaderboard date={seed.replace("bp-", "")} trace={result.trace} blueprint={blueprint} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
       {mode === "challenge" && challengeId && challengeRole && (
@@ -89,6 +99,26 @@ export function GameResultView({ mode, seed, asOf, result, roundNum, onRestart, 
           ⚔️ Challenge a friend to beat this
         </button>
       ))}
+    </Shell>
+  );
+}
+
+// W3 past-Daily archive: an unranked replay of a rolled-over Daily on that day's pool. No board, no
+// streak, no weekly/all-time credit (the daily submit route only takes today's date, and this view never
+// mounts the Leaderboard); the payoff is the revealed perfect five and how this run did against it.
+export function ArchiveResultView({ date, result, onRestart, onModeSelect, onPlayToday }: {
+  date: string; result: GameResult; onRestart: () => void; onModeSelect: () => void; onPlayToday: () => void;
+}) {
+  const label = `Archive · ${shortDay(date)}`;
+  return (
+    <Shell roundNum={5} mode="daily" label={label} onRestart={onRestart} onModeSelect={onModeSelect} showRestart>
+      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={label} modeKey="archive" usedHints={result.usedHints} onReset={onRestart}
+        afterActions={<p className="mt-3 text-center text-xs text-zinc-400" data-testid="archive-unranked">Unranked replay: no leaderboard, streak or weekly credit.</p>} />
+      <CeilingReveal date={date} yourWins={result.result.wins} />
+      <div className="mt-4 grid gap-2 sm:flex sm:gap-3">
+        <ButtonLink href="/archive" variant="secondary" className="flex-1">← All past Dailies</ButtonLink>
+        <Button variant="primary" onClick={onPlayToday} className="flex-1">Play today&apos;s Daily →</Button>
+      </div>
     </Shell>
   );
 }
