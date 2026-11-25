@@ -60,7 +60,8 @@ def lineup_penalties(five, c):
     pw = c.get("overloadPow", 1.0)
     over = c["overloadGamma"] * max(0.0, usage - c["usageBudget"]) ** pw
     short = c.get("shortfallGamma", 0.0) * max(0.0, c.get("usageFloor", 0.0) - usage) ** pw
-    rim = max(rim_score(p, c) for p in five)
-    perim = sum(_clamp((_z(p, "stl") - 0.2) / 0.8, 0, 1) for p in five if p.get("pos") in PERIM_POS)
-    return {"overload": over, "shortfall": short, "rim": c["noRimPenalty"] * (1 - rim),
-            "perim": c["thinPerimeterPenalty"] * _clamp(1 - perim, 0, 1)}
+    cv = c["coverage"]
+    size = max(1.0 if p.get("pos") in BIG_POS else _clamp((_z(p, "trb") - cv["trbLo"]) / cv["trbSpan"], 0, 1) for p in five)
+    perim = max(1.0 if p.get("pos") in PERIM_POS else _clamp((_z(p, "stl") - cv["stlLo"]) / cv["stlSpan"], 0, 1) for p in five)
+    return {"overload": over, "shortfall": short, "rim": c["noRimPenalty"] * (1 - size),
+            "perim": c["thinPerimeterPenalty"] * (1 - perim)}

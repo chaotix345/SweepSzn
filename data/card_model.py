@@ -34,6 +34,8 @@ class CardParams:
     prior_def: tuple
     off_w: dict = field(default_factory=lambda: {"obpm": 1.0})
     def_w: dict = field(default_factory=lambda: {"dbpm": 1.0})
+    max_gap: int = MAX_GAP
+    minutes_alpha: float = 0.0   # starter translation: positive impact x min(1, mpg/36)^alpha
 
 
 DEFAULT_PARAMS = CardParams(decay=0.7, prior_k=0.0, prior_off=(0.0, 0.0), prior_def=(0.0, 0.0))
@@ -77,7 +79,10 @@ def box_def(s, coeff):
 
 def features(s, coeff):
     g, mp = s.get("g") or 0, s.get("mp") or 0
-    dws48 = (float(s["dws"]) / (g * mp) * 48) if _ok(s.get("dws")) and g * mp > 0 else 0.1
+    # Pre-1974 seasons already turn DWS into their DBPM substitute (box_def), so DWS/48 must not
+    # enter a second time: they get the league-typical 0.1 (neutral under any weight).
+    has_dbpm = _ok(s.get("dbpm"))
+    dws48 = (float(s["dws"]) / (g * mp) * 48) if has_dbpm and _ok(s.get("dws")) and g * mp > 0 else 0.1
     f = {"obpm": box_off(s, coeff), "dbpm": box_def(s, coeff), "mpg": float(mp),
          "usg": float(s["usg"]) if _ok(s.get("usg")) else 20.0, "dws48": dws48}
     f.update(_pos_oh(s.get("pos")))
@@ -102,7 +107,7 @@ def rate(seasons, card_year, p: CardParams, coeff, exclude_year=None, card_mpg=N
     num_o = num_d = den = 0.0
     for s in seasons:
         dy = abs(s["year"] - card_year)
-        if dy > MAX_GAP or s["year"] == exclude_year:
+        if dy > p.max_gap or s["year"] == exclude_year:
             continue
         x = season_inputs(s, p, coeff)
         if x is None:
@@ -112,8 +117,13 @@ def rate(seasons, card_year, p: CardParams, coeff, exclude_year=None, card_mpg=N
     po = p.prior_off[0] + p.prior_off[1] * card_mpg
     pd_ = p.prior_def[0] + p.prior_def[1] * card_mpg
     if den + p.prior_k == 0:
-        return po, pd_
-    return ((num_o + p.prior_k * po) / (den + p.prior_k), (num_d + p.prior_k * pd_) / (den + p.prior_k))
+        o, d = po, pd_
+    else:
+        o, d = (num_o + p.prior_k * po) / (den + p.prior_k), (num_d + p.prior_k * pd_) / (den + p.prior_k)
+    # Starter translation: a card plays 36+ minutes next to stars, so per-100 impact earned in a
+    # smaller role is discounted (positive side only; a bad player doesn't get better with minutes).
+    f = min(1.0, card_mpg / 36.0) ** p.minutes_alpha
+    return (o * f if o > 0 else o, d * f if d > 0 else d)
 
 
 def _norm(name):

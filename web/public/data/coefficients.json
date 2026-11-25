@@ -1,8 +1,8 @@
 {
-  "ortgBase": 104.407,
-  "drtgBase": 107.595,
-  "offScale": 0.6178,
-  "defScale": 0.742,
+  "ortgBase": 105.21,
+  "drtgBase": 107.969,
+  "offScale": 0.8934,
+  "defScale": 1.0055,
   "pythK": 13.75,
   "zCap": 3.3,
   "eraStrength": {
@@ -12,40 +12,73 @@
     "fullYear": 1985
   },
   "offModel": {
-    "intercept": 0.4328,
-    "pts": 1.058,
-    "ast": 0.6331,
-    "ts": 0.9088
+    "intercept": 0.4307,
+    "pts": 1.055,
+    "ast": 0.6267,
+    "ts": 0.904
   },
   "defModel": {
-    "intercept": -2.4242,
-    "dws": 79.5313,
-    "trb": -0.7115,
-    "posC": 0.6555,
-    "posPF": 0.2915,
-    "posSF": 0.1066,
-    "posSG": -0.0155
+    "intercept": -2.4239,
+    "dws": 79.4384,
+    "trb": -0.7144,
+    "posC": 0.6583,
+    "posPF": 0.295,
+    "posSF": 0.1102,
+    "posSG": -0.0142
   },
   "defModelEst": {
-    "intercept": -1.7504,
-    "dws": 77.2445,
-    "posC": 0.0613,
-    "posPF": -0.2484,
-    "posSF": -0.1734,
-    "posSG": -0.1265
+    "intercept": -1.7417,
+    "dws": 76.9113,
+    "posC": 0.0616,
+    "posPF": -0.2472,
+    "posSF": -0.171,
+    "posSG": -0.1255
   },
   "defEstCap": 5.5,
   "dwsShrinkK": 40,
   "leagueDwsMean": 0.02037,
   "usgModel": {
-    "intercept": 21.2311,
-    "pts": 3.0339,
-    "ast": -0.4904
+    "intercept": 21.2312,
+    "pts": 3.0338,
+    "ast": -0.4907
   },
-  "usageBudget": 110,
+  "usageBudget": 128.5,
   "overloadGamma": 0.22,
+  "usageFloor": 95.5,
+  "overloadPow": 1.0,
+  "shortfallGamma": 0.13,
+  "cardModel": {
+    "decay": 0.5,
+    "prior_k": 50.0,
+    "max_gap": 1,
+    "minutes_alpha": 0.5,
+    "prior_off": [
+      -3.76753,
+      0.13494
+    ],
+    "prior_def": [
+      -0.66151,
+      0.02305
+    ],
+    "off_w": {
+      "intercept": -0.31213,
+      "obpm": 0.62479,
+      "mpg": 0.01974,
+      "usg": -0.0163
+    },
+    "def_w": {
+      "intercept": -0.92642,
+      "dbpm": 0.62132,
+      "dws48": 5.82818,
+      "mpg": 0.02014,
+      "posC": 0.36109,
+      "posPF": 0.11132,
+      "posSF": 0.06897,
+      "posSG": -0.11068
+    }
+  },
   "spacing": {
-    "perShooter": 0.987,
+    "perShooter": 1.293,
     "diminish": 0.55,
     "noneFloor": -3.0,
     "baseline": 1.6
@@ -56,23 +89,52 @@
     "trbProxyLo": 0.8,
     "trbProxySpan": 1.6
   },
-  "noRimPenalty": 7.0,
+  "coverage": {
+    "trbLo": -0.2,
+    "trbSpan": 1.0,
+    "stlLo": 0.0,
+    "stlSpan": 1.0
+  },
+  "noRimPenalty": 10.0,
   "thinPerimeterPenalty": 3.0,
   "_meta": {
     "team_seasons": 1170,
-    "off_r2": 0.423,
-    "def_r2": 0.429,
+    "off_r2": 0.427,
+    "def_r2": 0.431,
     "cv_target": "pythag_wins(k=14)",
-    "in_sample_wins_rmse": 5.55,
-    "cv_wins_rmse": 5.565,
-    "cv_wins_rmse_vs_actual": 6.071,
-    "cv_wins_rmse_with_box": 5.894,
-    "zoff_r2": 0.609,
-    "zdef_r2_legacy": 0.233,
+    "in_sample_wins_rmse": 5.54,
+    "cv_wins_rmse": 5.557,
+    "cv_wins_rmse_vs_actual": 6.066,
+    "cv_wins_rmse_with_box": 5.884,
+    "zoff_r2": 0.61,
+    "zdef_r2_legacy": 0.234,
     "zdef_r2_est": 0.153,
     "zusg_r2": 0.343,
-    "gamma_fit": -0.0216,
-    "spacing_fit": 0.987,
-    "box_team_terms_help_cv": false
+    "gamma_fit": -0.0224,
+    "spacing_fit": 1.293,
+    "box_team_terms_help_cv": false,
+    "engine_version": 4,
+    "track_a_scales": {
+      "ortgBase": 104.4065,
+      "offScale": 0.6219,
+      "drtgBase": 107.5877,
+      "defScale": 0.7447
+    },
+    "track_b_cv": 8.095,
+    "track_b_cv_vs_actual": 8.267,
+    "track_b_baseline_cv": 8.142,
+    "card_weights": "rapm",
+    "rapm_used": true,
+    "rapm_match_rate": 0.9901,
+    "concavity_helps_cv": false,
+    "cv_wins_rmse_concave": 5.655,
+    "usage_p1": 95.5,
+    "usage_p99": 128.5,
+    "ood_fire_rate": {
+      "overload": 0.0094,
+      "shortfall": 0.0077,
+      "rim": 0.0094,
+      "perim": 0.0
+    }
   }
 }

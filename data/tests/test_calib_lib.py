@@ -11,6 +11,7 @@ COEFF = {
     "usageBudget": 110.0, "usageFloor": 90.0, "overloadGamma": 0.2, "overloadPow": 1.0,
     "shortfallGamma": 0.3, "noRimPenalty": 7.0, "thinPerimeterPenalty": 3.0,
     "rim": {"blkLo": 0.4, "blkSpan": 1.4, "trbProxyLo": 0.8, "trbProxySpan": 1.6},
+    "coverage": {"trbLo": -0.2, "trbSpan": 1.0, "stlLo": 0.0, "stlSpan": 1.0},
 }
 
 
@@ -60,3 +61,10 @@ def test_year_folds_match_calibrate_construction():
     folds = year_folds(list(range(1985, 2026)))
     assert len(folds) == 10
     assert sorted(y for f in folds for y in f) == list(range(1985, 2026))
+
+
+def test_no_big_lineup_pays_interior_with_partial_rebounding_credit():
+    guards = [s(2005, 0, 0, pos="PG", usg=20.0, z={"trb": 0.3})] * 5
+    assert math.isclose(lineup_penalties(guards, COEFF)["rim"], 7.0 * (1 - 0.5))
+    bigs = [s(2005, 0, 0, pos="C", usg=20.0, z={"stl": -1.0})] * 5
+    assert math.isclose(lineup_penalties(bigs, COEFF)["perim"], 3.0)

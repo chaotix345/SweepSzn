@@ -25,6 +25,7 @@ export const DEFAULT_COEFFICIENTS: Coefficients = {
   shortfallGamma: 0,
   spacing: { perShooter: 0.987, diminish: 0.55, noneFloor: -3, baseline: 1.6 },
   rim: { blkLo: 0.4, blkSpan: 1.4, trbProxyLo: 0.8, trbProxySpan: 1.6 },
+  coverage: { trbLo: -0.2, trbSpan: 1, stlLo: 0, stlSpan: 1 },
   noRimPenalty: 7,
   thinPerimeterPenalty: 3,
 };
@@ -117,6 +118,7 @@ export function playerFeatures(p: Player, c: Coefficients = DEFAULT_COEFFICIENTS
     rim: rimScore >= 0.5, rimScore, modern: p.year >= 1980,
     perim: perimPos && zget(p, "stl") >= 0.6,
     perimScore: perimPos ? clamp((zget(p, "stl") - 0.2) / 0.8, 0, 1) : 0,
+    sizeCover: playerSizeCover(p, c), perimCover: playerPerimCover(p, c),
   };
 }
 
@@ -152,6 +154,20 @@ function playerRimScore(p: Player, c: Coefficients): number {
   }
   return size; // pre-1974: no blocks tracked, fall back to size/rebounding
 }
+// v4 lineup COVERAGE (what lineupTerms uses): does the five have a big at all / a perimeter player at
+// all? A listed big (C/PF/F) or perimeter player (PG/SG/SF/G) covers fully; others earn partial credit
+// from rebounding (size) or steals (perimeter), so there is no positional cliff. Real NBA top-fives
+// essentially always have both (>= 99% of 1,170 team-seasons; calibrate.py asserts it), so these
+// penalties are fantasy-regime only. Rim protection and on-ball defense QUALITY are already in each
+// player's defensive rating; real data shows no extra team effect from them (DESIGN.md §14).
+function playerSizeCover(p: Player, c: Coefficients): number {
+  if (p.pos === "C" || p.pos === "PF" || p.pos === "F") return 1;
+  return clamp((zget(p, "trb") - c.coverage.trbLo) / c.coverage.trbSpan, 0, 1);
+}
+function playerPerimCover(p: Player, c: Coefficients): number {
+  if (p.pos === "PG" || p.pos === "SG" || p.pos === "SF" || p.pos === "G") return 1;
+  return clamp((zget(p, "stl") - c.coverage.stlLo) / c.coverage.stlSpan, 0, 1);
+}
 function isRimProtector(p: Player, c: Coefficients): boolean {
   return playerRimScore(p, c) >= 0.5;
 }
@@ -176,12 +192,8 @@ function lineupTerms(lineup: Player[], c: Coefficients) {
   for (const p of lineup) {
     sumOff += offValue(p, c); sumDef += defValue(p, c); totalUsage += usageDemand(p, c);
     shooterUnits += shooterUnit(p);
-    rim = Math.max(rim, playerRimScore(p, c));
-    // continuous perimeter-defense credit: 0 at stl z<=0.2, full at z>=1.0. The old binary gate
-    // (z>=0.6 counts, else nothing) was a ~3-pt cliff between z=0.59 and z=0.61 — and gameable,
-    // since coefficients.json is public. Credit accumulates across defenders.
-    if (p.pos === "PG" || p.pos === "SG" || p.pos === "SF" || p.pos === "G")
-      perimScore += clamp((zget(p, "stl") - 0.2) / 0.8, 0, 1);
+    rim = Math.max(rim, playerSizeCover(p, c));
+    perimScore = Math.max(perimScore, playerPerimCover(p, c));
     if (p.year >= 1980) anyModern = true;
   }
   // Two-sided usage band: zero anywhere real top-5s live ([usageFloor, usageBudget] = real p1/p99).
@@ -191,11 +203,10 @@ function lineupTerms(lineup: Player[], c: Coefficients) {
   const shortfallPenalty = c.shortfallGamma * Math.pow(Math.max(0, c.usageFloor - totalUsage), c.overloadPow);
   const effShoot = shooterUnits <= 3 ? shooterUnits : 3 + (shooterUnits - 3) * c.spacing.diminish;
   const spacing = anyModern ? clamp(c.spacing.perShooter * (effShoot - c.spacing.baseline), c.spacing.noneFloor, 3) : 0;
-  // Interior-presence penalty: a lineup with no real big (rim score 0) concedes the rim, the post,
-  // and the defensive glass — the combined cost of zero size. Continuous in the best big's quality,
-  // and CV-safe because every real NBA top-5 has at least one big (so it is ~0 in-distribution).
+  // No big at all concedes the rim, the post and the glass; no perimeter player at all lets every
+  // ball-handler downhill. Both are 0 for real NBA top-fives (coverage 1), so they only price fantasy builds.
   const rimAdj = c.noRimPenalty * (1 - rim);
-  const perimAdj = c.thinPerimeterPenalty * clamp(1 - perimScore, 0, 1);
+  const perimAdj = c.thinPerimeterPenalty * (1 - perimScore);
 
   const ortg = c.ortgBase + c.offScale * sumOff + spacing - overloadPenalty - shortfallPenalty;
   const drtg = c.drtgBase - c.defScale * sumDef + rimAdj + perimAdj;

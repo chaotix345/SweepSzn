@@ -1,0 +1,92 @@
+[
+ {
+  "label": "1985-86 Celtics",
+  "year": 1986,
+  "team": "BOS",
+  "predicted_wins": 56,
+  "cold_wins": 55,
+  "actual_wins": 67,
+  "actual_losses": 15
+ },
+ {
+  "label": "1986-87 Lakers",
+  "year": 1987,
+  "team": "LAL",
+  "predicted_wins": 52,
+  "cold_wins": 50,
+  "actual_wins": 65,
+  "actual_losses": 17
+ },
+ {
+  "label": "1995-96 Bulls",
+  "year": 1996,
+  "team": "CHI",
+  "predicted_wins": 64,
+  "cold_wins": 62,
+  "actual_wins": 72,
+  "actual_losses": 10
+ },
+ {
+  "label": "2000-01 Lakers",
+  "year": 2001,
+  "team": "LAL",
+  "predicted_wins": 53,
+  "cold_wins": 54,
+  "actual_wins": 56,
+  "actual_losses": 26
+ },
+ {
+  "label": "2003-04 Pistons",
+  "year": 2004,
+  "team": "DET",
+  "predicted_wins": 56,
+  "cold_wins": 55,
+  "actual_wins": 54,
+  "actual_losses": 28
+ },
+ {
+  "label": "2007-08 Celtics",
+  "year": 2008,
+  "team": "BOS",
+  "predicted_wins": 64,
+  "cold_wins": 60,
+  "actual_wins": 66,
+  "actual_losses": 16
+ },
+ {
+  "label": "2012-13 Heat",
+  "year": 2013,
+  "team": "MIA",
+  "predicted_wins": 61,
+  "cold_wins": 60,
+  "actual_wins": 66,
+  "actual_losses": 16
+ },
+ {
+  "label": "2013-14 Spurs",
+  "year": 2014,
+  "team": "SAS",
+  "predicted_wins": 48,
+  "cold_wins": 45,
+  "actual_wins": 62,
+  "actual_losses": 20
+ },
+ {
+  "label": "2015-16 Warriors",
+  "year": 2016,
+  "team": "GSW",
+  "predicted_wins": 63,
+  "cold_wins": 62,
+  "actual_wins": 73,
+  "actual_losses": 9
+ },
+ {
+  "label": "2016-17 Warriors",
+  "year": 2017,
+  "team": "GSW",
+  "predicted_wins": 69,
+  "cold_wins": 68,
+  "actual_wins": 67,
+  "actual_losses": 15
+ }
+]

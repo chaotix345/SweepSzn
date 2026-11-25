@@ -86,3 +86,18 @@ def test_fit_input_weights_recovers_known_weights():
     assert abs(off_w["obpm"] - 0.8) < 0.05
     assert abs(def_w["dbpm"] - 0.5) < 0.05
     assert abs(def_w["dws48"] - 4.0) < 0.2
+
+
+def test_starter_translation_discounts_positive_low_minute_impact():
+    p = params(minutes_alpha=1.0)
+    off, d = rate([season(2000, obpm=4.0, dbpm=-1.0, mp=27.0)], 2000, p, COEFF)
+    assert math.isclose(off, 3.0) and math.isclose(d, -1.0)
+    off36, _ = rate([season(2000, obpm=4.0, mp=38.0)], 2000, p, COEFF)
+    assert math.isclose(off36, 4.0)
+
+
+def test_pre1974_dws_is_not_double_counted():
+    z = {"pts": 0.0, "ast": 0.0, "ts": 0.0}
+    hi = season(1965, obpm=None, dbpm=None, z=z, tier="partial", dws=12.0)
+    p = params(def_w={"dws48": 10.0})
+    assert season_inputs(hi, p, COEFF)[1] == season_inputs(dict(hi, dws=1.0), p, COEFF)[1]

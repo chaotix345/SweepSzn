@@ -23,7 +23,8 @@ SEASONS = "data/out/team_player_seasons.json"
 def rate_cards(players, seasons, coeff):
     cm = coeff["cardModel"]
     p = CardParams(decay=cm["decay"], prior_k=cm["prior_k"], prior_off=tuple(cm["prior_off"]),
-                   prior_def=tuple(cm["prior_def"]), off_w=cm["off_w"], def_w=cm["def_w"])
+                   prior_def=tuple(cm["prior_def"]), off_w=cm["off_w"], def_w=cm["def_w"],
+                   max_gap=int(cm.get("max_gap", 6)), minutes_alpha=float(cm.get("minutes_alpha", 0.0)))
     by_person = defaultdict(list)
     for s in seasons:
         by_person[normalize_name(s["name"])].append(s)
