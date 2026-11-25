@@ -7,7 +7,7 @@ A rebuild of the viral [82-0.com](https://www.82-0.com) NBA team-builder with an
 The original sums per-game stats (PPG×0.46 + RPG×0.25 + …) with no era adjustment, so raw-stat monsters (Wilt) and ball-dominant stat-stuffers dominate. This version:
 
 - **Era-normalizes** every stat to z-scores vs. that season's league, then applies an **era-strength multiplier** + z-cap so a thin 8-team 1950s league can't manufacture all-time greats (Mikan drops from #4 to outside the top-25; Wilt/Russell stay elite). The multiplier is 1.0 for the modern (1985+) calibration era, so the real-team fit is untouched.
-- Drafts **franchise-era player variants**: Miami LeBron, Cleveland LeBron, and Lakers LeBron are separate cards backed by their actual seasons, while the lineup still locks to one real LeBron.
+- Drafts **franchise-era player variants**: Miami LeBron, Cleveland LeBron, and Lakers LeBron are separate cards backed by their actual seasons, while the lineup still locks to one real LeBron. The pool runs through the **2025-26 season**; a new season adds cards without changing any existing card (`DESIGN.md` §12, pool by date).
 - Uses **OBPM/DBPM** (Box Plus/Minus — validated points-per-100 impact) for 1974+, with z-score box proxies for older eras. Pre-1974 **defense** is redone: DWS Bayesian-shrunk toward the league mean (the old model had a perverse rebounding term that ranked obscure 1950s role players as all-time defenders).
 - Applies a **continuous usage-overload penalty** (five ball-dominant stars can't all keep their numbers) and a **continuous interior-presence penalty** (a no-big lineup concedes the rim, post, and glass) — which keeps five point guards honest without a gameable positional rule.
 - Scores **offense and defense separately** (≈ equal weight) and adds a **data-fit spacing** term (per-shooter coefficient regressed from real ORtg residuals, not hand-set).
@@ -25,6 +25,7 @@ Result: a balanced two-way team beats a stat-stuffer; nobody has gone 82-0 — t
 DESIGN.md              engine + game design doc (trust model & 82-0 parity: §12)
 data/                  offline Python pipeline (run once to (re)build data)
   scrape.py            throttled Basketball-Reference scraper -> data/raw/
+  add_season.py        appends a new season's cards to players.json (since/until; existing cards untouched)
   build_dataset.py     raw HTML -> web/public/data/{players,league_context}.json
                        players are one peak season per player/franchise/era
                        (also writes data/out/* intermediates the calibration needs)
@@ -61,8 +62,9 @@ themselves when their vars are present — see `web/.env.example` for the full r
 
 Order matters: `build_dataset.py` writes `data/out/team_rotations.json` and
 `team_player_seasons.json`, which `calibrate.py` and `rate_cards.py` read — on a fresh clone,
-calibration fails with FileNotFoundError until the build step has run. The draftable pool is frozen
-(82-0 parity, card ids in share links): a normal build does not touch `players.json`.
+calibration fails with FileNotFoundError until the build step has run. Existing cards never change
+(card ids and numbers live in share links, Dex and stored results): a normal build does not touch
+`players.json`, and a new season is appended with `add_season.py` (see `DESIGN.md` §12, pool by date).
 
 ```bash
 pip install -r data/requirements.txt
@@ -72,6 +74,11 @@ python data/scrape_heights.py  # player heights (26 B-R index pages) -> data/out
 python data/fetch_rapm.py      # optional: nbarapm 3-year RAPM -> data/out/rapm.json (fitting target only, never committed)
 python data/calibrate.py       # -> coefficients.json + famous_teams.json + calibration report (asserts the accuracy gates)
 python data/rate_cards.py      # -> off_rating/def_rating/ht on every card in players.json (ids and stats untouched)
+
+# add a season (2025-26 shown) without touching existing cards:
+python data/scrape.py 2014 2026          # the new season plus the seasons its ratings and smoothing read
+python data/scrape_heights.py
+python data/add_season.py                # appends `since` cards, stamps beaten cards `until`
 python -m pytest data/tests    # pipeline unit tests
 ```
 

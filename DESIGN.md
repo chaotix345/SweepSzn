@@ -203,7 +203,7 @@ The one residual quirk: **Nate McMillan** ranks as the top single-season defende
 
 ---
 
-## 12. Trust model & 82-0 parity (frozen) — read before adding a mode
+## 12. Trust model & 82-0 rules — read before adding a mode
 
 **Trust model: leaderboards are casual-fair, not adversarially-fair, by design.** The engine is open
 source, `players.json` / `coefficients.json` are served publicly, and `/api/evaluate` accepts arbitrary
@@ -224,11 +224,24 @@ Corollary: anonymous identity is a **bearer token** (`crypto.randomUUID()` in lo
 anon play is the funnel; signed-in (Google) identity is the upgrade path for anyone who cares about
 their standing. Don't ship anon UIDs in URLs or logs.
 
-**82-0 parity: frozen as of the 2026-06 dataset.** Classic's draftable surface (current franchises,
-1960s–2020s decades, multi-position eligibility) matches 82-0.com via the committed
-`data/820_player_meta.json` (one-time export — see `data/gen_820_meta.mjs`). There is **no ongoing
-sync**: if 82-0.com changes its pool, we owe it nothing. All other modes, scoring, and data decisions
-are free to diverge. Don't re-run the meta generator or re-litigate parity per feature.
+**82-0 rules, not an 82-0 roster freeze (amended 2026-11, W5).** Classic keeps 82-0's *rules*: only
+current franchises, only the 1960s–2020s decades, and multi-position eligibility from the committed
+`data/820_player_meta.json` (one-time export — see `data/gen_820_meta.mjs`; cards the meta doesn't
+cover fall back to adjacency from the engine position in `data/enrich_players.mjs`). The 2026-06
+roster freeze is **retired**: new seasons join one shared pool that every mode, Classic included,
+drafts from. There is still **no ongoing sync** with 82-0.com; don't re-run the meta generator or
+re-litigate the rules per feature.
+
+**Pool by date.** A release never edits an existing card. `data/add_season.py` appends new
+(player, franchise, decade) cards stamped `since` and stamps a card the new season beats `until`; the
+superseded card keeps its id and every number, so `/r/`, compare, rank, Dex, boards, stored results
+and OG cards keep resolving it exactly as before. The release key maps to a go-live date (00:00 UTC)
+in `web/lib/poolDate.ts`, the one place that date is set. A spin draws from the pool of its date:
+dated seeds (Daily, Factor Hunt, Blueprint, Surgeon) use the seed's day, a challenge uses the day it
+was created (records from before pool dating use the day before the first release), and other modes
+pin the day the game started. `verifyTrace` replays with the same date, so a five drafted before a
+release still verifies after it and today's Daily never changes mid-day. Reference pages (`/teams`,
+receipts) show the newest pool.
 
 ---
 
@@ -416,3 +429,5 @@ closed daily boards and today's mode boards are left as they were.
 ### Pipeline order
 
 `scrape.py` → `build_dataset.py` (pool frozen unless `--write-pool`) → `scrape_heights.py` → `fetch_rapm.py` → `calibrate.py` → `rate_cards.py`
+
+A new season is added with `data/add_season.py` (§12 pool by date), never with `--write-pool`, which would re-pick every peak and rename ids. It rates only its new cards, with the committed coefficients; `rate_cards.py` leaves `since` cards alone.
