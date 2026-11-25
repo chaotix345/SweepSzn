@@ -49,7 +49,9 @@ def main():
     players = json.load(open(PLAYERS, encoding="utf-8"))
     coeff = json.load(open(COEFF, encoding="utf-8"))
     seasons = json.load(open(SEASONS, encoding="utf-8"))
-    out = rate_cards(players, seasons, coeff, load_heights())
+    # cards with `since` were rated by data/add_season.py from seasons this build doesn't parse
+    rated = iter(rate_cards([c for c in players if "since" not in c], seasons, coeff, load_heights()))
+    out = [c if "since" in c else next(rated) for c in players]
     assert [c["id"] for c in out] == [c["id"] for c in players]
     open(PLAYERS, "w", encoding="utf-8").write(json.dumps(out))
     print(f"rated {len(out)} cards -> {PLAYERS}")
