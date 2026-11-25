@@ -20,6 +20,7 @@ import { Dossier } from "@/components/game/Dossier";
 import { DexStrip } from "@/components/game/DexStrip";
 import { CompareLineup } from "@/components/game/CompareLineup";
 import { ExploreZone } from "@/components/game/ExploreZone";
+import FiveStrip from "@/components/FiveStrip";
 
 // Crowd snapshot + your vote (and, same-session only, the spun team/era the vote was about).
 type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
@@ -130,12 +131,13 @@ export default function ResultCard({
   const elite = isEliteGrade(result.grade);
   // one roster row's dossier open at a time (tap ⓘ) — reuses the draft-board Dossier, post-commit
   const [openRosterId, setOpenRosterId] = useState<string | null>(null);
-  // teaser for the collapsed Explore zone (What-If Lab is gated off Prime — see below)
-  const exploreSummary = prime ? "Compare your five" : "What-If Lab · Compare";
+  // teaser for the collapsed "Dig deeper" zone (What-If Lab is gated off Prime — see below)
+  const exploreSummary = prime ? "Roster · Scouting · Compare" : "Roster · Scouting · What-If · Compare";
 
   return (
     <div className={`mt-4 overflow-hidden rounded-2xl border bg-zinc-900 ${elite ? "border-gold/30 ring-1 ring-gold/25 animate-gold-pulse" : "animate-rise-in border-zinc-800"}`}>
-      {/* hero — the buzzer moment: the record slams in; elite grades get the gold trophy glow */}
+      {/* Above the fold (result-card diet): the record, the grade, the verdict line, your five at a
+          glance, then Share and Play again. Everything analytical sits below or behind "Dig deeper". */}
       <div className="relative isolate bg-gradient-to-b from-zinc-900 to-zinc-950 px-6 pt-6 pb-5 text-center">
         {/* elite-only radial gold wash behind the record — gold stays reserved for S/A+ / 82-0 */}
         {elite && <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-gold-glow" />}
@@ -172,9 +174,39 @@ export default function ResultCard({
           <div className="mt-2 ml-1 inline-flex items-center gap-1 rounded-full bg-cyan-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-cyan-300"
             title={`Committed before the spin: ${blueprint.label}`}>📐 {blueprint.label}</div>
         )}
-        {/* context layer: real-history anchor, league-average baseline, verified ceiling, rank */}
+        <p className="mx-auto mt-3 max-w-md text-base font-medium text-zinc-200">{headline(result)}</p>
+        {pct != null && lbRank && (
+          <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-orange-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-orange-300"
+            title="Your standing on today's server-verified leaderboard">
+            {pct <= 50 ? <>🏆 Top {pct}% today</> : <>#{lbRank.rank} of {lbRank.total} today</>}
+          </div>
+        )}
+        <div className="mx-auto mt-4 max-w-md text-left">
+          <FiveStrip title={shared ? "Starting five" : "Your starting five"} five={players.map((p, i) => ({ id: p.id, name: p.name, team: p.team, decade: p.decade, slot: slots[i] }))} />
+        </div>
+      </div>
+
+      <div className="px-6 pb-5">
+        <p className="mb-2.5 text-center text-xs font-medium text-zinc-400">{shareNudge(result)}</p>
+        {/* stacked on phones so the primary Share keeps a full-width hit area; side by side from sm up */}
+        <div className="grid gap-2 sm:flex sm:gap-3">
+          {/* On a shared permalink the cold viewer's "build your own" is the conversion that matters,
+              so it takes the primary orange and Share drops to secondary. In-game it's the reverse —
+              Share is the sharer's growth action. (DESIGN.md: exactly one orange CTA per row.) */}
+          <ShareButton primary={!shared} result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint} />
+          {shared ? (
+            <ButtonLink href="/play?mode=daily" variant="primary" className="flex-1">Build your own five →</ButtonLink>
+          ) : (
+            <Button variant="secondary" onClick={onReset} className="flex-1">Build Another</Button>
+          )}
+        </div>
+        <SaveCardImage path={sharePath} />
+      </div>
+
+      {/* how it stacks up: real-history anchor, league-average baseline, verified ceiling, grade ladder */}
+      <div className="border-t border-zinc-800 px-6 py-4 text-center">
         {anchor && (
-          <p className="mt-2 text-xs italic text-zinc-400">
+          <p className="text-xs italic text-zinc-400">
             Comparable to the {anchor.record} {anchor.team} ({anchor.season}) — {anchor.hook}.
           </p>
         )}
@@ -190,14 +222,7 @@ export default function ResultCard({
             The best draftable five projects {BEST_DRAFTABLE_RECORD} — nobody has gone 82-0.
           </p>
         )}
-        {pct != null && lbRank && (
-          <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-orange-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-orange-300"
-            title="Your standing on today's server-verified leaderboard">
-            {pct <= 50 ? <>🏆 Top {pct}% today</> : <>#{lbRank.rank} of {lbRank.total} today</>}
-          </div>
-        )}
         <GradeLadder wins={result.wins} grade={result.grade} />
-        <p className="mx-auto mt-3 max-w-md text-base font-medium text-zinc-200">{headline(result)}</p>
         <div className="mt-4 flex justify-center gap-2 text-sm">
           <Metric label="ORtg" value={result.ortg.toFixed(1)} title="Offensive Rating — points scored per 100 possessions" />
           <Metric label="DRtg" value={result.drtg.toFixed(1)} title="Defensive Rating — points allowed per 100 possessions" />
@@ -233,76 +258,61 @@ export default function ResultCard({
         <RarityBadge ids={players.map((p) => p.person_id ?? p.id).join(",")} />
       </div>
 
-      {/* roster */}
-      <div className="border-t border-zinc-800 px-4 py-4">
-        <div className="mb-2 px-2 text-xs font-bold uppercase tracking-wide text-zinc-500">Your starting five</div>
-        <div className="space-y-1.5">
-          {players.map((p, i) => {
-            const role = roles[i];
-            const c = teamColors(p.team);
-            const open = openRosterId === p.id;
-            return (
-              <div key={p.id} className="rounded-xl bg-zinc-950/60 px-2.5 py-2">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg text-[11px] font-black leading-none"
-                    style={{ background: c.bg, color: c.text }}>
-                    <span>{initials(p.name)}</span>
-                    <span className="mt-0.5 text-[8px] font-bold opacity-80">{slots[i]}</span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2">
-                      <span className="truncate text-sm font-semibold">{p.name}</span>
-                      <span className="shrink-0 text-[10px] text-zinc-500">{p.team} · {eraLabel(p.decade)}</span>
+      <div className="px-6 pb-2"><DexStrip lineupIds={players.map((p) => p.id)} /></div>
+
+      {/* "Dig deeper": the full roster with dossiers, the scouting report, the What-If Lab and Compare.
+          Collapsed + lazy-mounted (a cold permalink viewer never fires their /api fetches); the
+          explore_open / whatif_open / compare_open beacons are unchanged. */}
+      <ExploreZone summary={exploreSummary} onOpen={() => { track("explore_open", { mode: modeKey ?? "shared", grade: result.grade, wins: result.wins }); ev("explore_open", { uid: getUid() }); }}>
+        {/* roster */}
+        <div className="py-2">
+          <div className="mb-2 px-2 text-xs font-bold uppercase tracking-wide text-zinc-500">Roster &amp; player dossiers</div>
+          <div className="space-y-1.5">
+            {players.map((p, i) => {
+              const role = roles[i];
+              const c = teamColors(p.team);
+              const open = openRosterId === p.id;
+              return (
+                <div key={p.id} className="rounded-xl bg-zinc-950/60 px-2.5 py-2">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg text-[11px] font-black leading-none"
+                      style={{ background: c.bg, color: c.text }}>
+                      <span>{initials(p.name)}</span>
+                      <span className="mt-0.5 text-[8px] font-bold opacity-80">{slots[i]}</span>
                     </div>
-                    <div className="text-[11px] text-orange-400/90">{role.role}<span className="text-zinc-600"> · {role.blurb}</span></div>
-                    <RoleBars pb={result.players[i]} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2">
+                        <span className="truncate text-sm font-semibold">{p.name}</span>
+                        <span className="shrink-0 text-[10px] text-zinc-500">{p.team} · {eraLabel(p.decade)}</span>
+                      </div>
+                      <div className="text-[11px] text-orange-400/90">{role.role}<span className="text-zinc-600"> · {role.blurb}</span></div>
+                      <RoleBars pb={result.players[i]} />
+                    </div>
+                    <StatRow p={p} className="hidden shrink-0 sm:flex" />
+                    {/* tap ⓘ → the same descriptive Dossier the draft board uses (accolades, career, era bars) */}
+                    <button onClick={() => setOpenRosterId(open ? null : p.id)} aria-expanded={open}
+                      aria-label={`${open ? "Hide" : "Show"} ${p.name} details`}
+                      title="Player details — accolades, career, era context"
+                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border text-sm transition ${
+                        open ? "border-orange-500 bg-orange-500/10 text-orange-400" : "border-zinc-800 text-zinc-500 hover:text-orange-400"}`}>
+                      {open ? "▴" : "ⓘ"}
+                    </button>
                   </div>
-                  <StatRow p={p} className="hidden shrink-0 sm:flex" />
-                  {/* tap ⓘ → the same descriptive Dossier the draft board uses (accolades, career, era bars) */}
-                  <button onClick={() => setOpenRosterId(open ? null : p.id)} aria-expanded={open}
-                    aria-label={`${open ? "Hide" : "Show"} ${p.name} details`}
-                    title="Player details — accolades, career, era context"
-                    className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border text-sm transition ${
-                      open ? "border-orange-500 bg-orange-500/10 text-orange-400" : "border-zinc-800 text-zinc-500 hover:text-orange-400"}`}>
-                    {open ? "▴" : "ⓘ"}
-                  </button>
+                  <StatRow p={p} className="mt-1.5 flex justify-between px-1 sm:hidden" />
+                  {open && <Dossier cand={p} />}
                 </div>
-                <StatRow p={p} className="mt-1.5 flex justify-between px-1 sm:hidden" />
-                {open && <Dossier cand={p} />}
-              </div>
-            );
-          })}
-        </div>
-        {/* totals */}
-        <div className="mt-2 flex items-center justify-between gap-2 px-2.5 sm:justify-end sm:gap-2.5">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 sm:mr-auto">Team totals</span>
-          <div className="flex gap-2 sm:gap-2.5">
-            <Stat v={totals.pts} k="PPG" strong /><Stat v={totals.trb} k="RPG" strong /><Stat v={totals.ast} k="APG" strong />
-            <Stat v={totals.stl} k="SPG" strong /><Stat v={totals.blk} k="BPG" strong />
+              );
+            })}
+          </div>
+          {/* totals */}
+          <div className="mt-2 flex items-center justify-between gap-2 px-2.5 sm:justify-end sm:gap-2.5">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 sm:mr-auto">Team totals</span>
+            <div className="flex gap-2 sm:gap-2.5">
+              <Stat v={totals.pts} k="PPG" strong /><Stat v={totals.trb} k="RPG" strong /><Stat v={totals.ast} k="APG" strong />
+              <Stat v={totals.stl} k="SPG" strong /><Stat v={totals.blk} k="BPG" strong />
+            </div>
           </div>
         </div>
-        <DexStrip lineupIds={players.map((p) => p.id)} />
-      </div>
-
-      <div className="border-t border-zinc-800 px-6 py-4">
-        <p className="mb-2.5 text-center text-xs font-medium text-zinc-400">{shareNudge(result)}</p>
-        <div className="flex gap-3">
-          {/* On a shared permalink the cold viewer's "build your own" is the conversion that matters,
-              so it takes the primary orange and Share drops to secondary. In-game it's the reverse —
-              Share is the sharer's growth action. (DESIGN.md: exactly one orange CTA per row.) */}
-          <ShareButton primary={!shared} result={result} path={sharePath} names={names} usedHints={usedHints} pickem={hasPickem ? pickem : undefined} prime={prime} blueprint={blueprint} />
-          {shared ? (
-            <ButtonLink href="/play?mode=daily" variant="primary" className="flex-1">Build your own five →</ButtonLink>
-          ) : (
-            <Button variant="secondary" onClick={onReset} className="flex-1">Build Another</Button>
-          )}
-        </div>
-        <SaveCardImage path={sharePath} />
-      </div>
-
-      {/* Deep tools sit BELOW Share so the growth loop isn't buried under a wall of analysis.
-          Collapsed + lazy-mounted (a cold permalink viewer never fires their /api fetches). */}
-      <ExploreZone summary={exploreSummary} onOpen={() => { track("explore_open", { mode: modeKey ?? "shared", grade: result.grade, wins: result.wins }); ev("explore_open", { uid: getUid() }); }}>
         <ScoutingAnchor result={result} />
         {/* What-If Lab: post-commit swap sandbox. Gated off Prime — a candidate's decade there is
             his peak, not the spun era, so the slot pool wouldn't match. Re-scores via /api/evaluate. */}
@@ -552,10 +562,9 @@ function GradeLadder({ wins, grade }: { wins: number; grade: string }) {
       </div>
       {next && next.min - wins <= 5 && (
         <p className="mt-1 text-[11px] text-zinc-500">
-          {next.grade === "S"
-            // the draftable ceiling is 79 — "1 win from S" would taunt an impossible chase
-            ? "S (80+) is theoretical — no draftable five has reached it"
-            : `${next.min - wins} win${next.min - wins === 1 ? "" : "s"} from ${next.grade} (${next.label})`}
+          {`${next.min - wins} win${next.min - wins === 1 ? "" : "s"} from ${next.grade} (${next.label})`}
+          {/* engine v4: the best draftable five reaches S, so S is a real (if brutal) chase */}
+          {next.grade === "S" && ` · the best draftable five goes ${BEST_DRAFTABLE_RECORD}`}
         </p>
       )}
     </div>

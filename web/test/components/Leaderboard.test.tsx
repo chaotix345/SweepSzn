@@ -94,9 +94,122 @@ describe("Leaderboard 'vs you' compare links", () => {
     act(() => root.unmount());
   });
 
+  it("D2: a row without a lineup (live Daily, viewer hasn't submitted) renders with no /r/ or compare link", async () => {
+    const { container, root } = await renderWith({ date: "2026-6-15", total: 2, top: [{ rank: 1, name: "P1", wins: 70, losses: 12, net: 5 }, { rank: 2, name: "P2", wins: 60, losses: 22, net: 2 }] });
+    expect(container.textContent).toContain("P1");
+    const hrefs = [...container.querySelectorAll("a")].map((a) => a.getAttribute("href") ?? "");
+    expect(hrefs.some((h) => h.startsWith("/r/") || h.startsWith("/compare/"))).toBe(false);
+    act(() => root.unmount());
+  });
+
   it("offers no compare before you've posted (pre-commit)", async () => {
     const { container, root } = await renderWith({ date: "2026-6-15", total: 1, top: [row(1, THEIRS)] });
     expect([...container.querySelectorAll("a")].some((a) => a.getAttribute("href")?.startsWith("/compare/"))).toBe(false);
     act(() => root.unmount());
+  });
+});
+
+// D1: a finished Daily posts itself through /api/daily/submit — once, on the result screen only — and the
+// streak is credited by that submit. Without Redis (503) the board quietly hides.
+describe("Leaderboard D1 auto-submit", () => {
+  const TRACE = (["PG", "SG", "SF", "PF", "C"] as const).map((slot, i) => ({ slot, pickedId: `p${i}`, respins: [] }));
+  const VIEW = { date: "2026-6-15", total: 1, top: [{ rank: 1, name: "Anonymous", wins: 60, losses: 22, net: 4, lineup: "p0,p1,p2,p3,p4", me: true }], you: { rank: 1, name: "Anonymous", wins: 60, losses: 22, net: 4, lineup: "p0,p1,p2,p3,p4", me: true } };
+  const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } }));
+  function mount(el: React.ReactElement, submitStatus = 200) {
+    const fetchMock = vi.fn((url: string) =>
+      url === "/api/daily/submit" ? json(submitStatus === 200 ? VIEW : { error: "x" }, submitStatus)
+        : url === "/api/daily/leaderboard" ? json({ date: "2026-6-15", total: 0, top: [] })
+        : new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetchMock);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    return { fetchMock, container, root, calls: (u: string) => fetchMock.mock.calls.filter(([url]) => url === u) };
+  }
+  const settle = () => act(async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0)); });
+  afterEach(() => { try { localStorage.clear(); } catch { /* none */ } });
+
+  it("submits a finished Daily once, shows the board, and credits the streak", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+    const m = mount(<Leaderboard date="2026-6-15" trace={TRACE} />);
+    await act(async () => { m.root.render(<Leaderboard date="2026-6-15" trace={TRACE} />); });
+    await settle();
+    expect(m.calls("/api/daily/submit")).toHaveLength(1);
+    const body = JSON.parse(String((m.calls("/api/daily/submit")[0] as unknown as [string, RequestInit])[1].body));
+    expect(body).toMatchObject({ date: "2026-6-15", trace: TRACE });
+    expect(m.calls("/api/daily/leaderboard")).toHaveLength(0); // the submit response is the view
+    expect(m.container.textContent).toContain("1-day streak");
+    expect(m.container.querySelector("input")).toBeNull(); // no manual submit form any more
+    act(() => m.root.unmount());
+  });
+
+  it("submits exactly once under StrictMode's double effect run", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+    const m = mount(<Leaderboard date="2026-6-15" trace={TRACE} />);
+    await act(async () => { m.root.render(<React.StrictMode><Leaderboard date="2026-6-15" trace={TRACE} /></React.StrictMode>); });
+    await settle();
+    expect(m.calls("/api/daily/submit")).toHaveLength(1);
+    expect(m.container.textContent).toContain("Anonymous");
+    act(() => m.root.unmount());
+  });
+
+  it("a restored result screen (same trace, remount) reads the board instead of re-posting", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+    const first = mount(<Leaderboard date="2026-6-15" trace={TRACE} />);
+    await act(async () => { first.root.render(<Leaderboard date="2026-6-15" trace={TRACE} />); });
+    await settle();
+    expect(first.calls("/api/daily/submit")).toHaveLength(1);
+    act(() => first.root.unmount());
+
+    const again = mount(<Leaderboard date="2026-6-15" trace={TRACE} />);
+    await act(async () => { again.root.render(<Leaderboard date="2026-6-15" trace={TRACE} />); });
+    await settle();
+    expect(again.calls("/api/daily/submit")).toHaveLength(0);
+    expect(again.calls("/api/daily/leaderboard")).toHaveLength(1);
+    act(() => again.root.unmount());
+  });
+
+  it("a different trace on the same day still auto-submits (keep-best decides)", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+    const first = mount(<Leaderboard date="2026-6-15" trace={TRACE} />);
+    await act(async () => { first.root.render(<Leaderboard date="2026-6-15" trace={TRACE} />); });
+    await settle();
+    act(() => first.root.unmount());
+    const other = TRACE.map((s, i) => (i === 0 ? { ...s, pickedId: "q0" } : s));
+    const again = mount(<Leaderboard date="2026-6-15" trace={other} />);
+    await act(async () => { again.root.render(<Leaderboard date="2026-6-15" trace={other} />); });
+    await settle();
+    expect(again.calls("/api/daily/submit")).toHaveLength(1);
+    act(() => again.root.unmount());
+  });
+
+  it("never submits a read-only board", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+    const m = mount(<Leaderboard date="2026-6-15" trace={TRACE} readOnly />);
+    await act(async () => { m.root.render(<Leaderboard date="2026-6-15" trace={TRACE} readOnly />); });
+    await settle();
+    expect(m.calls("/api/daily/submit")).toHaveLength(0);
+    expect(m.calls("/api/daily/leaderboard")).toHaveLength(1);
+    act(() => m.root.unmount());
+  });
+
+  it("never submits a game whose Daily rolled over at UTC midnight", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-06-16T00:00:05Z"), toFake: ["Date"] });
+    const m = mount(<Leaderboard date="2026-6-15" trace={TRACE} />);
+    await act(async () => { m.root.render(<Leaderboard date="2026-6-15" trace={TRACE} />); });
+    await settle();
+    expect(m.calls("/api/daily/submit")).toHaveLength(0);
+    expect(m.container.textContent).toMatch(/just reset/);
+    act(() => m.root.unmount());
+  });
+
+  it("without Redis (503) hides the board quietly and credits no streak", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+    const m = mount(<Leaderboard date="2026-6-15" trace={TRACE} />, 503);
+    await act(async () => { m.root.render(<Leaderboard date="2026-6-15" trace={TRACE} />); });
+    await settle();
+    expect(m.container.textContent).toMatch(/warming up/i);
+    expect(m.container.textContent).not.toContain("streak");
+    act(() => m.root.unmount());
   });
 });

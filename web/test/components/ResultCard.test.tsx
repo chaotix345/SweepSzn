@@ -20,6 +20,7 @@ vi.mock("@/lib/streak", () => ({ getUid: () => "test-uid" }));
 
 // --- import the component under test AFTER mocks ---
 import ResultCard, { ShareButton } from "@/components/ResultCard";
+import { headline } from "@/lib/explain";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
 import type { LineupResult, Player, Slot } from "@/lib/types";
@@ -277,10 +278,13 @@ describe("ResultCard — context & explanation layer", () => {
     expect(container.textContent).toMatch(/best draftable five projects 80-2/i);
   });
 
-  it("at the draftable ceiling, the ladder says S is theoretical instead of taunting '1 win from S'", () => {
+  // D10: under engine v4 the best draftable five is 80-2, so S is reachable — the ladder must not
+  // call it theoretical or unreachable.
+  it("one win short of S, the ladder names the real 80-2 ceiling instead of calling S unreachable", () => {
     const { container } = renderCard({ result: makeResult({ wins: 79, losses: 3, grade: "A+", label: "HISTORIC" }) });
-    expect(container.textContent).toMatch(/S .*theoretical — no draftable five has reached it/i);
-    expect(container.textContent).not.toMatch(/1 win from S/i);
+    expect(container.textContent).toMatch(/1 win from S \(PERFECT\)/);
+    expect(container.textContent).toMatch(/best draftable five goes 80-2/i);
+    expect(container.textContent).not.toMatch(/theoretical|unreachable|no draftable five/i);
   });
 
   it("renders the grade ladder with a next-grade hint when close", () => {
@@ -439,10 +443,10 @@ describe("ResultCard — shareable card image (screenshots are the product)", ()
   });
 });
 
-// The deep analytical tools now live in a collapsed "Explore" zone BELOW the Share CTA so a
-// first-time mobile visitor reaches Share without scrolling past them. The zone is lazy-mounted.
+// Result-card diet: the deep analytical tools (roster dossiers, Scouting, What-If, Compare) live in one
+// collapsed "Dig deeper" zone BELOW the Share CTA. The zone is lazy-mounted.
 function openExplore(container: HTMLElement) {
-  fireEvent.click(within(container).getByRole("button", { name: /explore your five/i }));
+  fireEvent.click(within(container).getByRole("button", { name: /dig deeper/i }));
 }
 
 describe("ResultCard — scouting anchor (now inside the Explore zone, below Share)", () => {
@@ -469,7 +473,7 @@ describe("ResultCard — share-first sequencing (deep tools disclosed below Shar
     expect(container.textContent).not.toMatch(/Open the What-If Lab/i);
     expect(container.textContent).not.toMatch(/Compare lineup/i);
     expect(container.textContent).not.toMatch(/Scouting report/i);
-    const toggle = within(container).getByRole("button", { name: /explore your five/i });
+    const toggle = within(container).getByRole("button", { name: /dig deeper/i });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
 
@@ -483,7 +487,7 @@ describe("ResultCard — share-first sequencing (deep tools disclosed below Shar
   it("places the primary Share affordance ABOVE the Explore zone (the growth loop is not buried)", () => {
     const { container } = renderCard();
     const share = container.querySelector('a[aria-label="Post to X"]')!;
-    const explore = within(container).getByRole("button", { name: /explore your five/i });
+    const explore = within(container).getByRole("button", { name: /dig deeper/i });
     // Node.DOCUMENT_POSITION_FOLLOWING (4) set => explore comes AFTER share in document order
     expect(share.compareDocumentPosition(explore) & 4).toBeTruthy();
   });
@@ -504,11 +508,34 @@ describe("ResultCard — share-first sequencing (deep tools disclosed below Shar
   });
 });
 
+describe("ResultCard — result-card diet (above the fold)", () => {
+  it("orders record → grade → verdict → Share → Play again before any analysis", () => {
+    const { container } = renderCard();
+    const text = container.textContent ?? "";
+    const at = (re: RegExp) => text.search(re);
+    const record = at(/55–27/), verdict = text.indexOf(headline(makeResult()));
+    const share = container.querySelector('a[aria-label="Post to X"]')!;
+    const again = within(container).getByRole("button", { name: /build another/i });
+    const why = within(container).getByText(/why this record/i);
+    expect(record).toBeGreaterThanOrEqual(0);
+    expect(verdict).toBeGreaterThan(record);
+    expect(share.compareDocumentPosition(why) & 4).toBeTruthy();   // Share precedes the analysis
+    expect(again.compareDocumentPosition(why) & 4).toBeTruthy();   // so does Play again
+  });
+});
+
 describe("ResultCard — roster-row player dossier (descriptive, post-commit §12)", () => {
   afterEach(() => { vi.unstubAllGlobals(); });
 
+  it("keeps the dossier roster behind Dig deeper, with the five still named above the fold", () => {
+    const { container } = renderCard();
+    expect(container.querySelectorAll('button[aria-label$=" details"]').length).toBe(0);
+    expect(container.textContent).toMatch(/Your starting five/);
+  });
+
   it("exposes a player-details toggle on every starting-five row", () => {
     const { container } = renderCard();
+    openExplore(container);
     const toggles = container.querySelectorAll('button[aria-label$=" details"]');
     expect(toggles.length).toBe(5);
   });
@@ -517,6 +544,7 @@ describe("ResultCard — roster-row player dossier (descriptive, post-commit §1
     // never-resolving fetch holds the dossier in its loading state (and silences RarityBadge/DexStrip)
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
     const { container } = renderCard();
+    openExplore(container);
     const toggle = container.querySelector('button[aria-label="Show Player PG details"]') as HTMLButtonElement;
     expect(toggle).toBeTruthy();
     expect(toggle.getAttribute("aria-expanded")).toBe("false");

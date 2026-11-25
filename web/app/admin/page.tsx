@@ -11,8 +11,8 @@ if (ADMIN_UIDS.length === 0) console.warn("[admin] ADMIN_UIDS is empty — /admi
 const fmtPct = (x: number) => `${(x * 100).toFixed(1)}%`;
 const fmtRate = (x: number) => fmtPct(Math.min(1, x)); // funnel rates can exceed 100% if a stage's beacon is lossy/spammed
 
-// Modes that show the post-game sign-in nudge (every mode except Daily, which uses the Leaderboard's
-// richer claim-your-rank prompt) — mirrors lib/signinNudge.showsSaveNudge.
+// Modes that showed the post-game sign-in nudge (every mode except Daily). The nudge was retired in
+// Nov 2026 (853 impressions, ~0 taps); the claim_nudge_* stages stay readable for that history.
 const NUDGE_MODES = ["classic", "hoopiq", "prime", "factorhunt", "blueprint", "surgeon", "challenge"];
 
 function Bar({ label, value, max }: { label: string; value: number; max: number }) {
@@ -142,7 +142,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           );
         })}
         {laggingNudges.size > 0 && <p className="text-xs text-amber-400">⚠️ {laggingNudges.size} mode{laggingNudges.size > 1 ? "s" : ""} with a tap rate well below the rest: {[...laggingNudges].join(", ")}</p>}
-        <p className="text-xs text-zinc-500">Did the post-game nudge earn the tap? Tap rate = claim_nudge_tap ÷ claim_nudge_shown for that mode (Daily excluded — it uses the Leaderboard prompt).</p>
+        <p className="text-xs text-zinc-500">Historical: the post-game nudge was retired in Nov 2026 and no longer fires. Tap rate = claim_nudge_tap ÷ claim_nudge_shown for that mode (Daily excluded — it uses the Leaderboard prompt).</p>
       </section>
 
       <section className="space-y-2">
