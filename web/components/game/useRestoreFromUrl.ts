@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { parseModeParam } from "@/lib/modeParam";
 import { encodeLineup, decodeShare } from "@/lib/share";
-import { readLastResult } from "@/lib/resultHistory";
+import { readLastResult, listResults } from "@/lib/resultHistory";
+import { legacyResultAsOf } from "@/lib/poolDate";
 import { bpCode, bpFromCode, type BlueprintKey } from "@/lib/blueprint";
 import type { Mode } from "@/components/game/types";
 import { todaySeed, type GameResult, type LastResult } from "@/components/game/gameState";
@@ -95,7 +96,9 @@ export function useRestoreFromUrl(
           const last = readLastResult<LastResult>();
           if (last && last.mode === m && last.result && encodeLineup(last.result.players.map((p) => p.id), last.result.usedHints, m === "prime", m === "blueprint" && last.bp ? bpCode(last.bp) : null) === enc) {
             if (cancelled) return;
-            setMode(m); setSeed(last.seed); setResult(last.result); setFhPrediction(last.fh ?? null); setBlueprint(last.bp ?? null); setRestoring(false); return;
+            // the pool the five was drafted from, so converting it to a challenge replays against it
+            const ts = listResults().find((e) => e.mode === m && e.encoded === enc)?.ts;
+            setMode(m); setSeed(last.seed); setAsOf(last.asOf ?? legacyResultAsOf(ts)); setResult(last.result); setFhPrediction(last.fh ?? null); setBlueprint(last.bp ?? null); setRestoring(false); return;
           }
           // cold restore (other device / cleared storage): rebuild from the five's ids. No trace, so the
           // Daily leaderboard renders read-only (still shows your standing, just no re-submit).

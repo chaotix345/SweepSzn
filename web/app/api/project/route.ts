@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 
   const drafted = getPlayersByIds(draftedIds);
   const openSlots = SLOTS.filter((_, i) => lineup[i] === null);
-  const pool = getDraftablePool(seed.startsWith("prime-"), undefined, resolveAsOf(seed, body?.asOf));
+  const pool = getDraftablePool(seed.startsWith("prime-"), undefined, resolveAsOf(seed, typeof body?.asOf === "string" ? body.asOf : undefined));
   const { floor, ceiling, n } = projectRoster(drafted, pool, openSlots, getCoefficients());
   return NextResponse.json({ floor, ceiling, n });
 }

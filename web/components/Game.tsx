@@ -105,12 +105,12 @@ export default function Game() {
     if (!projAllowed || filled < 1 || filled > 4) return;
     const lineup = rosterKey.split("|").map((id) => id || null);
     const ctrl = new AbortController();
-    fetch("/api/project", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, lineup }), signal: ctrl.signal })
+    fetch("/api/project", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, asOf, lineup }), signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (d && d.floor) setProjection(d as RosterProjection); })
       .catch(() => { /* offline or aborted — keep the last projection on screen */ });
     return () => ctrl.abort();
-  }, [seed, filled, projAllowed, rosterKey]);
+  }, [seed, asOf, filled, projAllowed, rosterKey]);
 
   useHoldYourPlace(mode, seed, result, blueprint, sgResult);
 
@@ -150,7 +150,7 @@ export default function Game() {
       setResult(full);
       // Persist so the result survives a refresh (full object, incl. trace) and shows under "Your
       // results". A challenge entry is upgraded with its challengeId later, when the link is created.
-      writeLastResult({ mode, seed, result: full, fh: fhPred, bp: blueprint });
+      writeLastResult({ mode, seed, asOf, result: full, fh: fhPred, bp: blueprint });
       if (mode) {
         const saved = saveResult({ encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints, mode === "prime", mode === "blueprint" && blueprint ? bpCode(blueprint) : null), mode, wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });
         if (user) void pushResult(saved); // signed in: mirror this game to the account history (cross-device)
@@ -162,7 +162,7 @@ export default function Game() {
     } finally {
       if (!ctrl.signal.aborted) setLoading(false);
     }
-  }, [mode, seed, blueprint, user]);
+  }, [mode, seed, asOf, blueprint, user]);
 
   // Factor Hunt: hook placed after simulate so beginFhPrediction can close over the stable callback.
   const { fhStep, fhPick, setFhPick, fhPrediction, setFhPrediction, fhRef, beginFhPrediction, lockFh, fhFetching, reset: resetFh } = useFactorHunt(seed, simulate, setError);

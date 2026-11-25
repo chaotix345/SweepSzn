@@ -12,7 +12,8 @@ export type GameResult = { result: LineupResult; players: Player[]; trace: Draft
 // The full current result kept in localStorage for a same-session refresh (carries the draft trace
 // plus, for Factor Hunt, the locked prediction so the verdict chip survives a refresh — and, for
 // Blueprint, the committed objective so the execution strip and board submit survive one too).
-export type LastResult = { mode: Mode; seed: string; result?: GameResult; fh?: string | null; bp?: BlueprintKey | null; sg?: SgResult };
+// asOf is the game's pinned pool date; results saved before it was stored have none (lib/poolDate.ts).
+export type LastResult = { mode: Mode; seed: string; asOf?: string; result?: GameResult; fh?: string | null; bp?: BlueprintKey | null; sg?: SgResult };
 
 // Hints are a limited resource: this many assisted picks per game (Classic only), so the engine's
 // fit grade can't be used to mindlessly auto-pick all five. Tune here (1 = strict, 3 = friendly).

@@ -29,6 +29,12 @@ const dayBefore = (iso: string): string => {
 // The pool date for stored challenges that predate pool dating: the last day before the 2025-26 release.
 export const LEGACY_AS_OF = dayBefore(SEASON_2026_SINCE);
 
+// The pool date of a saved result that predates storing one: the legacy pool if it was saved before
+// the release, else today.
+export function legacyResultAsOf(ts: number | undefined, now: Date = new Date()): string {
+  return ts !== undefined && ts < Date.parse(`${SEASON_2026_SINCE}T00:00:00Z`) ? LEGACY_AS_OF : isoDay(now);
+}
+
 // A card's `since`/`until` release key → its date. Unknown keys return null.
 export function releaseDate(key: string): string | null {
   return POOL_RELEASES[key] ?? null;
