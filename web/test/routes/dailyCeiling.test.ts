@@ -140,7 +140,7 @@ describe("caching + limits", () => {
   it("stores the computed ceiling in Redis with a long TTL and serves it from there", async () => {
     await get(PAST);
     const [key] = ceilingKeys();
-    expect(key).toMatch(/^ceiling:v1:[a-z0-9]+:2026-11-19$/);
+    expect(key).toMatch(/^ceiling:v1:[a-z0-9]+:[a-z0-9]+:2026-11-19$/);
     expect(ctx.redis!.ttls.get(key)).toBeGreaterThan(60 * 60 * 24 * 300);
     // prove the read path: tamper the stored record, drop the memo, and the route returns Redis's copy
     const stored = JSON.parse(ctx.redis!.strings.get(key)!);

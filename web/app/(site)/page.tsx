@@ -31,6 +31,7 @@ const SEO_COPY =
   "Prime Draft drops the era reel so you can build cross-era fives with every player at his peak; " +
   "Blueprint mode has you commit to a tactical objective before the spin and grades your execution; " +
   "and Surgeon mode diagnoses your lineup's worst factor and gives you one targeted swap to fix it. " +
+  "Draft Duel pits you against a bot drafting from the same spins in snake order, at three difficulty levels. " +
   "You can also challenge a friend to the same spins. Every result generates a unique shareable " +
   "permalink and result card. The goal: can you build an all-time NBA five that goes 82-0, " +
   "undefeated over a full season? Nobody has — the best draftable five projects 80-2, better than " +

@@ -87,6 +87,21 @@ describe("POST /api/profile/sync", () => {
     expect([...(ctx.redis!.sets.get(`dex:${UID}`) ?? [])]).toEqual([FIVE[0]]);
   });
 
+  it("syncs a Draft Duel entry with its outcome; only YOUR five enters the dex, never the bot's", async () => {
+    await signIn({ uid: UID, name: "X" });
+    const bot = ["magic_johnson_lal_1980s_1990", "larry_bird_bos_1980s_1985", "hakeem_olajuwon_hou_1990s_1993", "tim_duncan_sas_2000s_2002", "stephen_curry_gsw_2010s_2016"]; // real ids: proves the bot's five is NOT added
+    const card = `do~${FIVE.join(",")}.${bot.join(",")}`;
+    const { body } = await readJson(await post({ results: [
+      { encoded: card, mode: "duel", wins: 60, losses: 22, grade: "A", ts: 1, outcome: "w" },
+      { encoded: `${card}x`, mode: "duel", wins: 60, losses: 22, grade: "A", ts: 2, outcome: "bogus" },
+    ] }));
+    expect(body.results).toBe(2);
+    const stored = (ctx.redis!.lists.get(`results:${UID}`) ?? []).map((x) => (typeof x === "string" ? JSON.parse(x) : x));
+    expect(stored.find((e: { encoded: string }) => e.encoded === card).outcome).toBe("w");
+    expect(stored.find((e: { encoded: string }) => e.encoded === `${card}x`).outcome).toBeUndefined();
+    expect([...(ctx.redis!.sets.get(`dex:${UID}`) ?? [])].sort()).toEqual([...FIVE].sort());
+  });
+
   it("drops entries with an unknown mode at the trust boundary", async () => {
     await signIn({ uid: UID, name: "X" });
     const { body } = await readJson(await post({ results: [

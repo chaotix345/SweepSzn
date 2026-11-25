@@ -6,7 +6,7 @@ import { useSessionContext } from "@/components/SessionProvider";
 import { fetchProfile } from "@/lib/account";
 import { gradeColor } from "@/lib/grades";
 
-const MODE_LABEL: Record<ResultEntry["mode"], string> = { daily: "Daily", classic: "Classic", hoopiq: "HoopIQ", challenge: "Challenge", factorhunt: "Factor Hunt", prime: "Prime", blueprint: "Blueprint", surgeon: "Surgeon" };
+const MODE_LABEL: Record<ResultEntry["mode"], string> = { daily: "Daily", classic: "Classic", hoopiq: "HoopIQ", challenge: "Challenge", factorhunt: "Factor Hunt", prime: "Prime", blueprint: "Blueprint", surgeon: "Surgeon", duel: "Duel" };
 const gradeText = gradeColor; // single source of truth — DESIGN.md grade-color scale
 const ago = (ts: number) => {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -49,6 +49,9 @@ export default function ResultsHistory({ onOpenChallenge }: { onOpenChallenge: (
       <span className="w-20 shrink-0 text-xs font-bold uppercase tracking-wide text-zinc-400">{MODE_LABEL[e.mode]}</span>
       <span className="shrink-0 tabular-nums font-bold text-zinc-100">{e.wins}-{e.losses}</span>
       <span className={`shrink-0 text-sm font-bold ${gradeText(e.grade)}`}>{e.grade}</span>
+      {e.mode === "duel" && e.outcome && (
+        <span className="shrink-0 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-bold uppercase text-zinc-300">{e.outcome === "w" ? "Won" : e.outcome === "l" ? "Lost" : "Tie"}</span>
+      )}
       <span className="min-w-0 flex-1 text-right text-xs text-zinc-500">{ago(e.ts)}</span>
       <span className="shrink-0 text-orange-400/80">→</span>
     </>
@@ -64,7 +67,7 @@ export default function ResultsHistory({ onOpenChallenge }: { onOpenChallenge: (
         {items.slice(0, 12).map((e) => {
           const cls = "flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 transition hover:border-zinc-600";
           // surgeon entries store the /sg/ card and open the before/after permalink, not /r/
-          const href = e.mode === "surgeon" ? `/sg/${e.encoded}` : `/r/${e.encoded}`;
+          const href = e.mode === "surgeon" ? `/sg/${e.encoded}` : e.mode === "duel" ? `/duel/${e.encoded}` : `/r/${e.encoded}`;
           return e.mode === "challenge" && e.challengeId ? (
             <button key={`${e.mode}:${e.encoded}`} onClick={() => onOpenChallenge(e.challengeId!)} className={`w-full text-left ${cls}`}>
               <Row e={e} />

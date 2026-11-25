@@ -41,8 +41,9 @@ const DATA_ROUTES = [
   "/api/factorhunt/choices",
   "/api/surgeon/submit",
   "/api/surgeon/pool",
+  "/api/duel/**", // bot-pick + result (lib/duelBot replays through data.ts)
   "/api/challenge/**", // submit + [id] + [id]/board + [id]/results (lib/challengeStore imports data.ts)
-  "/r/**", "/pe/**", "/sg/**", "/c/**", "/dex/s/**", "/compare/**", // share pages + OG cards
+  "/r/**", "/pe/**", "/sg/**", "/c/**", "/dex/s/**", "/compare/**", "/duel/**", // share pages + OG cards
 ];
 
 const nextConfig: NextConfig = {

@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
 import type { DraftStep, LeaderboardView, DailyBoardRow, AggBoardView, AggLeaderboardRow } from "@/lib/types";
 import type { RankCard } from "@/lib/rankShare";
-import { getUid, getName, recordDailyDone, getStreak, msToNextUtcMidnight } from "@/lib/streak";
+import { getUid, getName, recordDailyDone, getStreak } from "@/lib/streak";
+import { useNextDailyCountdown } from "@/components/useNextDaily";
 import { useSession } from "@/lib/useSession";
 import RankShareButton from "@/components/RankShareButton";
 import PushPrompt from "@/components/PushPrompt";
@@ -15,33 +16,21 @@ import { AUTH_ENABLED } from "@/lib/authClient";
 type Tab = "daily" | "week" | "alltime";
 const TABS: [Tab, string][] = [["daily", "Daily"], ["week", "Weekly"], ["alltime", "All-time"]];
 
-const hhmmss = (ms: number) => {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
-};
-
 // the server's notion of "today" (UTC, same format as the daily seed/key) — used to detect a
 // game that straddled midnight so we can warn before the submit 400s with a cryptic "stale date".
 const serverDate = dayUTC;
-
-// Hydration-safe "mounted" flag (the Game/ResultCard useSyncExternalStore pattern): false on the server
-// and during hydration, true after — so the time-dependent countdown can't mismatch the server HTML.
-const subscribeNoop = () => () => {};
-const getMounted = () => true;
-const getServerMounted = () => false;
 
 const AUTO_KEY = "sweepszn:dailyAutoSubmitted";
 function wasAutoSubmitted(sig: string): boolean { try { return localStorage.getItem(AUTO_KEY) === sig; } catch { return false; } }
 function markAutoSubmitted(sig: string): void { try { localStorage.setItem(AUTO_KEY, sig); } catch { /* no storage */ } }
 
-export default function Leaderboard({ date: dateProp, trace, usedHints = false, readOnly = false, onView }: { date?: string; trace: DraftStep[]; usedHints?: boolean; readOnly?: boolean; onView?: (v: LeaderboardView | null) => void }) {
+export default function Leaderboard({ date: dateProp, trace, usedHints = false, readOnly = false, onView, onStreak }: { date?: string; trace: DraftStep[]; usedHints?: boolean; readOnly?: boolean; onView?: (v: LeaderboardView | null) => void; onStreak?: (n: number) => void }) {
   const { user, signOut, promptSignIn, signInNonce } = useSession();
   // No date = today's board, resolved on the client at mount (lets /leaderboards prerender statically
   // instead of rendering per request just to pass the date down; the date is never in the markup).
   const [today] = useState(dayUTC);
   const date = dateProp ?? today;
-  const mounted = useSyncExternalStore(subscribeNoop, getMounted, getServerMounted);
+  const countdown = useNextDailyCountdown();
   const [tab, setTab] = useState<Tab>("daily");
   const [view, setView] = useState<LeaderboardView | null>(null);
 
@@ -54,7 +43,6 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
   const [err, setErr] = useState<string | null>(null);
   const [streak, setStreak] = useState(0);
   const [serverStreak, setServerStreak] = useState<number | null>(null);
-  const [countdown, setCountdown] = useState(() => msToNextUtcMidnight());
   const [reload, setReload] = useState(0);
 
   const stale = !readOnly && date !== serverDate(); // this game's daily date rolled past UTC midnight
@@ -150,11 +138,6 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
     return () => { on = false; };
   }, [user?.uid, reload]);
 
-  useEffect(() => {
-    const t = setInterval(() => setCountdown(msToNextUtcMidnight()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
   // Fired once per fresh sign-in (via signInNonce): auto-claim today's result under the Google identity
   // so it immediately credits the daily + weekly + all-time boards. The generic streak/result migration
   // already ran in SessionProvider.onSignedIn.
@@ -194,6 +177,8 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
   const whenLabel = tab === "daily" ? " today" : tab === "week" ? " this week" : " all-time";
   // Signed in: show the server streak (cross-device). Signed out: the local-only streak.
   const displayStreak = user && serverStreak != null ? serverStreak : streak;
+  // mirror it up to the Daily result's come-back block (W3), which shows it prominently
+  useEffect(() => { onStreak?.(displayStreak); }, [displayStreak, onStreak]);
 
   return (
     <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
@@ -201,7 +186,7 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
         <div className="text-sm font-bold text-zinc-200">🏆 Leaderboard</div>
         <div className="flex items-center gap-3 text-xs text-zinc-500">
           {displayStreak > 0 && <span className="rounded bg-orange-500/15 px-2 py-0.5 font-semibold text-orange-300">🔥 {displayStreak}-day streak</span>}
-          {tab === "daily" && <span>next in <span className="tabular-nums text-zinc-400">{mounted ? hhmmss(countdown) : "--:--:--"}</span></span>}
+          {tab === "daily" && <span>next in <span className="tabular-nums text-zinc-400">{countdown}</span></span>}
         </div>
       </div>
 

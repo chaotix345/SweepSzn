@@ -3,7 +3,7 @@ import { parseModeParam, DEEP_LINK_MODES } from "@/lib/modeParam";
 
 describe("parseModeParam", () => {
   it("returns each deep-linkable mode unchanged", () => {
-    for (const m of ["daily", "classic", "hoopiq", "factorhunt", "prime", "blueprint", "surgeon"]) {
+    for (const m of ["daily", "classic", "hoopiq", "factorhunt", "prime", "blueprint", "surgeon", "duel"]) {
       expect(parseModeParam(m)).toBe(m);
     }
   });
@@ -37,9 +37,9 @@ describe("parseModeParam", () => {
     expect(parseModeParam("daily ")).toBeNull();
   });
 
-  it("DEEP_LINK_MODES is exactly the 7 non-challenge modes", () => {
+  it("DEEP_LINK_MODES is exactly the 8 non-challenge modes", () => {
     expect([...DEEP_LINK_MODES].sort()).toEqual(
-      ["blueprint", "classic", "daily", "factorhunt", "hoopiq", "prime", "surgeon"].sort(),
+      ["blueprint", "classic", "daily", "duel", "factorhunt", "hoopiq", "prime", "surgeon"].sort(),
     );
     expect(DEEP_LINK_MODES).not.toContain("challenge");
   });

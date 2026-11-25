@@ -52,6 +52,8 @@ const ROUTE_TO_TEST: Record<string, string> = {
   "daily/leaderboard":              "dailyLeaderboard",
   "daily/submit":                   "dailySubmit",
   "dex":                            "dex",
+  "duel/bot-pick":                  "duelBotPick",
+  "duel/result":                    "duelResult",
   "ev":                             "ev",
   "evaluate":                       "evaluate",
   "factorhunt/choices":             "factorhuntChoices",

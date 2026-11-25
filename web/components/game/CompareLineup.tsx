@@ -46,7 +46,7 @@ function RatingTable({ you, them }: {
   );
 }
 
-function RecordPill({ label, wins, losses, grade }: { label: string; wins: number; losses: number; grade: string }) {
+export function RecordPill({ label, wins, losses, grade }: { label: string; wins: number; losses: number; grade: string }) {
   return (
     <div className="rounded-xl bg-zinc-950/60 p-2">
       <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>

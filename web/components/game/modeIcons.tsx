@@ -28,6 +28,8 @@ export function ModeGlyph({ mode, className }: { mode: Mode; className?: string 
       return (<svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="9" x2="9" y2="21" /></svg>);
     case "surgeon": // ECG pulse — diagnose and fix
       return (<svg {...p}><polyline points="2 12 7 12 10 5 14 19 17 12 22 12" /></svg>);
+    case "duel": // facing arrows — you vs the bot, pick for pick
+      return (<svg {...p}><polyline points="4 7 9 12 4 17" /><polyline points="20 7 15 12 20 17" /><line x1="12" y1="4" x2="12" y2="20" /></svg>);
     case "challenge": // send — build a five, send a link
       return (<svg {...p}><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>);
   }

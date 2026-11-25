@@ -8,7 +8,7 @@ import type { SgResult } from "@/components/game/useSurgeon";
 // Hold-your-place: while a finished result is on screen, mirror it into the URL (?r=&m=) so a refresh
 // restores it. Challenge mode owns the URL via ?own=<id> (set by ChallengeOwner), so it's skipped here.
 // Surgeon hold-your-place: mirror the /sg/ card so a same-session refresh restores the delta.
-export function useHoldYourPlace(mode: Mode | null, seed: string, result: GameResult | null, blueprint: BlueprintKey | null, sgResult: SgResult | null) {
+export function useHoldYourPlace(mode: Mode | null, seed: string, result: GameResult | null, blueprint: BlueprintKey | null, sgResult: SgResult | null, archiveDate: string | null = null) {
   useEffect(() => {
     if (mode !== "surgeon" || !sgResult) return;
     try {
@@ -30,8 +30,10 @@ export function useHoldYourPlace(mode: Mode | null, seed: string, result: GameRe
       else if (mode === "factorhunt") u.searchParams.set("d", seed.replace("fh-", ""));
       else if (mode === "blueprint") u.searchParams.set("d", seed.replace("bp-", ""));
       else u.searchParams.delete("d");
+      // W3: an archive replay restores as one (unranked, no board), not as that day's ranked Daily
+      if (archiveDate) u.searchParams.set("a", "1"); else u.searchParams.delete("a");
       u.searchParams.delete("c"); u.searchParams.delete("own");
       window.history.replaceState(null, "", u.pathname + u.search + u.hash);
     } catch { /* no history API */ }
-  }, [result, mode, seed, blueprint]);
+  }, [result, mode, seed, blueprint, archiveDate]);
 }

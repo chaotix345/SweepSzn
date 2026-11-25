@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { redis } from "./redis";
 import { dayUTC } from "./day";
 import { decodeLineup } from "./share";
+import { decodeDuelCard } from "./duel";
 import { decodeSurgeonCard } from "./surgeon";
 import { RELEASE_LOCK_LUA } from "./score";
 
@@ -50,11 +51,13 @@ export interface ProfileResult {
   grade: string;
   ts: number;
   challengeId?: string;
+  outcome?: "w" | "l" | "t";
 }
 
 // Every player id a stored result fielded. Surgeon entries carry a card (`ids.outIdx.inId`), not a
 // lineup segment: the drafted five plus the swapped-in player all took the floor.
 export function fieldedIds(r: Pick<ProfileResult, "mode" | "encoded">): string[] {
+  if (r.mode === "duel") return decodeDuelCard(r.encoded)?.youIds ?? []; // your five only — the bot's isn't yours
   if (r.mode !== "surgeon") return decodeLineup(r.encoded);
   const card = decodeSurgeonCard(r.encoded);
   return card ? [...card.beforeIds, card.inId] : [];

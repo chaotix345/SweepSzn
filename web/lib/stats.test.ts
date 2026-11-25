@@ -25,8 +25,8 @@ describe("computeStats — empty / malformed input", () => {
     expect(s.grades.every((g) => g.count === 0)).toBe(true);
   });
 
-  it("covers all eight result modes and the engine's grade scale in order", () => {
-    expect([...STAT_MODES]).toEqual(["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon"]);
+  it("covers all nine result modes and the engine's grade scale in order", () => {
+    expect([...STAT_MODES]).toEqual(["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon", "duel"]);
     expect([...GRADE_SCALE]).toEqual(["S", "A+", "A", "B", "C", "D", "F"]);
   });
 
@@ -204,7 +204,24 @@ describe("resultHref", () => {
   it("links like ResultsHistory: /r/ by default, /sg/ for surgeon, the owner dashboard for a created challenge", () => {
     expect(resultHref(e({ mode: "classic", wins: 1, encoded: "abc" }))).toBe("/r/abc");
     expect(resultHref(e({ mode: "surgeon", wins: 1, encoded: "card1" }))).toBe("/sg/card1");
+    expect(resultHref(e({ mode: "duel", wins: 1, encoded: "do~a,b,c,d,e.f,g,h,i,j" }))).toBe("/duel/do~a,b,c,d,e.f,g,h,i,j");
     expect(resultHref(e({ mode: "challenge", wins: 1, encoded: "five", challengeId: "abc123" }))).toBe("/play?own=abc123");
     expect(resultHref(e({ mode: "challenge", wins: 1, encoded: "five" }))).toBe("/r/five"); // responder entry
+  });
+});
+
+describe("computeStats — Draft Duel record", () => {
+  it("counts duel outcomes vs the bot (W-L-T); other modes and outcome-less entries don't count", () => {
+    const s = computeStats([
+      e({ mode: "duel", wins: 60, encoded: "d1", outcome: "w" }),
+      e({ mode: "duel", wins: 40, encoded: "d2", outcome: "l" }),
+      e({ mode: "duel", wins: 50, encoded: "d3", outcome: "w" }),
+      e({ mode: "duel", wins: 50, encoded: "d4", outcome: "t" }),
+      e({ mode: "duel", wins: 50, encoded: "d5" }),
+      e({ mode: "classic", wins: 50, encoded: "c1", outcome: "w" }),
+    ], [], NOW);
+    expect(s.duel).toEqual({ w: 2, l: 1, t: 1 });
+    expect(s.modes.find((m) => m.mode === "duel")!.played).toBe(4 + 1);
+    expect(computeStats([], [], NOW).duel).toEqual({ w: 0, l: 0, t: 0 });
   });
 });

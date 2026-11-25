@@ -31,6 +31,16 @@ describe("rescoreProfileResults", () => {
     expect(await r.get("results:lock:u1")).toBeNull(); // released
   });
 
+  it("re-decides a duel's outcome against the rescored bot five", async () => {
+    const r = fake();
+    // stored as a win; under the new engine the bot's five (led by z9) goes 70-12 and yours 60-22
+    await r.lpush("results:u3", { encoded: `do~${IDS.join(",")}.z9,f6,g7,h8,i9`, mode: "duel", wins: 61, losses: 21, grade: "B", outcome: "w", ts: 1 });
+    expect(await rescoreProfileResults(r, "u3", evaluate)).toBe(1);
+    const [e] = await r.lrange<{ wins: number; outcome: string }>("results:u3", 0, -1);
+    expect(e).toMatchObject({ wins: 60, outcome: "l" });
+    expect(await rescoreProfileResults(r, "u3", evaluate)).toBe(0);
+  });
+
   it("does not touch a history whose sync lock another writer holds", async () => {
     const r = fake();
     await r.lpush("results:u2", { encoded: IDS.join(","), mode: "classic", wins: 41, losses: 41, grade: "D", ts: 1 });

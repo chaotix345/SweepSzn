@@ -20,7 +20,7 @@ No account is needed. The engine models finite possessions and usage overload, e
 
 ## Key pages
 
-- [Play](${u("/play")}): draft a five in Daily, Classic, HoopIQ, Prime Draft, Factor Hunt, Blueprint, Surgeon or Challenge mode
+- [Play](${u("/play")}): draft a five in Daily, Classic, HoopIQ, Prime Draft, Factor Hunt, Blueprint, Surgeon or Challenge mode, or draft against a bot in Draft Duel
 - [How it works](${u("/how-it-works")}): what the engine models, straight answers, and the public accuracy receipts
 - [About](${u("/about")}): what SweepSzn is, with an FAQ
 - [All-time fives for every NBA franchise](${u("/teams")}): 30 franchise pages, each five picked by career accolades and scored by the engine

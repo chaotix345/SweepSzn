@@ -5,6 +5,7 @@ import ResultsHistory from "@/components/ResultsHistory";
 import { ModeGlyph } from "@/components/game/modeIcons";
 import { CloseIcon } from "@/components/ui/icons";
 import { listResults, type ResultEntry } from "@/lib/resultHistory";
+import { getHistory } from "@/lib/streak";
 import { dayUTC } from "@/lib/day";
 import type { Mode } from "@/components/game/types";
 
@@ -72,21 +73,25 @@ function ModeTile({ m, onPick }: { m: ModeCard; onPick: (m: Mode) => void }) {
 
 const DAILY_CARD = "group mt-5 block w-full overflow-hidden rounded-2xl border border-orange-500/40 bg-gradient-to-br from-orange-500/10 to-zinc-900 p-6 text-left ring-1 ring-orange-500/10 transition hover:border-orange-500 hover:ring-orange-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 sm:mt-8 sm:p-7";
 
-// Featured Daily card: a client-side Link to today's /r/ result once played, otherwise a button that starts it.
-function DailyCardShell({ href, onPlay, children }: { href: string | null; onPlay: () => void; children: React.ReactNode }) {
-  return href
-    ? <Link href={href} aria-label="View today's Daily result" className={DAILY_CARD}>{children}</Link>
+// Featured Daily card. Played today: reopens the player's own Daily result and standing in place (F15;
+// the cold /r/ page has neither). Otherwise a button that starts it.
+function DailyCardShell({ played, onView, onPlay, children }: { played: boolean; onView: () => void; onPlay: () => void; children: React.ReactNode }) {
+  return played
+    ? <button onClick={onView} aria-label="View today's Daily result" className={DAILY_CARD}>{children}</button>
     : <button onClick={onPlay} aria-label="Play Daily mode — recommended for new players" className={DAILY_CARD}>{children}</button>;
 }
 
-export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => void; onOpenChallenge: (challengeId: string) => void }) {
+export function ModeSelect({ onPick, onOpenChallenge, onViewDaily }: { onPick: (m: Mode) => void; onOpenChallenge: (challengeId: string) => void; onViewDaily: (encoded: string) => void }) {
   const [showIntro, setShowIntro] = useState(false);
   // First visit only: read the flag after mount (avoids SSR/hydration mismatch), show the 10-second
-  // orientation, and remember the dismissal.
+  // orientation, and remember the dismissal. A returning player (any game or Daily on this device)
+  // never sees it, dismissed or not (F15).
   useEffect(() => {
     // async IIFE keeps the setState out of the effect body (react-hooks/set-state-in-effect — repo idiom)
     (async () => {
-      try { if (!localStorage.getItem("sweepszn_seen_modes")) setShowIntro(true); } catch { /* private mode */ }
+      try {
+        if (!localStorage.getItem("sweepszn_seen_modes") && listResults().length === 0 && getHistory().length === 0) setShowIntro(true);
+      } catch { /* private mode */ }
     })();
   }, []);
   const dismissIntro = () => {
@@ -108,8 +113,9 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
   const [history, setHistory] = useState<ResultEntry[] | null>(null);
   // read after mount (hydration-safe, like ResultsHistory). null until then → no returning-user UI on SSR.
   useEffect(() => { (async () => { try { setHistory(listResults()); } catch { /* private mode */ } })(); }, []);
-  // Returning-user fast path: most recent SOLO game's mode (daily is featured above; challenge has its own).
-  const lastReplay = history?.find((e) => e.mode !== "daily" && e.mode !== "challenge");
+  // Returning-user fast path: most recent SOLO game's mode (daily and duel have their own cards right
+  // above it; challenge has its own).
+  const lastReplay = history?.find((e) => e.mode !== "daily" && e.mode !== "challenge" && e.mode !== "duel");
   const lastReplayMode = MODES.find((m) => m.id === lastReplay?.mode);
   // Daily already played today? Deep-link to its result instead of re-drafting the already-scored board.
   const dailyToday = history?.find((e) => e.mode === "daily" && dayUTC(new Date(e.ts)) === dayUTC());
@@ -135,7 +141,7 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
       )}
 
       {/* Featured: Daily — the obvious, low-commitment first play */}
-      <DailyCardShell href={dailyToday ? `/r/${dailyToday.encoded}` : null} onPlay={() => onPick("daily")}>
+      <DailyCardShell played={!!dailyToday} onView={() => dailyToday && onViewDaily(dailyToday.encoded)} onPlay={() => onPick("daily")}>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-orange-300">
           {dailyToday ? "✓ You played today" : "★ Recommended · start here"}
         </span>
@@ -154,6 +160,22 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
           {dailyToday ? "View today's result →" : "Play Daily →"}
         </div>
       </DailyCardShell>
+
+      {/* Draft Duel: a solo opponent, right after Daily (W4) */}
+      <button
+        onClick={() => onPick("duel")}
+        aria-label="Play Draft Duel mode"
+        className="group mt-4 flex w-full items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-left transition hover:border-zinc-600 hover:shadow-[0_10px_28px_rgba(0,0,0,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-500/15 text-orange-400">
+          <ModeGlyph mode="duel" className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 font-bold text-zinc-100">Draft Duel <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-orange-300">New</span></div>
+          <p className="mt-0.5 text-sm text-zinc-400">Draft against a bot from the same spins, snake order. Three opponents, easy to hard.</p>
+        </div>
+        <span className="shrink-0 text-sm font-bold text-orange-400 group-hover:underline">Play →</span>
+      </button>
 
       {/* Returning-user fast path: jump straight back into your last solo mode */}
       {lastReplayMode && (
@@ -193,12 +215,28 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
           className="flex w-full items-center justify-between gap-3 rounded-2xl px-5 py-4 text-left transition hover:bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500">
           <span>
             <span className="block font-bold text-zinc-100">More modes</span>
-            <span className="mt-0.5 block text-sm text-zinc-400">{MORE_MODES.map((m) => m.title).join(" · ")}</span>
+            <span className="mt-0.5 block text-sm text-zinc-400">{MORE_MODES.map((m) => m.title).join(" · ")} · Daily archive</span>
           </span>
           <span aria-hidden className="shrink-0 text-zinc-500">{moreOpen ? "▴" : "▾"}</span>
         </button>
         <div id="more-modes-panel" hidden={!moreOpen} className="grid gap-4 px-4 pb-4 sm:grid-cols-2">
           {moreOpen && MORE_MODES.map((m) => <ModeTile key={m.id} m={m} onPick={onPick} />)}
+          {/* W3: replay any past Daily on that day's spins, unranked */}
+          {moreOpen && (
+            <Link href="/archive" aria-label="Open the Daily archive"
+              className="group flex flex-col rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-left transition hover:-translate-y-0.5 hover:border-zinc-600 hover:shadow-[0_10px_28px_rgba(0,0,0,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 sm:col-span-2">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-500/15 text-orange-400">
+                  <ModeGlyph mode="daily" className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold text-zinc-100">Daily archive</div>
+                  <p className="mt-0.5 text-sm text-zinc-400">Replay any past Daily on that day&apos;s spins, then see its perfect five. Unranked.</p>
+                </div>
+                <span className="shrink-0 text-sm font-bold text-orange-400 group-hover:underline">Browse →</span>
+              </div>
+            </Link>
+          )}
         </div>
       </div>
 

@@ -2,13 +2,14 @@ import { useEffect } from "react";
 import { parseModeParam } from "@/lib/modeParam";
 import { encodeLineup, decodeShare } from "@/lib/share";
 import { readLastResult, listResults } from "@/lib/resultHistory";
-import { legacyResultAsOf } from "@/lib/poolDate";
+import { legacyResultAsOf, seedDay } from "@/lib/poolDate";
+import { archiveDay } from "@/lib/day";
 import { bpCode, bpFromCode, type BlueprintKey } from "@/lib/blueprint";
 import type { Mode } from "@/components/game/types";
 import { todaySeed, type GameResult, type LastResult } from "@/components/game/gameState";
 import type { SgResult } from "@/components/game/useSurgeon";
 
-type StartFn = (m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string; asOf?: string }) => void;
+type StartFn = (m: Mode, challenge?: { id: string; role: "create" | "respond"; seed?: string; asOf?: string }, archive?: string) => void;
 
 // Bootstrap the view from the URL (hold-your-place restore on refresh). Priority: a joiner deep link
 // (?c=<id>) → respond mode; then a creator dashboard (?own=<id>); then a finished-result restore
@@ -25,6 +26,8 @@ export function useRestoreFromUrl(
   setFhPrediction: (p: string | null) => void,
   setBlueprint: (b: BlueprintKey | null) => void,
   setSgResult: (r: SgResult | null) => void,
+  setArchiveDate: (d: string | null) => void,
+  nonce = 0, // bump to re-run the restore after rewriting the URL in place (the picker's "View today's result")
 ) {
   useEffect(() => {
     let cancelled = false;
@@ -65,11 +68,14 @@ export function useRestoreFromUrl(
         const dl = parseModeParam(params.get("mode"));
         if (dl) {
           if (cancelled) return;
-          start(dl);
+          // W3 archive: /play?mode=daily&date=YYYY-M-D replays a rolled-over Daily (unranked). Anything
+          // that isn't a past Daily (today, the future, before the first one, junk) plays today's.
+          const arch = dl === "daily" ? archiveDay(params.get("date")) : null;
+          start(dl, undefined, arch ?? undefined);
           // A fresh start owns the URL: drop ?mode= AND any restore params (?r=/?m=/?own=/?d=/?sg=) so a
           // later refresh can't resurrect a stale result. start() already strips them from the LIVE url,
           // but `params` is the pre-start snapshot — clean it too before this replaceState rewrites the bar.
-          for (const k of ["mode", "r", "m", "own", "d", "sg"]) params.delete(k);
+          for (const k of ["mode", "r", "m", "own", "d", "sg", "a", "date"]) params.delete(k);
           const qs = params.toString();
           window.history.replaceState(null, "", window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash);
           return;
@@ -98,6 +104,7 @@ export function useRestoreFromUrl(
             if (cancelled) return;
             // the pool the five was drafted from, so converting it to a challenge replays against it
             const ts = listResults().find((e) => e.mode === m && e.encoded === enc)?.ts;
+            setArchiveDate(m === "daily" && last.archive ? last.archive : null);
             setMode(m); setSeed(last.seed); setAsOf(last.asOf ?? legacyResultAsOf(ts)); setResult(last.result); setFhPrediction(last.fh ?? null); setBlueprint(last.bp ?? null); setRestoring(false); return;
           }
           // cold restore (other device / cleared storage): rebuild from the five's ids. No trace, so the
@@ -113,6 +120,10 @@ export function useRestoreFromUrl(
             // shows the result's own day (read-only), not today's empty board. Fall back to today if absent/bad.
             const d = params.get("d");
             const dailyDate = d && /^\d{4}-\d{1,2}-\d{1,2}$/.test(d) ? d : todaySeed();
+            // a cold archive restore (?a=1) stays an unranked replay: no board for that day
+            const arch = m === "daily" && params.get("a") === "1" ? archiveDay(dailyDate) : null;
+            setArchiveDate(arch);
+            if (arch) setAsOf(seedDay(`daily-${arch}`) ?? "");
             setMode(m); setSeed(m === "daily" ? `daily-${dailyDate}` : m === "factorhunt" ? `fh-${dailyDate}` : m === "blueprint" ? `bp-${dailyDate}` : `${m}-restored`);
             if (m === "blueprint") setBlueprint(bpFromCode(bp)); // the committed objective rides the encoded lineup
             setResult({ result: data.result, players: data.players, trace: [], usedHints: hinted });
@@ -122,5 +133,5 @@ export function useRestoreFromUrl(
       } catch { /* no query / no history API */ }
     })();
     return () => { cancelled = true; };
-  }, [start, setOwnerId, setRestoring, setMode, setSeed, setAsOf, setResult, setFhPrediction, setBlueprint, setSgResult]);
+  }, [start, setOwnerId, setRestoring, setMode, setSeed, setAsOf, setResult, setFhPrediction, setBlueprint, setSgResult, setArchiveDate, nonce]);
 }

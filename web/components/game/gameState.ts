@@ -13,7 +13,8 @@ export type GameResult = { result: LineupResult; players: Player[]; trace: Draft
 // plus, for Factor Hunt, the locked prediction so the verdict chip survives a refresh — and, for
 // Blueprint, the committed objective so the execution strip and board submit survive one too).
 // asOf is the game's pinned pool date; results saved before it was stored have none (lib/poolDate.ts).
-export type LastResult = { mode: Mode; seed: string; asOf?: string; result?: GameResult; fh?: string | null; bp?: BlueprintKey | null; sg?: SgResult };
+// archive: the past Daily this was an unranked W3 replay of (its seed is that day's).
+export type LastResult = { mode: Mode; seed: string; asOf?: string; result?: GameResult; fh?: string | null; bp?: BlueprintKey | null; sg?: SgResult; archive?: string };
 
 // Hints are a limited resource: this many assisted picks per game (Classic only), so the engine's
 // fit grade can't be used to mindlessly auto-pick all five. Tune here (1 = strict, 3 = friendly).
@@ -28,8 +29,9 @@ export function todaySeed() {
 export function stripRestoreParams() {
   try {
     const u = new URL(window.location.href);
-    if (u.searchParams.has("r") || u.searchParams.has("m") || u.searchParams.has("own") || u.searchParams.has("d") || u.searchParams.has("sg")) {
-      u.searchParams.delete("r"); u.searchParams.delete("m"); u.searchParams.delete("own"); u.searchParams.delete("d"); u.searchParams.delete("sg");
+    const keys = ["r", "m", "own", "d", "sg", "a", "date"];
+    if (keys.some((k) => u.searchParams.has(k))) {
+      for (const k of keys) u.searchParams.delete(k);
       window.history.replaceState(null, "", u.pathname + u.search + u.hash);
     }
   } catch { /* no history API */ }
