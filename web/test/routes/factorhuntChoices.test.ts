@@ -41,7 +41,7 @@ const DEFAULT_COEFFS: Coefficients = {
   defModelEst: { intercept: -1.7504, dws: 77.2445, posC: 0.0613, posPF: -0.2484, posSF: -0.1734, posSG: -0.1265 },
   defEstCap: 5.5, dwsShrinkK: 40, leagueDwsMean: 0.02037,
   usgModel: { intercept: 21.2311, pts: 3.0339, ast: -0.4904 },
-  usageBudget: 100, overloadGamma: 0.22,
+  usageBudget: 100, usageFloor: 0, overloadGamma: 0.22, overloadPow: 1, shortfallGamma: 0,
   spacing: { perShooter: 0.987, diminish: 0.55, noneFloor: -3, baseline: 1.6 },
   rim: { blkLo: 0.4, blkSpan: 1.4, trbProxyLo: 0.8, trbProxySpan: 1.6 },
   noRimPenalty: 7, thinPerimeterPenalty: 3,
