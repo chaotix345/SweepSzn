@@ -1,5 +1,5 @@
 import "server-only";
-import { HERO_IDS } from "@/components/ResultPreview";
+import { HERO_IDS } from "@/lib/heroExample";
 import { getCoefficients, getPlayersByIds } from "./data";
 import { evaluateLineup } from "./engine";
 import { getEngineMeta } from "./receipts";

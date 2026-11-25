@@ -60,3 +60,15 @@ describe("LandingSection — honest calibration copy", () => {
     expect(container.textContent).not.toMatch(/not hand-tuned/);
   });
 });
+
+describe("LandingSection — engine-derived contrast copy (no hardcoded number that can drift)", () => {
+  it("quotes the hero five's record, grade and usage-overload hit exactly as the engine computes them", async () => {
+    const { heroExample } = await import("@/lib/heroExample");
+    const { result, usageOverload } = heroExample();
+    const { container } = render(<LandingSection />);
+    const text = container.textContent ?? "";
+    expect(text).toContain(`−${Math.abs(usageOverload!).toFixed(1)} for usage overload`);
+    expect(text).toContain(`${result.wins}–${result.losses}`);
+    expect(text).toContain(`${result.grade} ${result.label}`);
+  });
+});

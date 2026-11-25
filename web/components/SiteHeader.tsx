@@ -8,12 +8,18 @@ import { ButtonLink } from "@/components/ui/Button";
 import { MenuIcon, CloseIcon } from "@/components/ui/icons";
 import { buildFocusTrapHandler } from "@/components/game/useFocusTrap";
 
+// `desktop: false` keeps an item to the mobile menu + footer so the desktop bar stays one line.
 const NAV = [
-  { href: "/play", label: "Play" },
-  { href: "/leaderboards", label: "Leaderboards" },
-  { href: "/how-it-works", label: "How it works" },
-  { href: "/about", label: "About" },
+  { href: "/play", label: "Play", desktop: true },
+  { href: "/leaderboards", label: "Leaderboards", desktop: true },
+  { href: "/teams", label: "Teams", desktop: true },
+  { href: "/stats", label: "Stats", desktop: true },
+  { href: "/dex", label: "Dex", desktop: false },
+  { href: "/how-it-works", label: "How it works", desktop: true },
+  { href: "/about", label: "About", desktop: false },
 ];
+
+const CTA_LABEL = "Draft your five";
 
 export default function SiteHeader() {
   const pathname = usePathname();
@@ -22,6 +28,8 @@ export default function SiteHeader() {
   const navRef = useRef<HTMLElement>(null);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  // The home hero owns the one orange primary CTA, so the header CTA steps down to secondary there.
+  const ctaVariant = pathname === "/" ? "secondary" : "primary";
 
   // Escape closes the mobile menu and returns focus to the toggle (keyboard a11y)
   useEffect(() => {
@@ -42,7 +50,7 @@ export default function SiteHeader() {
         </Link>
 
         <nav className="hidden items-center gap-6 sm:flex">
-          {NAV.map((n) => (
+          {NAV.filter((n) => n.desktop).map((n) => (
             <Link
               key={n.href}
               href={n.href}
@@ -56,8 +64,8 @@ export default function SiteHeader() {
 
         <div className="flex items-center gap-2">
           {pathname !== "/play" && (
-            <ButtonLink href="/play" size="sm" className="hidden sm:inline-flex">
-              Build your five
+            <ButtonLink href="/play" size="sm" variant={ctaVariant} className="hidden sm:inline-flex">
+              {CTA_LABEL}
             </ButtonLink>
           )}
           <AuthControl />
@@ -94,9 +102,11 @@ export default function SiteHeader() {
               {n.label}
             </Link>
           ))}
-          <ButtonLink href="/play" onClick={() => setOpen(false)} className="mt-1 w-full">
-            Build your five →
-          </ButtonLink>
+          {pathname !== "/play" && (
+            <ButtonLink href="/play" onClick={() => setOpen(false)} variant={ctaVariant} className="mt-1 w-full">
+              {CTA_LABEL} →
+            </ButtonLink>
+          )}
         </nav>
       )}
     </header>

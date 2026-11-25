@@ -23,7 +23,7 @@ export default function SiteFooter() {
               Can you go 82-0? Draft an all-time NBA five and find out. It&apos;s sweep season.
             </p>
             <div className="mt-4 flex items-center gap-4">
-              <ButtonLink href="/play" size="sm">
+              <ButtonLink href="/play" size="sm" variant="secondary">
                 Draft your five →
               </ButtonLink>
               <a
@@ -40,9 +40,11 @@ export default function SiteFooter() {
           <nav className="grid grid-cols-2 gap-x-10 gap-y-2 text-sm">
             <Link href="/play" className="text-zinc-400 hover:text-zinc-100">Play</Link>
             <Link href="/leaderboards" className="text-zinc-400 hover:text-zinc-100">Leaderboards</Link>
+            <Link href="/teams" className="text-zinc-400 hover:text-zinc-100">Teams</Link>
+            <Link href="/stats" className="text-zinc-400 hover:text-zinc-100">Stats</Link>
+            <Link href="/dex" className="text-zinc-400 hover:text-zinc-100">Dex</Link>
             <Link href="/how-it-works" className="text-zinc-400 hover:text-zinc-100">How it works</Link>
             <Link href="/about" className="text-zinc-400 hover:text-zinc-100">About</Link>
-            <Link href="/teams" className="text-zinc-400 hover:text-zinc-100">Teams</Link>
             <Link href="/vs" className="text-zinc-400 hover:text-zinc-100">Matchups</Link>
           </nav>
         </div>

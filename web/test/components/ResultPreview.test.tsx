@@ -33,3 +33,16 @@ describe("ResultPreview — landing hero example card", () => {
     expect(container.textContent).toMatch(/projected record/i);
   });
 });
+
+describe("ResultPreview — names the five", () => {
+  it("renders a slot-labelled chip for each of the five players", async () => {
+    const { heroExample } = await import("@/lib/heroExample");
+    const { container } = render(<ResultPreview />);
+    const chips = container.querySelectorAll('ul[aria-label="The five"] li');
+    expect(chips.length).toBe(5);
+    heroExample().chips.forEach((c, i) => {
+      expect(chips[i].textContent).toContain(c.name);
+      expect(chips[i].textContent).toContain(c.slot);
+    });
+  });
+});

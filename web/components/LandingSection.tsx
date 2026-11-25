@@ -6,18 +6,23 @@ import Link from "next/link";
 import ResultPreview from "./ResultPreview";
 import TodaysBest from "@/components/TodaysBest";
 import { ButtonLink } from "@/components/ui/Button";
+import { heroExample, HERO_SHORT_NAMES } from "@/lib/heroExample";
+import { GRADE_COLOR, isEliteGrade } from "@/lib/grades";
 
 export default function LandingSection() {
+  const { result, usageOverload } = heroExample();
+  const elite = isEliteGrade(result.grade);
+  const gradeColor = GRADE_COLOR[result.grade] ?? "text-zinc-300";
+  const names = HERO_SHORT_NAMES.join(", ");
   return (
     <div className="bg-zinc-950 text-zinc-100">
       {/* ── Section 1: Scoreboard hero ─────────────────────────────────────
-          Mobile order (single column, verified): headline → CTA + live strip → result card.
-          The ready-to-play visitor gets the orange CTA above the fold; the proof card follows.
-          Desktop (lg): two columns — headline + CTA stack on the left, the result card fills
-          the right, vertically centered. Grid placement drives both without duplicating the CTA. */}
+          Mobile order (single column): headline → CTA + live strip → result card. The ready-to-play
+          visitor gets the orange CTA above the fold; the proof card follows. Desktop (lg): two columns,
+          one left stack (headline → CTA, no gap between them) beside the result card. */}
       <section className="bg-arena-glow px-5 pt-12 pb-10 sm:px-8 sm:pt-16">
         <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-2 lg:gap-14">
-          <div className="order-1 text-center lg:col-start-1 lg:row-start-1 lg:text-left">
+          <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-400">
               All-time NBA lineup simulator
             </p>
@@ -27,23 +32,22 @@ export default function LandingSection() {
             <p className="mx-auto mt-5 max-w-md text-base text-zinc-400 sm:text-lg lg:mx-0">
               {"Draft an all-time NBA five. An engine fit to 1,170 real seasons simulates all 82 games — and finds every hole in your lineup."}
             </p>
+            <div className="mt-8 flex flex-col items-center gap-4 lg:items-start">
+              <div className="flex flex-col items-center gap-1 lg:items-start">
+                <ButtonLink href="/play?mode=daily" size="lg">
+                  Draft your five →
+                </ButtonLink>
+                <p className="text-xs text-zinc-400">No account needed · free forever</p>
+              </div>
+              <TodaysBest />
+            </div>
           </div>
 
-          <div className="order-3 mx-auto w-full max-w-lg lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mx-0">
+          <div className="mx-auto w-full max-w-lg lg:mx-0">
             {/* No `reveal`: the buzzer slam + gold pulse is the EARNED in-game payoff (DESIGN.md). The
                 static example keeps its ambient gold ring/glow so it still reads elite, without
                 spending the reveal before the visitor has done anything. */}
             <ResultPreview />
-          </div>
-
-          <div className="order-2 flex flex-col items-center gap-4 lg:order-none lg:col-start-1 lg:row-start-2 lg:items-start">
-            <div className="flex flex-col items-center gap-1 lg:items-start">
-              <ButtonLink href="/play?mode=daily" size="lg">
-                Draft your five →
-              </ButtonLink>
-              <p className="text-xs text-zinc-400">No account needed · free forever</p>
-            </div>
-            <TodaysBest />
           </div>
         </div>
       </section>
@@ -72,11 +76,13 @@ export default function LandingSection() {
             <div className="text-xs font-bold uppercase tracking-wide text-orange-400">SweepSzn engine</div>
             <div className="mt-0.5 text-[11px] italic text-zinc-500">rewards a balanced two-way five</div>
             <div className="mt-3 flex items-baseline gap-2">
-              <span className="font-display text-5xl tabular-nums text-green-400">78<span className="text-zinc-600">–</span>4</span>
-              <span className="rounded-full bg-gold/10 px-2 py-0.5 text-xs font-black text-gold">A+ HISTORIC</span>
+              <span className="font-display text-5xl tabular-nums text-green-400">{result.wins}<span className="text-zinc-600">–</span>{result.losses}</span>
+              <span className={`rounded-full px-2 py-0.5 text-xs font-black ${elite ? "bg-gold/10" : "bg-zinc-800"} ${gradeColor}`}>{result.grade} {result.label}</span>
             </div>
             <p className="mt-3 text-xs text-zinc-400">
-              {"Curry, Jordan, LeBron, Giannis, Jokić — and it still docks them −13.2 for usage overload."}
+              {usageOverload !== null
+                ? `${names} — and it still docks them −${Math.abs(usageOverload).toFixed(1)} for usage overload.`
+                : `${names} — and it still checks them for usage overload.`}
             </p>
             <p className="mt-2 text-sm font-semibold text-green-400">The engine gets it right.</p>
           </div>
