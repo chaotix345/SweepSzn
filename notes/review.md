@@ -1,3 +1,34 @@
+# App upgrades roadmap shipped — 2026-11-25/26
+
+- **Spec:** `docs/specs/2026-11-25-app-upgrades-design.md`, with decisions D1–D11.
+- **UI/UX audit:** `docs/plans/2026-11-25-uiux-audit.md`, by a Gemini 4 Neon reviewer.
+- **How decisions were made:** the brainstorm used a Neon owner stand-in, checked against real production usage (about 400 visitors since the June launch; 74% of games completed; almost no day-2 return). The owner delegated every decision, including merge and production deploy.
+- **Process:** each workstream got an independent review before merge, and production was checked read-only after each deploy.
+
+| Workstream | PR | Merge |
+|---|---|---|
+| W6a AI search: `/llms.txt`, JSON-LD, direct answers, 17 `/vs` matchup pages, AI crawlers allowed | #85 | `9b5bdcd` |
+| W1 sharper core: Game.tsx split, More-modes drawer, Daily auto-submit, server-side Daily anti-spoiler, "Dig deeper", sign-in nudge removed | #86 | `570f7af` |
+| W7a UI chrome: tailwind-merge `cn()`, 404/error pages, local-first Dex, nav, share-page a11y, compare/rank | #87 | `e34c8ca` |
+| W5 2025-26 season cards (179 new, 62 supersede; legacy ids untouched), pool-by-date `asOf`, §12 roster-freeze amendment, TS↔Python parity test | #84 | `301197d` |
+| W4 Draft Duel vs 3 server-side bot personas, snake draft, pick clock, `/duel/` share | #88 | `1348024` |
+| W2 "Beats N% of real NBA teams since 1985" + exact Daily ceiling behind `/api/daily/ceiling` (§12-gated) | #89 | `f4b0116` |
+| W3 Daily come-back block + `/archive` unranked past-Daily replays | #90 | `b180dea` |
+| W6b share framing: Classic/Prime Share creates a challenge, spoiler-free Daily emoji grid, share-row consolidation | #91 | `9ec5944` |
+| W7b game UI/UX: mobile overflow, first-run cleanup, explicit "Place at" button, contrast/targets, board name, re-audit fixes | #92 | `46ae3dd` |
+
+**Neon re-audit of the finished site:** 26 of the 29 original findings were fixed and 3 partly fixed. All 9 new findings were fixed in #92.
+
+**Operational notes:**
+- **Card go-live:** the 2025-26 cards become draftable at `SEASON_2026_SINCE` = 2026-11-27 00:00 UTC (`web/lib/poolDate.ts`).
+- **Ceiling cache:** keyed on coefficients plus card data. Bump `ceiling:v1` in `web/lib/dailyCeiling.ts` when the engine code changes. The past-day ceiling GET is CDN-cached for up to about 8 days.
+- **#92 deploy:** GitHub's partial outage on 2026-11-25 dropped the deploy webhook, so the production deploy was triggered manually through Vercel from `46ae3dd`.
+
+**Known follow-ups:**
+- The Duel W-L on `/stats` is client-trusted and display-only (`DESIGN.md` §12).
+- An anonymous player's board name applies from their next Daily.
+- The v4 engine gaps are still `it.fails`.
+
 # Engine v4 shipped — 2026-11-25
 
 [PR #82](https://github.com/chaotix345/SweepSzn/pull/82) merged to `main` as `898da39`. Writeup: `DESIGN.md` §14;
