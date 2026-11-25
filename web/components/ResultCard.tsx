@@ -29,10 +29,10 @@ type FactorHuntProp = { prediction: string; answer: string; correct: boolean };
 type LbRankProp = { rank: number; total: number };
 
 // The strongest SLOT-LEGAL five search_best.ts has ever found (verified through evaluateLineup)
-// — the ceiling a player can actually draft, which is what the elite-result copy cites. The
-// engine's theoretical max is 80-2, but that five needs two C-only bigs and can't be drafted.
-// Re-run the script after any engine/data change; golden tests pin both numbers.
-const BEST_DRAFTABLE_RECORD = "79-3";
+// — the ceiling a player can actually draft, which is what the elite-result copy cites. Since
+// engine v4 it equals the engine's theoretical max (80-2). Re-run the script after any engine/data
+// change; golden tests pin both numbers.
+const BEST_DRAFTABLE_RECORD = "80-2";
 
 // Grade-aware nudge above the share/replay row — frames sharing as a social act, not a chore.
 function shareNudge(result: LineupResult): string {
@@ -211,7 +211,10 @@ export default function ResultCard({
 
       {/* why this record */}
       <div className="border-t border-zinc-800 px-6 py-5">
-        <div className="mb-3 text-xs font-bold uppercase tracking-wide text-zinc-500">Why this record</div>
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <div className="text-xs font-bold uppercase tracking-wide text-zinc-500">Why this record</div>
+          <a href="/how-it-works#receipts" className="text-[11px] text-zinc-600 hover:text-zinc-400">How accurate is this?</a>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <FactorColumn title="What's helping" items={helps} kind="good" contrib={contrib} />
           <FactorColumn title="What's hurting" items={hurts} kind="bad" contrib={contrib} />

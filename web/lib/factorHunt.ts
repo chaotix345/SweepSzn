@@ -19,6 +19,7 @@ export const FH_FACTOR_LABELS = [
   "Star offense",
   "Star defense",
   "Usage overload",
+  "Not enough shot creation",
   "Spacing",
   "Thin interior size",
   "No interior size",

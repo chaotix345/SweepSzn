@@ -2,28 +2,33 @@ import type { Player, Coefficients, DefModel, LineupResult, PlayerBreakdown, Slo
 
 // Defaults mirror the fitted coefficients.json so the engine is sane even if the file is missing.
 export const DEFAULT_COEFFICIENTS: Coefficients = {
-  ortgBase: 104.407,
-  drtgBase: 107.595,
-  offScale: 0.6178,
-  defScale: 0.742,
+  ortgBase: 105.209,
+  drtgBase: 107.969,
+  offScale: 0.8935,
+  defScale: 1.0054,
   pythK: 13.75,
   zCap: 3.3,
   eraStrength: { floor: 0.85, gamma: 0.7, startYear: 1950, fullYear: 1985 },
-  offModel: { intercept: 0.4328, pts: 1.058, ast: 0.6331, ts: 0.9088 },
-  defModel: { intercept: -2.4242, dws: 79.5313, trb: -0.7115, posC: 0.6555, posPF: 0.2915, posSF: 0.1066, posSG: -0.0155 },
-  defModelEst: { intercept: -1.7504, dws: 77.2445, posC: 0.0613, posPF: -0.2484, posSF: -0.1734, posSG: -0.1265 },
+  offModel: { intercept: 0.4307, pts: 1.055, ast: 0.6267, ts: 0.904 },
+  defModel: { intercept: -2.4239, dws: 79.4384, trb: -0.7144, posC: 0.6583, posPF: 0.295, posSF: 0.1102, posSG: -0.0142 },
+  defModelEst: { intercept: -1.7417, dws: 76.9113, posC: 0.0616, posPF: -0.2472, posSF: -0.171, posSG: -0.1255 },
   defEstCap: 5.5,
   dwsShrinkK: 40,
   leagueDwsMean: 0.02037,
-  usgModel: { intercept: 21.2311, pts: 3.0339, ast: -0.4904 },
-  // 110 (was 100): the median real top-5 sums ~107.5% usage, so 100 penalized 91.7% of REAL
-  // teams — fantasy-regime penalties must be ~0 in-distribution. See calibrate.py USAGE_BUDGET.
-  usageBudget: 110,
+  usgModel: { intercept: 21.2312, pts: 3.0338, ast: -0.4907 },
+  // v4: usage band [usageFloor, usageBudget] = real top-5 usage p1/p99 (1985-2025); penalties only
+  // outside it. calibrate.py asserts each reasoned penalty fires on <= 1% of real teams.
+  usageBudget: 128.5,
   overloadGamma: 0.22,
-  spacing: { perShooter: 0.987, diminish: 0.55, noneFloor: -3, baseline: 1.6 },
+  usageFloor: 95.5,
+  overloadPow: 1,
+  shortfallGamma: 0.13,
+  spacing: { perShooter: 1.294, diminish: 0.55, noneFloor: -3, baseline: 1.6 },
   rim: { blkLo: 0.4, blkSpan: 1.4, trbProxyLo: 0.8, trbProxySpan: 1.6 },
-  noRimPenalty: 7,
-  thinPerimeterPenalty: 3,
+  coverage: { trbLo: -0.2, trbSpan: 1, stlLo: 0.5, stlSpan: 2.5, htLo: 78, htSpan: 3 },
+  frontcourt: { h2Floor: 77, h2Span: 2, penalty: 12 },
+  noRimPenalty: 10,
+  thinPerimeterPenalty: 7,
 };
 
 const num = (v: number | null | undefined) => (v == null || Number.isNaN(v) ? 0 : v);
@@ -63,13 +68,16 @@ export function eraStrength(year: number, c: Coefficients): number {
 // real OBPM/DBPM when available (1974+), otherwise the fitted z-model prediction, then scaled by era depth.
 function offValue(p: Player, c: Coefficients): number {
   let v: number;
-  if (p.obpm != null && !Number.isNaN(p.obpm)) v = p.obpm;
+  if (p.off_rating != null && !Number.isNaN(p.off_rating)) v = p.off_rating;
+  else if (p.obpm != null && !Number.isNaN(p.obpm)) v = p.obpm;
   else v = c.offModel.intercept + c.offModel.pts * zcap(p, "pts", c) + c.offModel.ast * zcap(p, "ast", c) + c.offModel.ts * zcap(p, "ts", c);
   return v * eraStrength(p.year, c);
 }
 function defValue(p: Player, c: Coefficients): number {
   let v: number;
-  if (p.dbpm != null && !Number.isNaN(p.dbpm)) {
+  if (p.def_rating != null && !Number.isNaN(p.def_rating)) {
+    v = p.def_rating;
+  } else if (p.dbpm != null && !Number.isNaN(p.dbpm)) {
     v = p.dbpm;
   } else {
     // pre-1974 (no STL/BLK): shrink DWS-per-game toward the league mean, map through defModelEst, cap.
@@ -111,6 +119,7 @@ export function playerFeatures(p: Player, c: Coefficients = DEFAULT_COEFFICIENTS
     rim: rimScore >= 0.5, rimScore, modern: p.year >= 1980,
     perim: perimPos && zget(p, "stl") >= 0.6,
     perimScore: perimPos ? clamp((zget(p, "stl") - 0.2) / 0.8, 0, 1) : 0,
+    sizeCover: playerSizeCover(p, c), perimCover: playerPerimCover(p, c), ht: p.ht ?? 0,
   };
 }
 
@@ -146,6 +155,21 @@ function playerRimScore(p: Player, c: Coefficients): number {
   }
   return size; // pre-1974: no blocks tracked, fall back to size/rebounding
 }
+// v4 lineup COVERAGE (what lineupTerms uses): does the five have a big at all / a perimeter player at
+// all? A listed big (C/PF/F) or perimeter player (PG/SG/SF/G) covers fully; others earn partial credit
+// from rebounding (size) or steals (perimeter), so there is no positional cliff. Real NBA top-fives
+// essentially always have both (>= 99% of 1,170 team-seasons; calibrate.py asserts it), so these
+// penalties are fantasy-regime only. Rim protection and on-ball defense QUALITY are already in each
+// player's defensive rating; real data shows no extra team effect from them (DESIGN.md §14).
+function playerSizeCover(p: Player, c: Coefficients): number {
+  if (p.pos === "C" || p.pos === "PF" || p.pos === "F") return 1;
+  const byHt = p.ht ? clamp((p.ht - c.coverage.htLo) / c.coverage.htSpan, 0, 1) : 0;
+  return Math.max(byHt, clamp((zget(p, "trb") - c.coverage.trbLo) / c.coverage.trbSpan, 0, 1));
+}
+function playerPerimCover(p: Player, c: Coefficients): number {
+  if (p.pos === "PG" || p.pos === "SG" || p.pos === "SF" || p.pos === "G") return 1;
+  return clamp((zget(p, "stl") - c.coverage.stlLo) / c.coverage.stlSpan, 0, 1);
+}
 function isRimProtector(p: Player, c: Coefficients): boolean {
   return playerRimScore(p, c) >= 0.5;
 }
@@ -170,26 +194,29 @@ function lineupTerms(lineup: Player[], c: Coefficients) {
   for (const p of lineup) {
     sumOff += offValue(p, c); sumDef += defValue(p, c); totalUsage += usageDemand(p, c);
     shooterUnits += shooterUnit(p);
-    rim = Math.max(rim, playerRimScore(p, c));
-    // continuous perimeter-defense credit: 0 at stl z<=0.2, full at z>=1.0. The old binary gate
-    // (z>=0.6 counts, else nothing) was a ~3-pt cliff between z=0.59 and z=0.61 — and gameable,
-    // since coefficients.json is public. Credit accumulates across defenders.
-    if (p.pos === "PG" || p.pos === "SG" || p.pos === "SF" || p.pos === "G")
-      perimScore += clamp((zget(p, "stl") - 0.2) / 0.8, 0, 1);
+    rim = Math.max(rim, playerSizeCover(p, c));
+    perimScore = Math.max(perimScore, playerPerimCover(p, c));
     if (p.year >= 1980) anyModern = true;
   }
-  const overloadPenalty = c.overloadGamma * Math.max(0, totalUsage - c.usageBudget);
+  // Two-sided usage band: zero anywhere real top-5s live ([usageFloor, usageBudget] = real p1/p99).
+  // Above it, too many ball-dominant scorers share one ball; below it, nobody can create a shot and
+  // low-usage players are forced into possessions they can't finish efficiently.
+  const overloadPenalty = c.overloadGamma * Math.pow(Math.max(0, totalUsage - c.usageBudget), c.overloadPow);
+  const shortfallPenalty = c.shortfallGamma * Math.pow(Math.max(0, c.usageFloor - totalUsage), c.overloadPow);
   const effShoot = shooterUnits <= 3 ? shooterUnits : 3 + (shooterUnits - 3) * c.spacing.diminish;
   const spacing = anyModern ? clamp(c.spacing.perShooter * (effShoot - c.spacing.baseline), c.spacing.noneFloor, 3) : 0;
-  // Interior-presence penalty: a lineup with no real big (rim score 0) concedes the rim, the post,
-  // and the defensive glass — the combined cost of zero size. Continuous in the best big's quality,
-  // and CV-safe because every real NBA top-5 has at least one big (so it is ~0 in-distribution).
-  const rimAdj = c.noRimPenalty * (1 - rim);
-  const perimAdj = c.thinPerimeterPenalty * clamp(1 - perimScore, 0, 1);
+  // No big at all concedes the rim, the post and the glass; no perimeter player at all lets every
+  // ball-handler downhill. Both are 0 for real NBA top-fives (coverage 1), so they only price fantasy builds.
+  // Frontcourt floor: no real top-five's second-tallest player was under h2Floor (real p1), so a five
+  // whose second-biggest player is a guard concedes the glass and the rim to every two-big frontcourt.
+  const hts = lineup.map((p) => p.ht ?? 0).filter((h) => h > 0).sort((a, b) => b - a);
+  const frontcourt = hts.length >= 2 ? c.frontcourt.penalty * clamp((c.frontcourt.h2Floor - hts[1]) / c.frontcourt.h2Span, 0, 1) : 0;
+  const rimAdj = c.noRimPenalty * (1 - rim) + frontcourt;
+  const perimAdj = c.thinPerimeterPenalty * (1 - perimScore);
 
-  const ortg = c.ortgBase + c.offScale * sumOff + spacing - overloadPenalty;
+  const ortg = c.ortgBase + c.offScale * sumOff + spacing - overloadPenalty - shortfallPenalty;
   const drtg = c.drtgBase - c.defScale * sumDef + rimAdj + perimAdj;
-  return { sumOff, sumDef, totalUsage, shooterUnits, perimScore, rim, spacing, overloadPenalty, rimAdj, perimAdj, ortg, drtg };
+  return { sumOff, sumDef, totalUsage, shooterUnits, perimScore, rim, spacing, overloadPenalty, shortfallPenalty, rimAdj, perimAdj, ortg, drtg };
 }
 
 function winsFrom(ortg: number, drtg: number, k: number) {
@@ -246,6 +273,8 @@ export function evaluateLineup(lineup: Player[], coeff: Coefficients = DEFAULT_C
   factors.push({ label: "Star defense", value: round1(c.defScale * t.sumDef), kind: "good" });
   if (t.overloadPenalty > 0.2) factors.push({ label: `Usage overload (${Math.round(t.totalUsage)}% demand)`, value: -round1(t.overloadPenalty), kind: "bad",
     winsEst: winsEst(t.overloadPenalty, 0) });
+  if (t.shortfallPenalty > 0.2) factors.push({ label: `Not enough shot creation (${Math.round(t.totalUsage)}% demand)`, value: -round1(t.shortfallPenalty), kind: "bad",
+    winsEst: winsEst(t.shortfallPenalty, 0) });
   if (Math.abs(t.spacing) > 0.2) factors.push({ label: `Spacing (${t.shooterUnits.toFixed(1)} shooters)`, value: round1(t.spacing), kind: t.spacing > 0 ? "good" : "bad",
     winsEst: winsEst(-t.spacing, 0) });
   if (t.rimAdj > 0.2) factors.push({ label: t.rim > 0 ? "Thin interior size" : "No interior size", value: -round1(t.rimAdj), kind: "bad",

@@ -19,7 +19,7 @@ describe("TodaysBest", () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {}))); // never resolves
     render(<TodaysBest />);
     expect(screen.getByText(/Best draftable five ever found/i)).toBeTruthy();
-    expect(screen.getByText("79–3")).toBeTruthy();
+    expect(screen.getByText("80–2")).toBeTruthy();
   });
 
   it("renders today's leader and player count once the board loads", async () => {

@@ -75,6 +75,10 @@ export function getCoefficients(): Coefficients {
   return load().coeff;
 }
 
+export function getAllPlayers(): Player[] {
+  return load().players;
+}
+
 export function getPlayersByIds(ids: string[]): Player[] {
   const { byId } = load();
   return ids.map((id) => byId.get(id)).filter((p): p is Player => !!p);
@@ -158,9 +162,10 @@ function computeFits(allDrafted: Player[], cands: Player[], c: Coefficients): Ma
   const round1 = (x: number) => Math.round(x * 10) / 10;
   const feats = drafted.map((p) => playerFeatures(p, c));
   const need = {
-    rim: !feats.some((f) => f.rim),
+    // v4: mirror what the engine charges — no size at all, no perimeter player at all
+    rim: !feats.some((f) => f.sizeCover >= 1),
     spacing: feats.reduce((a, f) => a + f.shoot, 0) < 2,
-    perim: !feats.some((f) => f.perim),
+    perim: !feats.some((f) => f.perimCover >= 1),
     playmaking: !drafted.some((p) => (p.ast ?? 0) >= 6),
   };
   const slots = 5 - drafted.length;                          // open starting slots
@@ -172,9 +177,9 @@ function computeFits(allDrafted: Player[], cands: Player[], c: Coefficients): Ma
     // swap one replacement filler for this candidate, keep a full 5-man lineup
     const delta = quickScore([...drafted, p, ...FILLERS.slice(0, slots - 1)], c).netRtg - baseNet;
     const gap: string[] = [];
-    if (need.rim && f.rim) gap.push("Rim protection");
+    if (need.rim && f.sizeCover >= 1) gap.push("Size");
     if (need.spacing && f.shoot >= 0.4) gap.push("Spacing");
-    if (need.perim && f.perim) gap.push("Perimeter D");
+    if (need.perim && f.perimCover >= 1) gap.push("Perimeter");
     if (need.playmaking && (p.ast ?? 0) >= 6) gap.push("Playmaking");
     const generic: string[] = [];
     if (f.def >= 3) generic.push("Defense");

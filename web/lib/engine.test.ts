@@ -72,9 +72,11 @@ describe("usage budget is fantasy-regime only", () => {
 });
 
 // Only the PG's steal z varies; everyone else is a big, so the perimeter term is isolated.
-function perimLineup(stlZ: number): Player[] {
+// v4: perimeter coverage is "does the five have ANY perimeter player": a listed guard/wing covers fully,
+// otherwise the most active big earns partial credit from steals z — continuous, no cliff.
+function perimLineup(opts: { guard: boolean; bigStl: number }): Player[] {
   return [
-    mk({ name: "Test Guard", pos: "PG", obpm: 3, dbpm: 1, usg: 22, z: { stl: stlZ } }),
+    mk({ name: "Flex", pos: opts.guard ? "PG" : "C", obpm: 3, dbpm: 1, usg: 22, z: { stl: opts.bigStl, blk: 1, trb: 1 } }),
     mk({ name: "Big A", pos: "PF", obpm: 2, dbpm: 2, usg: 20, z: { blk: 1.2, trb: 1.5 } }),
     mk({ name: "Big B", pos: "C", obpm: 2, dbpm: 2.5, usg: 20, z: { blk: 1.6, trb: 1.8 } }),
     mk({ name: "Big C", pos: "PF", obpm: 1.5, dbpm: 1.5, usg: 19, z: { blk: 0.8, trb: 1.2 } }),
@@ -82,22 +84,22 @@ function perimLineup(stlZ: number): Player[] {
   ];
 }
 
-describe("perimeter defense is continuous, not a cliff", () => {
-  const good = evaluateLineup(perimLineup(1.0));
-  const mid = evaluateLineup(perimLineup(0.4));
-  const none = evaluateLineup(perimLineup(0));
+describe("perimeter coverage is continuous, not a cliff", () => {
+  const good = evaluateLineup(perimLineup({ guard: true, bigStl: 0 }));
+  const mid = evaluateLineup(perimLineup({ guard: false, bigStl: 1.5 }));
+  const none = evaluateLineup(perimLineup({ guard: false, bigStl: 0 }));
 
-  it("no perimeter defender pays the full penalty", () => {
-    expect(none.drtg - good.drtg).toBeCloseTo(3, 1);
+  it("no perimeter player pays the full penalty", () => {
+    expect(none.drtg - good.drtg).toBeCloseTo(DEFAULT_COEFFICIENTS.thinPerimeterPenalty, 1);
   });
 
-  it("borderline defender (stl z 0.4) gets partial credit between the extremes", () => {
+  it("a big with active hands (stl z 1.5) gets partial credit between the extremes", () => {
     const midPen = mid.drtg - good.drtg;
     expect(midPen).toBeGreaterThan(0.5);
     expect(midPen).toBeLessThan(none.drtg - good.drtg - 0.5);
   });
 
-  it("strong perimeter defender pays zero penalty and shows no factor", () => {
+  it("any perimeter player pays zero penalty and shows no factor", () => {
     expect(good.factors.some((f) => /perimeter/i.test(f.label))).toBe(false);
   });
 });
@@ -226,5 +228,54 @@ describe("per-player role scores on the breakdown", () => {
     expect(c.shoot).toBe(0);
     expect(c.rimScore).toBe(1);
     expect(c.perimScore).toBe(0);
+  });
+});
+
+describe("v4 card ratings", () => {
+  it("off_rating/def_rating take precedence over obpm/dbpm", () => {
+    const p = mk({ name: "Rated", obpm: 9, dbpm: 4, off_rating: 5, def_rating: 1 });
+    const f = playerFeatures(p);
+    expect(f.off).toBe(5);
+    expect(f.def).toBe(1);
+  });
+
+  it("missing off_rating falls back to the current path", () => {
+    const p = mk({ name: "Unrated", obpm: 9, dbpm: 4 });
+    const f = playerFeatures(p);
+    expect(f.off).toBe(9);
+    expect(f.def).toBe(4);
+  });
+});
+
+describe("v4 two-sided usage band", () => {
+  const C = { ...DEFAULT_COEFFICIENTS, usageFloor: 95, usageBudget: 125, overloadGamma: 0.2, overloadPow: 1.5, shortfallGamma: 0.3 };
+  const five = (u: number) => [0, 1, 2, 3, 4].map((i) =>
+    mk({ name: `U${i}`, pos: i === 4 ? "C" : "SF", obpm: 1, dbpm: 1, usg: u / 5, z: { blk: 2, trb: 2, stl: 1 } }));
+  const pen = (u: number) => {
+    const r = evaluateLineup(five(u), C);
+    const base = evaluateLineup(five(110), C);
+    return base.ortg - r.ortg;
+  };
+
+  it("usage band is zero at and continuous across both bounds", () => {
+    expect(Math.abs(pen(95))).toBeLessThan(0.1);
+    expect(Math.abs(pen(125))).toBeLessThan(0.1);
+    expect(Math.abs(pen(94.9))).toBeLessThan(0.1);
+    expect(Math.abs(pen(125.1))).toBeLessThan(0.1);
+  });
+
+  it("a low-usage five carries a Not enough shot creation factor with negative winsEst", () => {
+    const r = evaluateLineup(five(70), C);
+    const f = r.factors.find((x) => x.label.startsWith("Not enough shot creation"));
+    expect(f).toBeDefined();
+    expect(f!.value).toBeLessThan(0);
+    expect(f!.winsEst!).toBeLessThan(0);
+  });
+
+  it("no real-team-shaped lineup (sum usage 100-120) pays a usage penalty", () => {
+    for (const u of [100, 105, 110, 115, 120]) {
+      const r = evaluateLineup(five(u), C);
+      expect(r.factors.some((x) => /^(Usage overload|Not enough shot creation)/.test(x.label))).toBe(false);
+    }
   });
 });

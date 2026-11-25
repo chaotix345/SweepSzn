@@ -31,10 +31,11 @@ export function surgeonDiagnosis(factors: LineupResult["factors"]): SurgeonDiagn
 
 // Diagnosis -> the roster need a replacement should target (drives candidate ranking + the
 // "why offered" copy — the spec's anti-"rigged feeling" mitigation).
-export type SurgeonNeed = "shoot" | "rim" | "perim" | "lowusage" | "off" | "def" | "modern";
+export type SurgeonNeed = "shoot" | "rim" | "perim" | "lowusage" | "creator" | "off" | "def" | "modern";
 export function needOf(canonical: string): SurgeonNeed {
   switch (canonical) {
     case "Usage overload": return "lowusage";
+    case "Not enough shot creation": return "creator"; // the fix is someone who takes possessions
     case "Spacing": return "shoot";
     case "Thin interior size":
     case "No interior size": return "rim";
@@ -48,7 +49,7 @@ export function needOf(canonical: string): SurgeonNeed {
 
 const NEED_TITLE: Record<SurgeonNeed, string> = {
   shoot: "floor spacer", rim: "rim anchor", perim: "perimeter stopper",
-  lowusage: "low-usage glue", off: "shot creator", def: "defensive upgrade",
+  lowusage: "low-usage glue", creator: "on-ball creator", off: "shot creator", def: "defensive upgrade",
   modern: "modern-era star",
 };
 
@@ -92,8 +93,12 @@ export function buildSurgeonPool(lineup: Player[], offered: Player[], need: Surg
   // primary need score (higher = dealt first); NaN-safe via playerFeatures' clamped math
   const score: Record<SurgeonNeed, (p: Player) => number> = {
     shoot: (p) => fx(p).shoot,
-    rim: (p) => (fx(p).rim ? 1000 : 0) + fx(p).def,
-    perim: (p) => (fx(p).perim ? 1000 : 0) + (p.stl ?? 0),
+    // v4: the interior penalty is cleared by real size (a big, or height for the frontcourt floor),
+    // the perimeter one by any perimeter player — rank by exactly what the engine charges for
+    rim: (p) => fx(p).sizeCover * 1000 + fx(p).ht + fx(p).def,
+    perim: (p) => fx(p).perimCover * 1000 + (p.stl ?? 0),
+    // shortfall is cleared by usage: deal the players who take the most possessions
+    creator: (p) => fx(p).usage * 10 + fx(p).off,
     // low usage that still plays: rank the 8 lightest-usage offers by two-way impact
     lowusage: (p) => -fx(p).usage,
     off: (p) => fx(p).off,
@@ -114,9 +119,10 @@ export function buildSurgeonPool(lineup: Player[], offered: Player[], need: Surg
     const f = fx(p);
     switch (need) {
       case "shoot": return { why: `${NEED_TITLE[need]} — ${f1(p.fg3)} 3PM on ${f1(p.fg3a)} attempts`, stat: `${f1(p.fg3)} 3PM` };
-      case "rim": return { why: `${NEED_TITLE[need]} — ${f1(p.trb)} RPG · ${f1(p.blk)} BPG`, stat: `${f1(p.blk)} BPG` };
+      case "rim": return { why: `${NEED_TITLE[need]} — ${p.ht ? `${Math.floor(p.ht / 12)}'${p.ht % 12}" · ` : ""}${f1(p.trb)} RPG · ${f1(p.blk)} BPG`, stat: `${f1(p.trb)} RPG` };
       case "perim": return { why: `${NEED_TITLE[need]} — ${f1(p.stl)} SPG`, stat: `${f1(p.stl)} SPG` };
       case "lowusage": return { why: `${NEED_TITLE[need]} — ${Math.round(f.usage)}% usage demand`, stat: `${Math.round(f.usage)}% USG` };
+      case "creator": return { why: `${NEED_TITLE[need]} — ${Math.round(f.usage)}% usage · ${f1(p.pts)} PPG`, stat: `${Math.round(f.usage)}% USG` };
       case "off": return { why: `${NEED_TITLE[need]} — ${f1(p.pts)} PPG`, stat: `${f1(p.pts)} PPG` };
       case "def": return { why: `${NEED_TITLE[need]} — ${f1(p.stl)} SPG · ${f1(p.blk)} BPG`, stat: `${f1(p.blk)} BPG` };
       case "modern": return { why: `${NEED_TITLE[need]} — ${p.year} season${p.year >= 1985 ? ", no era discount" : " (still era-adjusted)"}`, stat: `${p.year}` };

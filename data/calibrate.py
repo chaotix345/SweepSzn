@@ -176,7 +176,9 @@ for ts in team_seasons:
     tovs = [p.get("tov") for p in top5 if p.get("tov") is not None]
     orbs = [p.get("orb") for p in top5 if p.get("orb") is not None]
     drbs = [p.get("drb") for p in top5 if p.get("drb") is not None]
-    rows.append({"year": y, "sumOff": sumOff, "sumDef": sumDef, "ortg": ts["ortg"], "drtg": ts["drtg"],
+    rows.append({"year": y, "abbr": ab, "top5": top5, "w": ts["w"], "l": l,
+                 "sumOff2": sumOff ** 2, "sumDef2": sumDef ** 2,
+                 "sumOff": sumOff, "sumDef": sumDef, "ortg": ts["ortg"], "drtg": ts["drtg"],
                  "w82": 82 * ts["w"]/(ts["w"]+l),
                  # luck-free wins target: the team's own Pythagorean expectation from its ACTUAL ratings
                  "wpyth": 82 * ts["ortg"]**PYTH_TARGET_K / (ts["ortg"]**PYTH_TARGET_K + ts["drtg"]**PYTH_TARGET_K),
@@ -268,6 +270,205 @@ if len(have_box) > 800:
 else:
     keep_box = False
 print(f"  -> box-rate team terms {'KEPT' if keep_box else 'REJECTED (stay 0; rebounding handled as fantasy-regime deficit penalty)'}")
+cv_concave = cv_wins(extra_off=["sumOff2"], extra_def=["sumDef2"])
+concavity_helps = (cv_base - cv_concave) >= 0.02
+print(f"  + sumOff^2, sumDef^2 (diminishing returns): RMSE={cv_concave:.3f}  (delta {cv_concave-cv_base:+.3f}) -> {'KEPT' if concavity_helps else 'REJECTED'}")
+assert cv_base <= 5.565 + 1e-3 and cv_base_actual <= 6.071 + 1e-3, "Track A regressed (spec §6 hard gate)"
+
+# =====================================================================================
+# v4 (DESIGN.md §14): CARD RATINGS + TRACK B
+# Track A above fits real teams on raw same-season BPM, which is already adjusted to match that
+# team's own rating, so it cannot see how cards are built. Track B rates every top-5 player of
+# every real team-season OUT-OF-SEASON (card_model.rate with that season excluded: no same-season
+# BPM, DWS, or team rating enters), refits the team map on those ratings, and cross-validates.
+# Properly shrunk estimates are posterior means, so the scales fitted here are the ones the
+# engine ships for card ratings (no attenuation, no compression).
+# =====================================================================================
+from collections import defaultdict
+from card_model import CardParams, season_inputs, fit_input_weights, OFF_FEATURES, DEF_FEATURES
+from calib_lib import track_b_rating, baseline_rating, ood_fire_rate, lineup_penalties, year_folds, rim_score
+from fetch_rapm import normalize_name
+
+# REASONED lineup-penalty constants (cannot be fitted: real teams never enter these regimes).
+# Sized against the TUNING half of web/lib/stressPanel.ts only; checked against the pre-registered
+# holdout half. Each must fire (>= 0.2 pts) on <= 1% of real team-seasons (asserted below).
+# overload: 0.22 pts ORtg per usage point above the real p99 (unchanged v3 heuristic; one ball).
+# shortfall: 0.13 pts per usage point below the real p1 -- the usage-efficiency trade-off: forcing
+#   ~6 extra usage points onto each of five low-usage players costs each ~1.5% TS, about 3-4 pts of
+#   team ORtg for the five-defenders lineup (~29 points short). Checked on the tuning half.
+# no-rim: 10 pts DRtg for zero size coverage -- an elite rim protector is worth ~+5 per 100 in RAPM
+#   terms, the defensive glass ~+3, post defense ~+2. Reasoned, not fitted (real teams never go there).
+# perimeter: 7 pts DRtg for no perimeter player at all -- no ball-handler means live-ball turnovers,
+#   no ball pressure and no point-of-attack defense (~3-4 + ~3 per 100). Every real top-five has a
+#   guard or wing, so this fires on 0% of real teams; a big's steals earn partial credit only.
+OVERLOAD_GAMMA = 0.22
+OVERLOAD_POW = 1.0
+SHORTFALL_GAMMA = 0.13
+NO_RIM_PENALTY = 10.0
+THIN_PERIMETER_PENALTY = 7.0
+# Lineup coverage (v4): a listed big / perimeter player covers fully; rebounding / steals z give
+# partial credit. Chosen so >= 99% of real top-fives have full coverage (asserted below).
+COVERAGE = {"trbLo": -0.2, "trbSpan": 1.0, "stlLo": 0.5, "stlSpan": 2.5, "htLo": 78, "htSpan": 3}
+# frontcourt: the second-tallest player under the real-team floor (p1 of real top-fives' second-tallest,
+#   computed below) -- no real team has gone there. Reasoned size: 12 pts DRtg once the second-tallest is
+#   2+ inches under the floor (e.g. a 6'3" second-biggest player): the defensive glass ~4-5 per 100, the
+#   rim ~4, post mismatches ~3, against every two-big frontcourt in the league.
+FRONTCOURT_PENALTY = 12.0
+FRONTCOURT_SPAN = 2.0
+
+tps = json.load(open("data/out/team_player_seasons.json", encoding="utf-8"))
+from heights import load_heights, height_of
+HT = load_heights()
+for s in tps:
+    s["ht"] = height_of(HT, s["name"], s["year"])
+for r in rows:
+    for p in r["top5"]:
+        p["ht"] = height_of(HT, p["name"], p["year"])
+by_person = defaultdict(list)
+for s in tps:
+    by_person[normalize_name(s["name"])].append(s)
+fb = {"zCap": ZCAP, "offModel": offModel, "defModelEst": defModelEst, "defEstCap": DEF_EST_CAP,
+      "dwsShrinkK": DWS_SHRINK_K, "leagueDwsMean": LEAGUE_DWS_MEAN}
+
+rapm_rows, rapm_match = None, None
+if "--no-rapm" not in sys.argv:
+    try:
+        _r = json.load(open("data/out/rapm.json", encoding="utf-8"))
+        rapm_rows, rapm_match = _r["rows"], _r.get("match_rate")
+    except FileNotFoundError:
+        pass
+
+weight_sets = {"identity": ({"obpm": 1.0}, {"dbpm": 1.0})}
+if rapm_rows:
+    weight_sets["rapm"] = fit_input_weights(tps, rapm_rows, fb)
+
+    _rw = fit_input_weights(tps, rapm_rows, fb)
+    print("RAPM-fitted input weights:", {k: {n: round(v, 3) for n, v in w.items()} for k, w in zip(("off", "def"), _rw)})
+
+def fit_prior(off_w, def_w):
+    """Minutes prior: what a season at a given mpg is worth on average (1985+, >= 20 G)."""
+    p0 = CardParams(decay=1.0, prior_k=0.0, prior_off=(0, 0), prior_def=(0, 0), off_w=off_w, def_w=def_w)
+    X, yo, yd = [], [], []
+    for s in tps:
+        if s["year"] < 1985 or (s.get("g") or 0) < 20: continue
+        x = season_inputs(s, p0, fb)
+        if x is None: continue
+        X.append(s["mp"]); yo.append(x[0]); yd.append(x[1])
+    A = np.vstack([np.ones(len(X)), np.array(X, float)]).T
+    ao = np.linalg.lstsq(A, np.array(yo), rcond=None)[0]; ad = np.linalg.lstsq(A, np.array(yd), rcond=None)[0]
+    return (float(ao[0]), float(ao[1])), (float(ad[0]), float(ad[1]))
+
+FOLDS = year_folds(list(YR))
+def cv_sums(sO_, sD_, target):
+    errs = []
+    for f in FOLDS:
+        te = np.isin(YR, f); tr = ~te
+        mo, bo_ = np.polyfit(sO_[tr], oR[tr], 1); md_, bd_ = np.polyfit(sD_[tr], dR[tr], 1)
+        po = mo * sO_[te] + bo_; pdd = md_ * sD_[te] + bd_
+        wp = po**bestk / (po**bestk + pdd**bestk)
+        errs += list(82 * wp - target[te])
+    return math.sqrt(np.mean(np.array(errs) ** 2))
+
+def sums_for(rate_fn):
+    so, sd = [], []
+    for r in rows:
+        o = d = 0.0
+        for p in r["top5"]:
+            birth = r["year"] - p["age"] if p.get("age") is not None else None
+            ro, rd = rate_fn(by_person[normalize_name(p["name"])], r["year"], p.get("mp") or 30.0, birth)
+            o += ro; d += rd
+        so.append(o); sd.append(d)
+    return np.array(so), np.array(sd)
+
+bO, bD = sums_for(lambda ss, y, mpg, b: baseline_rating(ss, y, fb, birth=b))
+track_b_baseline = cv_sums(bO, bD, WP)
+print(f"\n=== Track B (out-of-season card ratings) ===\n  baseline (adjacent-season raw BPM mean): RMSE={track_b_baseline:.3f}")
+
+best = None
+for wname, (off_w, def_w) in weight_sets.items():
+    prior_off, prior_def = fit_prior(off_w, def_w)
+    # max_gap = how many seasons either side count. With max_gap=1, Track B (card season excluded)
+    # cannot see the card season's own weight vs its neighbours, so decay only trades the neighbours
+    # off against the prior there; the shipped card is a minutes-weighted 3-season window.
+    for max_gap, alpha in [(g_, 0.0) for g_ in (1, 2, 3)]:
+        for decay in (0.5, 0.8, 1.0):
+            for prior_k in (0, 50, 100, 200, 400):
+                P = CardParams(decay=decay, prior_k=float(prior_k), prior_off=prior_off, prior_def=prior_def,
+                               off_w=off_w, def_w=def_w, max_gap=max_gap, minutes_alpha=alpha)
+                sO_, sD_ = sums_for(lambda ss, y, mpg, b: track_b_rating(ss, y, mpg, P, fb, b))
+                e = cv_sums(sO_, sD_, WP)
+                if best is None or e < best[0]:
+                    best = (e, wname, P, sO_, sD_)
+    print(f"  weights={wname}: best so far RMSE={best[0]:.3f} ({best[1]}, gap={best[2].max_gap}, decay={best[2].decay}, prior_k={best[2].prior_k})")
+# Starter translation (reasoned): Track B scores real teams at their ACTUAL minutes, so it cannot
+# reward translating a 25-mpg role to 36+ minutes (the card always plays starter minutes, spec §3.1).
+# Adopt the strongest alpha costing <= 0.05 wins of Track B RMSE vs alpha=0 that still beats the
+# baseline. 2026-11 run: alpha 0.5 costs 0.04 (8.095 vs 8.056; baseline 8.142); alpha 1.0 costs 0.09.
+_e0, _w0, _P0 = best[0], best[1], best[2]
+for alpha in (0.5, 1.0, 1.5):
+    P = CardParams(**{**_P0.__dict__, "minutes_alpha": alpha})
+    sO_, sD_ = sums_for(lambda ss, y, mpg, b: track_b_rating(ss, y, mpg, P, fb, b))
+    e = cv_sums(sO_, sD_, WP)
+    print(f"  starter translation alpha={alpha}: RMSE={e:.3f} (alpha=0: {_e0:.3f})")
+    if e <= _e0 + 0.05 and e < track_b_baseline:
+        best = (e, _w0, P, sO_, sD_)
+track_b_cv, card_weights, CARD, sOB, sDB = best
+track_b_cv_actual = cv_sums(sOB, sDB, W)
+print(f"  chosen: weights={card_weights} gap={CARD.max_gap} alpha={CARD.minutes_alpha} decay={CARD.decay} prior_k={CARD.prior_k}  Track B RMSE={track_b_cv:.3f} (vs actual {track_b_cv_actual:.3f})")
+assert track_b_cv < track_b_baseline, "Track B must beat the naive out-of-season baseline (spec §6)"
+
+track_a_scales = {"ortgBase": ortgBase, "offScale": offScale, "drtgBase": drtgBase, "defScale": defScale}
+mo, bo_ = np.polyfit(sOB, oR, 1); md_, bd_ = np.polyfit(sDB, dR, 1)
+ortgBase, offScale, drtgBase, defScale = float(bo_), float(mo), float(bd_), float(-md_)
+print(f"  shipped team map: ORtg = {ortgBase:.2f} + {offScale:.3f}*Σoff   DRtg = {drtgBase:.2f} - {defScale:.3f}*Σdef")
+residB = oR - (ortgBase + offScale * sOB)
+per_shooter_fit = float(np.linalg.lstsq(np.vstack([su, np.ones_like(su)]).T, residB, rcond=None)[0][0])
+print(f"  spacing perShooter refit on Track B residuals: {per_shooter_fit:.3f}")
+
+# ---- usage band bounds from the real distribution; OOD fire rates with the final constants ----
+real_usg = np.array([r["sumUsg"] for r in have_usg])
+usage_p1 = round(float(np.percentile(real_usg, 1)) * 2) / 2
+usage_p99 = round(float(np.percentile(real_usg, 99)) * 2) / 2
+USAGE_BUDGET, USAGE_FLOOR = usage_p99, usage_p1
+gamma = OVERLOAD_GAMMA
+h2s = np.array([sorted([p["ht"] for p in r["top5"] if p.get("ht")], reverse=True)[1] for r in rows])
+H2_FLOOR = float(np.percentile(h2s, 1))
+FRONTCOURT = {"h2Floor": H2_FLOOR, "h2Span": FRONTCOURT_SPAN, "penalty": FRONTCOURT_PENALTY}
+print(f"  frontcourt floor (real p1 of second-tallest) = {H2_FLOOR:.0f} in")
+pen_c = {"usageBudget": USAGE_BUDGET, "frontcourt": FRONTCOURT, "usageFloor": USAGE_FLOOR, "overloadGamma": OVERLOAD_GAMMA,
+         "overloadPow": OVERLOAD_POW, "shortfallGamma": SHORTFALL_GAMMA, "noRimPenalty": NO_RIM_PENALTY,
+         "thinPerimeterPenalty": THIN_PERIMETER_PENALTY,
+         "coverage": COVERAGE}
+pens = [lineup_penalties(r["top5"], pen_c) for r in rows]
+ood = {k: round(ood_fire_rate(p[k] for p in pens), 4) for k in ("overload", "shortfall", "rim", "perim")}
+print(f"  usage band [{USAGE_FLOOR}, {USAGE_BUDGET}] (real p1/p99); OOD fire rates: {ood}")
+assert all(v <= 0.01 for v in ood.values()), f"reasoned penalty fires on >1% of real teams: {ood}"
+
+# ---- famous real teams: Track B (out-of-season) prediction vs what they actually won ----
+FAMOUS = [(1986, "BOS", "1985-86 Celtics"), (1987, "LAL", "1986-87 Lakers"), (1996, "CHI", "1995-96 Bulls"),
+          (2001, "LAL", "2000-01 Lakers"), (2004, "DET", "2003-04 Pistons"), (2008, "BOS", "2007-08 Celtics"),
+          (2013, "MIA", "2012-13 Heat"), (2014, "SAS", "2013-14 Spurs"), (2016, "GSW", "2015-16 Warriors"),
+          (2017, "GSW", "2016-17 Warriors")]
+def spacing_pts(su_):
+    eff = su_ if su_ <= 3 else 3 + (su_ - 3) * 0.55
+    return max(-3.0, min(3.0, per_shooter_fit * (eff - 1.6)))
+from card_model import rate as card_rate
+sOC, sDC = sums_for(lambda ss, y, mpg, b: card_rate(ss, y, CARD, fb, card_mpg=mpg, card_birth=b))   # the ratings the game uses
+famous = []
+for (yr, ab, label) in FAMOUS:
+    i = next((j for j, r in enumerate(rows) if r["year"] == yr and r["abbr"] == ab), None)
+    if i is None:
+        print(f"  WARNING famous team missing: {label}"); continue
+    pn = pens[i]
+    def wins_from(so, sd):
+        o = ortgBase + offScale * so + spacing_pts(rows[i]["su"]) - pn["overload"] - pn["shortfall"]
+        d = drtgBase - defScale * sd + pn["rim"] + pn["perim"]
+        return int(round(82 * o**bestk / (o**bestk + d**bestk)))
+    pw, cw = wins_from(sOC[i], sDC[i]), wins_from(sOB[i], sDB[i])
+    famous.append({"label": label, "year": yr, "team": ab, "predicted_wins": pw, "cold_wins": cw,
+                   "actual_wins": int(rows[i]["w"]), "actual_losses": int(rows[i]["l"])})
+    print(f"  {label:20s} card-ratings {pw:2d}  cold {cw:2d}  actual {int(rows[i]['w'])}-{int(rows[i]['l'])}")
+json.dump(famous, open("web/public/data/famous_teams.json", "w", encoding="utf-8"), indent=1)
 
 coeff = {
   "ortgBase": round(ortgBase, 3), "drtgBase": round(drtgBase, 3),
@@ -284,13 +485,22 @@ coeff = {
   # budget 110 (was 100): median real top-5 sumUSG is 107.5, so the old budget penalized 91.7% of
   # real teams -- see USAGE_BUDGET comment at top. The penalty now fires only on genuine stacks.
   "usageBudget": USAGE_BUDGET, "overloadGamma": round(gamma, 3),
+  # v4: two-sided usage band [usageFloor, usageBudget] = real top-5 p1/p99 (fitted bounds);
+  # the penalty sizes beyond the band are reasoned (see constants above).
+  "usageFloor": USAGE_FLOOR, "overloadPow": OVERLOAD_POW, "shortfallGamma": SHORTFALL_GAMMA,
+  # v4 card model (DESIGN.md §14): data/rate_cards.py writes off_rating/def_rating with these.
+  "cardModel": {"decay": CARD.decay, "prior_k": CARD.prior_k, "max_gap": CARD.max_gap, "minutes_alpha": CARD.minutes_alpha,
+                "prior_off": [round(v, 5) for v in CARD.prior_off], "prior_def": [round(v, 5) for v in CARD.prior_def],
+                "off_w": {k: round(v, 5) for k, v in CARD.off_w.items()},
+                "def_w": {k: round(v, 5) for k, v in CARD.def_w.items()}},
   "spacing": {"perShooter": round(per_shooter_fit, 3), "diminish": 0.55, "noneFloor": -3.0, "baseline": 1.6},
   # continuous rim protection: best big's blk z maps 0..1 over [blkLo, blkLo+blkSpan]; penalty = noRimPenalty*(1-rimScore)
   "rim": {"blkLo": 0.4, "blkSpan": 1.4, "trbProxyLo": 0.8, "trbProxySpan": 1.6},
   # interior-presence penalty (no real big -> concedes rim+post+glass). CV-safe: every real top-5 has a big.
   # A DRB-rate penalty was tested and DROPPED: it cannot separate all-guard fantasy lineups from real
   # small-ball teams (both have meanTrbZ ~0; see the DRB CV diagnostic above), so size is carried here.
-  "noRimPenalty": 7.0, "thinPerimeterPenalty": 3.0,
+  "coverage": COVERAGE, "frontcourt": FRONTCOURT,
+  "noRimPenalty": NO_RIM_PENALTY, "thinPerimeterPenalty": THIN_PERIMETER_PENALTY,
   "_meta": {"team_seasons": len(rows), "off_r2": round(r2o, 3), "def_r2": round(r2d, 3),
             # cv_wins_rmse measures against the LUCK-FREE pythag-wins target (k=PYTH_TARGET_K);
             # cv_wins_rmse_vs_actual is the same model vs raw season wins (incl. close-game luck).
@@ -300,7 +510,14 @@ coeff = {
             "cv_wins_rmse_with_box": round(cv_box, 3) if cv_box is not None else None,
             "zoff_r2": round(offR2, 3), "zdef_r2_legacy": round(defR2, 3), "zdef_r2_est": round(defEstR2, 3),
             "zusg_r2": round(usgR2, 3), "gamma_fit": round(gamma_fit, 4), "spacing_fit": round(per_shooter_fit, 3),
-            "box_team_terms_help_cv": bool(keep_box)}
+            "box_team_terms_help_cv": bool(keep_box),
+            "engine_version": 4,
+            "track_a_scales": {k: round(v, 4) for k, v in track_a_scales.items()},
+            "track_b_cv": round(track_b_cv, 3), "track_b_cv_vs_actual": round(track_b_cv_actual, 3),
+            "track_b_baseline_cv": round(track_b_baseline, 3), "card_weights": card_weights,
+            "rapm_used": card_weights == "rapm", "rapm_match_rate": rapm_match,
+            "concavity_helps_cv": bool(concavity_helps), "cv_wins_rmse_concave": round(cv_concave, 3),
+            "usage_p1": usage_p1, "usage_p99": usage_p99, "ood_fire_rate": ood}
 }
 json.dump(clean(coeff), open("web/public/data/coefficients.json", "w", encoding="utf-8"), indent=2, allow_nan=False)
 print("\nwrote web/public/data/coefficients.json")

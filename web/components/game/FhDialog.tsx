@@ -11,10 +11,11 @@ const FH_BLURB: Record<string, string> = {
   "Star offense": "Your five's raw scoring and shot-creation punch.",
   "Star defense": "Combined defensive impact across the lineup.",
   "Usage overload": "Too many ball-dominant scorers for one basketball.",
+  "Not enough shot creation": "Nobody who can create their own shot when the play breaks down.",
   "Spacing": "Floor spacing from shooting — or the lack of it.",
-  "Thin interior size": "Some rim presence, but light on size.",
+  "Thin interior size": "A frontcourt smaller than any real starting five.",
   "No interior size": "No real big — the rim and glass go uncontested.",
-  "Thin perimeter defense": "Soft on-ball defense on the perimeter.",
+  "Thin perimeter defense": "No true guard or wing — bigs chasing ball-handlers.",
   "No perimeter defender": "No perimeter stopper — ball-handlers get downhill.",
   "Era adjustment": "Pre-1985 box stats discounted for a shallower league.",
 };

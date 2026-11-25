@@ -15,11 +15,11 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Can you really go 82-0?",
-    a: "Nobody has. The best draftable five projects 79-3 — better than the 73-9 Warriors, the best real season in NBA history — and it takes a genuinely balanced two-way five, not five ball-dominant scorers. (The engine's theoretical maximum is 80-2, but that lineup needs two centers in one starting five — you can't actually draft it.) The chase is the whole challenge.",
+    a: "Nobody has. The best draftable five projects 80-2 — better than the 73-9 Warriors, the best real season in NBA history — and it takes a genuinely balanced two-way five, not five ball-dominant scorers. The chase is the whole challenge.",
   },
   {
     q: "How accurate is the engine?",
-    a: "Every coefficient is fit to 1,170 real NBA team-seasons (1985–2025) across 24,687 player-seasons, with out-of-sample accuracy of about 5.6 wins RMSE against luck-adjusted Pythagorean win totals in year-grouped cross-validation (6.1 against raw win totals, which carry roughly 2.4 wins of close-game luck). Wins come from a Pythagorean expectation. It is calibrated to history, not hand-tuned.",
+    a: "The core model is fit to 1,170 real NBA team-seasons (1985–2025) across 24,687 player-seasons. Given each player's actual season, the team model misses held-out real teams by about 5.6 wins on average against luck-adjusted win totals (6.1 against raw records, which carry roughly 2.4 wins of close-game luck). The card ratings the game uses are tested harder, from each player's other seasons only, and miss by about 8.1. The penalties for lineups real teams never field, like five point guards or five non-scorers, can't be fitted from real data, so they are reasoned and labeled that way. The How it works page shows the receipts: famous teams predicted cold, gimmick-lineup stress tests, and which parts are fitted versus reasoned.",
   },
   {
     q: "Why is it different from other lineup tools?",

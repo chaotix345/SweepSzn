@@ -54,9 +54,9 @@ describe("playerContribRows — per-player rating contributions", () => {
 
   it("scales impact by the engine's fitted off/def scales (1dp)", () => {
     const rows = playerContribRows(pb);
-    // offScale=0.6178, defScale=0.742 (DEFAULT_COEFFICIENTS mirrors the fitted file)
-    expect(rows[0]).toMatchObject({ id: "a", name: "Scorer", offPts: 3.1, defPts: 0.4 });
-    expect(rows[1]).toMatchObject({ id: "b", name: "Anchor", offPts: -1.1, defPts: 2.5 });
+    // offScale=0.8934, defScale=1.0055 (DEFAULT_COEFFICIENTS mirrors the fitted file, engine v4)
+    expect(rows[0]).toMatchObject({ id: "a", name: "Scorer", offPts: 4.5, defPts: 0.5 });
+    expect(rows[1]).toMatchObject({ id: "b", name: "Anchor", offPts: -1.6, defPts: 3.4 });
   });
 });
 

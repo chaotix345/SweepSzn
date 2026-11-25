@@ -16,6 +16,7 @@ const READERS: Record<string, string[]> = {
   "lib/leagueContext.ts": ["league_context.json"],
   "lib/playerMeta.ts": ["accolades.json"],
   "lib/teamLookup.ts": ["team_lookup.json"],
+  "lib/receipts.ts": ["coefficients.json", "famous_teams.json"], // static /how-it-works only (build-time read)
   "app/api/health/route.ts": ["players.json"], // the deploy canary stats players.json itself
 };
 // ○ static / ● SSG with dynamicParams=false in the build route table — prerendered at build (data read

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { LineupResult, Player } from "./types";
+import { DEFAULT_COEFFICIENTS } from "./engine";
 import {
   bpSeedOk, bpCode, bpFromCode, bpKeyOk, BLUEPRINTS, blueprintDef, blueprintMetric,
   gradeBlueprint, encBpScore, decodeBpDisplay, BP_MULT, type BlueprintKey,
@@ -61,41 +62,41 @@ describe("blueprint metric derivation", () => {
   it("fortress metric = Star defense factor value", () => expect(blueprintMetric("fortress", r)).toBe(8.2));
   it("discipline metric = exact usage sum", () => expect(blueprintMetric("discipline", r)).toBeCloseTo(96, 9));
   it("rim metric = defScale-weighted rim-protector def", () =>
-    expect(blueprintMetric("rim", r)).toBeCloseTo((3.5 + 2.5) * 0.742, 9));
+    expect(blueprintMetric("rim", r)).toBeCloseTo((3.5 + 2.5) * DEFAULT_COEFFICIENTS.defScale, 9));
   it("balanced metric = net rating", () => expect(blueprintMetric("balanced", r)).toBe(10));
   it("suppressed spacing factor -> 0", () => expect(blueprintMetric("spacing", synth({ factors: [] }))).toBe(0));
 });
 
 describe("blueprint grading bands + multipliers", () => {
   const r = synth();
-  it("spacing 2.6 -> A+ x1.3", () => {
-    const g = gradeBlueprint("spacing", synth({ factors: [{ label: "Spacing (4.0 shooters)", value: 2.6, kind: "good" }] }));
+  it("spacing 3.0 -> A+ x1.3", () => {
+    const g = gradeBlueprint("spacing", synth({ factors: [{ label: "Spacing (4.0 shooters)", value: 3.0, kind: "good" }] }));
     expect(g.grade).toBe("A+");
     expect(g.mult).toBe(1.3);
   });
-  it("spacing 1.8 -> B", () => {
+  it("spacing 1.8 -> C", () => {
     const g = gradeBlueprint("spacing", r);
-    expect(g.grade).toBe("B");
-    expect(g.mult).toBe(BP_MULT.B);
+    expect(g.grade).toBe("C");
+    expect(g.mult).toBe(BP_MULT.C);
   });
   it("negative spacing -> F", () =>
     expect(gradeBlueprint("spacing", synth({ factors: [{ label: "Spacing (0.2 shooters)", value: -1.0, kind: "bad" }] })).grade).toBe("F"));
-  it("discipline 96 -> B (lowerIsBetter band)", () => expect(gradeBlueprint("discipline", r).grade).toBe("B"));
-  it("usage 85 -> A+", () =>
-    expect(gradeBlueprint("discipline", synth({ players: r.players.map((p) => ({ ...p, usage: 17 })) })).grade).toBe("A+"));
+  it("discipline 96 -> A+ (lowerIsBetter band, just above the usage floor)", () => expect(gradeBlueprint("discipline", r).grade).toBe("A+"));
+  it("usage 85 -> B (below the floor folds: graded as 106)", () =>
+    expect(gradeBlueprint("discipline", synth({ players: r.players.map((p) => ({ ...p, usage: 17 })) })).grade).toBe("B"));
   it("usage 150 -> F", () =>
     expect(gradeBlueprint("discipline", synth({ players: r.players.map((p) => ({ ...p, usage: 30 })) })).grade).toBe("F"));
-  it("balanced 14.2 -> A+ with formatted metric", () => {
-    const g = gradeBlueprint("balanced", synth({ netRtg: 14.2 }));
+  it("balanced 14.6 -> A+ with formatted metric", () => {
+    const g = gradeBlueprint("balanced", synth({ netRtg: 14.6 }));
     expect(g.grade).toBe("A+");
-    expect(g.metricText).toBe("14.2");
+    expect(g.metricText).toBe("14.6");
   });
   it("view score matches encoded display score", () => {
-    const g = gradeBlueprint("balanced", synth({ netRtg: 14.2 }));
-    expect(g.score).toBe(decodeBpDisplay(encBpScore(70, 1.3, 14.2)));
+    const g = gradeBlueprint("balanced", synth({ netRtg: 14.6 }));
+    expect(g.score).toBe(decodeBpDisplay(encBpScore(70, 1.3, 14.6)));
   });
   it("70 wins x 1.3 -> 91.0", () => {
-    const g = gradeBlueprint("balanced", synth({ netRtg: 14.2 }));
+    const g = gradeBlueprint("balanced", synth({ netRtg: 14.6 }));
     expect(g.score).toBeCloseTo(91, 9);
   });
 });
@@ -179,5 +180,14 @@ describe("blueprint integration with a real engine evaluation", () => {
   it("integration: discipline reads the engine's exact usage sum", () => {
     const usageSum = real.players.reduce((a, p) => a + p.usage, 0);
     expect(blueprintMetric("discipline", real)).toBeCloseTo(usageSum, 9);
+  });
+});
+
+describe("v4 usage discipline is folded at the engine's usage floor", () => {
+  it("demand below the floor grades as far off as the same distance above it", () => {
+    const floor = DEFAULT_COEFFICIENTS.usageFloor;
+    const at = (u: number) => blueprintMetric("discipline", synth({ players: [{ id: "x", name: "X", off: 0, def: 0, usage: u, shooter: false, rimProtector: false }] }));
+    expect(at(floor - 10)).toBeCloseTo(floor + 10, 9);
+    expect(at(floor + 3)).toBeCloseTo(floor + 3, 9);
   });
 });

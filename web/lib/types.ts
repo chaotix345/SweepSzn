@@ -60,6 +60,12 @@ export interface Player {
   per?: number | null;
   ows?: number | null;
   dws?: number | null;
+  // v4 card ratings (data/rate_cards.py): multi-season, minutes-aware impact on the BPM scale,
+  // before era strength. The engine prefers these over the single-season obpm/dbpm.
+  off_rating?: number | null;
+  def_rating?: number | null;
+  ht?: number | null; // height in inches (data/scrape_heights.py); drives the lineup size terms
+
   z?: ZScores;
   defense_estimated?: boolean;
   peak_score?: number;
@@ -72,7 +78,7 @@ export interface CandidateFit {
   delta: number;        // marginal net-rating swing if added to the current roster now
   tier: "elite" | "strong" | "solid" | "marginal"; // relative to this spin's candidates
   best: boolean;        // the single best fit available in this spin
-  adds: string[];       // gaps this player fills for YOUR roster, e.g. ["Rim protection", "Spacing"]
+  adds: string[];       // gaps this player fills for YOUR roster, e.g. ["Size", "Spacing"]
 }
 
 // Trimmed player projection sent to the client during the draft (full stats stay server-side).
@@ -203,11 +209,19 @@ export interface Coefficients {
   dwsShrinkK: number;        // Bayesian shrinkage strength for DWS/g toward the league mean
   leagueDwsMean: number;     // prior mean DWS/g
   usgModel: { intercept: number; pts: number; ast: number };
+  // two-sided usage band [usageFloor, usageBudget] = real top-5 p1/p99; penalties only outside it
   usageBudget: number;
+  usageFloor: number;
   overloadGamma: number;
+  overloadPow: number;
+  shortfallGamma: number;
   spacing: { perShooter: number; diminish: number; noneFloor: number; baseline: number };
   // continuous rim protection: best big's blk z (or trb z proxy pre-1974) mapped 0..1 over [lo, lo+span]
   rim: { blkLo: number; blkSpan: number; trbProxyLo: number; trbProxySpan: number };
+  // v4 lineup coverage: partial size credit from height or rebounding z, partial perimeter credit from steals z
+  coverage: { trbLo: number; trbSpan: number; stlLo: number; stlSpan: number; htLo: number; htSpan: number };
+  // v4: second-tallest player below the real-team floor (p1) -> up to `penalty` pts DRtg over `h2Span` inches
+  frontcourt: { h2Floor: number; h2Span: number; penalty: number };
   noRimPenalty: number;
   thinPerimeterPenalty: number;
 }

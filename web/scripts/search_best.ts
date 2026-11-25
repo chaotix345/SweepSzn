@@ -12,21 +12,24 @@ type F = (typeof feat)[number];
 const base = (f: F) => c.offScale * f.off + c.defScale * f.def;
 
 // Lean inline scorer over precomputed features. MUST mirror lib/engine.ts lineupTerms exactly:
-// continuous interior presence (max rimScore), continuous perimeter credit (summed perimScore).
+// lineup coverage: max sizeCover (any big), max perimCover (any perimeter player); two-sided usage band.
 // playerFeatures exports both so this cannot silently drift from the engine again.
 function wpOf(fs: F[]): number {
   let sO = 0, sD = 0, tU = 0, sh = 0, perimScore = 0, rim = 0;
   let modern = false;
   for (const f of fs) {
     sO += f.off; sD += f.def; tU += f.usage; sh += f.shoot;
-    rim = Math.max(rim, f.rimScore); perimScore += f.perimScore;
+    rim = Math.max(rim, f.sizeCover); perimScore = Math.max(perimScore, f.perimCover);
     if (f.modern) modern = true;
   }
-  const overload = c.overloadGamma * Math.max(0, tU - c.usageBudget);
+  const overload = c.overloadGamma * Math.pow(Math.max(0, tU - c.usageBudget), c.overloadPow);
+  const shortfall = c.shortfallGamma * Math.pow(Math.max(0, c.usageFloor - tU), c.overloadPow);
   const eff = sh <= 3 ? sh : 3 + (sh - 3) * c.spacing.diminish;
   const spacing = modern ? Math.max(c.spacing.noneFloor, Math.min(3, c.spacing.perShooter * (eff - c.spacing.baseline))) : 0;
-  const ortg = c.ortgBase + c.offScale * sO + spacing - overload;
-  const drtg = c.drtgBase - c.defScale * sD + c.noRimPenalty * (1 - rim) + c.thinPerimeterPenalty * Math.max(0, Math.min(1, 1 - perimScore));
+  const ortg = c.ortgBase + c.offScale * sO + spacing - overload - shortfall;
+  const hts = fs.map((f) => f.ht).filter((h) => h > 0).sort((a, b) => b - a);
+  const front = hts.length >= 2 ? c.frontcourt.penalty * Math.max(0, Math.min(1, (c.frontcourt.h2Floor - hts[1]) / c.frontcourt.h2Span)) : 0;
+  const drtg = c.drtgBase - c.defScale * sD + c.noRimPenalty * (1 - rim) + front + c.thinPerimeterPenalty * (1 - perimScore);
   const oP = Math.max(1, ortg) ** c.pythK, dP = Math.max(1, drtg) ** c.pythK;
   return oP / (oP + dP); // winPct (continuous, breaks the integer-win ties)
 }

@@ -212,3 +212,18 @@ Regenerates the brand PNG exports into `<repo>/logo/` (gitignored). `sharp` is n
 ```
 npm i --no-save sharp && node scripts/export-logo.mjs
 ```
+
+### rescore_v4.ts
+
+One-time migration of stored scores onto the v4 engine (DESIGN.md §14). Rescores every profile
+result history (`results:{uid}`), every live challenge (`chal:{id}:info` + its board) and today's
+Daily board (`lb:{today}`) from the stored lineups, and archives the cumulative weekly and all-time
+boards under a `:v3` suffix so they restart on the new engine. Closed daily boards and the mode boards
+are left alone (they expire within 31 days). Idempotent; refuses to run unless `coefficients.json` is
+engine_version 4. Run right after the deploy is live.
+
+```bash
+DRY_RUN=1 npx tsx scripts/rescore_v4.ts   # counts only
+npx tsx scripts/rescore_v4.ts
+```
+
