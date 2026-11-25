@@ -1,3 +1,29 @@
+# Engine v4 shipped — 2026-11-25
+
+[PR #82](https://github.com/chaotix345/SweepSzn/pull/82) merged to `main` as `898da39`. Writeup: `DESIGN.md` §14;
+spec `docs/specs/2026-11-25-engine-accuracy-v4-design.md`; before/after numbers
+`docs/plans/2026-11-25-engine-accuracy-v4-baseline.md`.
+
+- **CI:** all 6 checks green on the PR (web ci, python, Socket x2, Vercel preview).
+- **Production deploy** `dpl_GrF2C78m3HtFEwijr8T2PLH7k3go`, live within a minute of merge. Read-only checks:
+  - `/`, `/how-it-works`, `/about`, `/play`, `/leaderboards`, `/api/health` → 200.
+  - `/data/coefficients.json` reports `engine_version` 4.
+  - `POST /api/evaluate` on five elite PGs → 62-20 with "Thin interior size" (−14 wins).
+  - `/how-it-works#receipts` renders both CV numbers, famous teams, stress tests, top-10 lists; no "not hand-tuned".
+  - `/about` cites the 80-2 ceiling.
+- **Stored scores** (`web/scripts/rescore_v4.ts` against production Redis, 09:25 UTC, mid-day — 15 h before the
+  Daily rollover, so today's Daily was rescored too):
+  - Dry run first, then the real run: 12 profile histories / 421 results rescored, 0 live challenges, today's
+    Daily empty, `lb:alltime` (9 entries) renamed to `lb:alltime:v3`; the current week's board did not exist yet.
+  - A second run was a no-op.
+  - Today's Factor Hunt / Blueprint / Surgeon boards mix v3 and v4 scores until 00:00 UTC, and predictions or
+    Surgeon pools dealt before the deploy can fail validation today only.
+- **Owner sign-off** came via the Neon stand-in (simulated owner) and the real owner's blanket go-ahead to ship.
+- **Known gaps** (also `it.fails` in `web/test/acceptance.v4.test.ts`): 8 of 11 stress-panel ranges miss (five
+  PGs 62 vs 50-57, all-wings 76 vs 62-69, ...); Duncan, Kobe, Hakeem, Russell outside the all-time top 25.
+- **Follow-ups:** nested CV for the Track B margin; a TS↔Python penalty parity test; refresh the stale
+  `scripts/sleeper*.ts` / `trap.ts` inline scorers.
+
 # SweepSzn improvement pass — 2026-10-05
 
 Branch `feat/improvement-pass` (worktree `.claude/worktrees/improvement-pass`, based on `origin/main` @ `c2d4598`).
