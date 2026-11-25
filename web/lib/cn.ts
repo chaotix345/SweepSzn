@@ -1,3 +1,6 @@
-// Tiny class- name joiner (no clsx dependency): drops falsy values, joins with a space.
+import { twMerge } from "tailwind-merge";
+
+// Class-name joiner: drops falsy values, then resolves Tailwind conflicts so a caller's className
+// (e.g. `hidden sm:inline-flex`) overrides a primitive's base classes (Button's `inline-flex`).
 export const cn = (...parts: (string | false | null | undefined)[]): string =>
-  parts.filter(Boolean).join(" ");
+  twMerge(parts.filter(Boolean).join(" "));

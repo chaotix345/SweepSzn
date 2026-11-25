@@ -17,7 +17,7 @@ export default function ShareHeader({
 }) {
   return (
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <Link href="/" className="flex items-baseline text-2xl tracking-tight">
+      <Link href="/" className="flex items-baseline py-1.5 text-2xl tracking-tight">
         <span className="font-display">Sweep<span className="text-orange-500">Szn</span></span>
         <span className="ml-3 text-sm font-semibold text-zinc-500">{tagline}</span>
       </Link>

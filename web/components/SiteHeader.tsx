@@ -8,20 +8,29 @@ import { ButtonLink } from "@/components/ui/Button";
 import { MenuIcon, CloseIcon } from "@/components/ui/icons";
 import { buildFocusTrapHandler } from "@/components/game/useFocusTrap";
 
+// `desktop: false` keeps an item to the mobile menu + footer so the desktop bar stays one line.
 const NAV = [
-  { href: "/play", label: "Play" },
-  { href: "/leaderboards", label: "Leaderboards" },
-  { href: "/how-it-works", label: "How it works" },
-  { href: "/about", label: "About" },
+  { href: "/play", label: "Play", desktop: true },
+  { href: "/leaderboards", label: "Leaderboards", desktop: true },
+  { href: "/teams", label: "Teams", desktop: true },
+  { href: "/stats", label: "Stats", desktop: true },
+  { href: "/dex", label: "Dex", desktop: false },
+  { href: "/how-it-works", label: "How it works", desktop: true },
+  { href: "/about", label: "About", desktop: false },
 ];
 
-export default function SiteHeader() {
+const CTA_LABEL = "Draft your five";
+
+// `quietCta`: the page has its own orange primary (404, error), so the header CTA steps down.
+export default function SiteHeader({ quietCta = false }: { quietCta?: boolean } = {}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  // The home hero owns the one orange primary CTA, so the header CTA steps down to secondary there.
+  const ctaVariant = quietCta || pathname === "/" ? "secondary" : "primary";
 
   // Escape closes the mobile menu and returns focus to the toggle (keyboard a11y)
   useEffect(() => {
@@ -37,12 +46,12 @@ export default function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/80 shadow-[0_1px_0_0_rgba(255,106,0,0.08),0_10px_30px_-12px_rgba(0,0,0,0.85)] backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-        <Link href="/" onClick={() => setOpen(false)} className="font-display text-2xl tracking-wide">
+        <Link href="/" onClick={() => setOpen(false)} className="flex min-h-11 items-center font-display text-2xl tracking-wide">
           Sweep<span className="text-orange-500">Szn</span>
         </Link>
 
-        <nav className="hidden items-center gap-6 sm:flex">
-          {NAV.map((n) => (
+        <nav className="hidden items-center gap-5 md:flex lg:gap-6">
+          {NAV.filter((n) => n.desktop).map((n) => (
             <Link
               key={n.href}
               href={n.href}
@@ -55,9 +64,11 @@ export default function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          {/* Shown beside the menu toggle (sm) and the full nav (lg); hidden md–lg, where the nav plus
+              the account controls would otherwise crowd it. */}
           {pathname !== "/play" && (
-            <ButtonLink href="/play" size="sm" className="hidden sm:inline-flex">
-              Build your five
+            <ButtonLink href="/play" size="sm" variant={ctaVariant} className="hidden sm:inline-flex md:hidden lg:inline-flex">
+              {CTA_LABEL}
             </ButtonLink>
           )}
           <AuthControl />
@@ -68,7 +79,7 @@ export default function SiteHeader() {
             aria-label="Toggle menu"
             aria-expanded={open}
             aria-controls="mobile-nav"
-            className="flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:border-zinc-500 sm:hidden"
+            className="flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:border-zinc-500 md:hidden"
           >
             {open ? <CloseIcon /> : <MenuIcon />}
           </button>
@@ -80,7 +91,7 @@ export default function SiteHeader() {
           id="mobile-nav"
           ref={navRef}
           onKeyDown={(e) => buildFocusTrapHandler<HTMLElement>(navRef, () => { setOpen(false); toggleRef.current?.focus(); }, { selector: "a[href], button" })(e)}
-          className="animate-menu-down border-t border-zinc-800 px-4 pb-3 pt-1 sm:hidden"
+          className="animate-menu-down border-t border-zinc-800 px-4 pb-3 pt-1 md:hidden"
         >
           {NAV.map((n, i) => (
             <Link
@@ -94,9 +105,11 @@ export default function SiteHeader() {
               {n.label}
             </Link>
           ))}
-          <ButtonLink href="/play" onClick={() => setOpen(false)} className="mt-1 w-full">
-            Build your five →
-          </ButtonLink>
+          {pathname !== "/play" && (
+            <ButtonLink href="/play" onClick={() => setOpen(false)} variant={ctaVariant} className="mt-1 w-full">
+              {CTA_LABEL} →
+            </ButtonLink>
+          )}
         </nav>
       )}
     </header>

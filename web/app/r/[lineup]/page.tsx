@@ -7,6 +7,7 @@ import { SLOTS, displayName } from "@/lib/teams";
 import ResultCard from "@/components/ResultCard";
 import Beacon from "@/components/Beacon";
 import ShareHeader from "@/components/ShareHeader";
+import SkipLink from "@/components/SkipLink";
 
 type Props = { params: Promise<{ lineup: string }> };
 
@@ -41,8 +42,10 @@ export default async function SharedResult({ params }: Props) {
   const { lineup } = await params;
   const data = loadLineup(lineup);
   if (!data) notFound();
+  const names = data.players.map((p) => displayName(p.name)).join(", ");
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      <SkipLink href="#share-content" />
       {/* Share-loop close: count each view of a shared permalink (once per page view). */}
       <Beacon name="share_view" />
       {/* Many first-time arrivals land here, not on home — count them as visitors too, or the
@@ -51,7 +54,10 @@ export default async function SharedResult({ params }: Props) {
       <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <ShareHeader tagline="a friend shared their five" cta="Can you beat this? →" />
+        <div id="share-content" tabIndex={-1} className="outline-none">
+        <h1 className="sr-only">{`A shared all-time five: ${names}, ${data.result.wins}-${data.result.losses} (${data.result.grade})`}</h1>
         <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared prime={data.prime} blueprint={data.blueprint ?? undefined} />
+        </div>
       </div>
       <footer className="pb-10 text-center text-xs text-zinc-600">
         {data.prime

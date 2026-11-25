@@ -1,9 +1,11 @@
 @import "tailwindcss";
 
 /* The app is dark-only. Lock the theme so a user on prefers-color-scheme: light
-   doesn't get a white body behind the dark UI. */
+   doesn't get a white body behind the dark UI. color-scheme keeps native scrollbars, selects and
+   form controls dark too. --background is the Arena base (web/DESIGN.md). */
 :root {
-  --background: #0a0a0a;
+  color-scheme: dark;
+  --background: #0a0a0b;
   --foreground: #ededed;
 }
 
@@ -41,7 +43,8 @@ body {
 .bg-arena-glow { background-image: var(--gradient-arena); }
 .bg-gold-glow { background-image: var(--gradient-gold); }
 
-/* Page transition: app/template.tsx remounts per navigation, replaying this fade. */
+/* Page transition: the (site) and /play templates remount per navigation, replaying this fade on
+   the page content inside <main> only, so the sticky header never blinks or shifts. */
 @keyframes pageFade {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }

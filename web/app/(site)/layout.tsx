@@ -1,4 +1,5 @@
 import SiteHeader from "@/components/SiteHeader";
+import SkipLink from "@/components/SkipLink";
 import SiteFooter from "@/components/SiteFooter";
 
 // Nested layout (not a second root layout) for the marketing/content routes:
@@ -7,7 +8,7 @@ import SiteFooter from "@/components/SiteFooter";
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-orange-500 focus:px-4 focus:py-2 focus:font-bold focus:text-black">Skip to content</a>
+      <SkipLink />
       <SiteHeader />
       <main id="main-content" className="flex-1">{children}</main>
       <SiteFooter />
