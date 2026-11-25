@@ -22,10 +22,11 @@ function wpOf(fs: F[]): number {
     rim = Math.max(rim, f.rimScore); perimScore += f.perimScore;
     if (f.modern) modern = true;
   }
-  const overload = c.overloadGamma * Math.max(0, tU - c.usageBudget);
+  const overload = c.overloadGamma * Math.pow(Math.max(0, tU - c.usageBudget), c.overloadPow);
+  const shortfall = c.shortfallGamma * Math.pow(Math.max(0, c.usageFloor - tU), c.overloadPow);
   const eff = sh <= 3 ? sh : 3 + (sh - 3) * c.spacing.diminish;
   const spacing = modern ? Math.max(c.spacing.noneFloor, Math.min(3, c.spacing.perShooter * (eff - c.spacing.baseline))) : 0;
-  const ortg = c.ortgBase + c.offScale * sO + spacing - overload;
+  const ortg = c.ortgBase + c.offScale * sO + spacing - overload - shortfall;
   const drtg = c.drtgBase - c.defScale * sD + c.noRimPenalty * (1 - rim) + c.thinPerimeterPenalty * Math.max(0, Math.min(1, 1 - perimScore));
   const oP = Math.max(1, ortg) ** c.pythK, dP = Math.max(1, drtg) ** c.pythK;
   return oP / (oP + dP); // winPct (continuous, breaks the integer-win ties)

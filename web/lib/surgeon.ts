@@ -35,6 +35,7 @@ export type SurgeonNeed = "shoot" | "rim" | "perim" | "lowusage" | "off" | "def"
 export function needOf(canonical: string): SurgeonNeed {
   switch (canonical) {
     case "Usage overload": return "lowusage";
+    case "Not enough shot creation": return "off"; // the fix is a shot creator
     case "Spacing": return "shoot";
     case "Thin interior size":
     case "No interior size": return "rim";

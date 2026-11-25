@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { LineupResult } from "./types";
+import { needOf } from "./surgeon";
+import { factorBlurb } from "./explain";
 import {
   FH_BONUS, FH_FACTOR_LABELS, canonicalFactor, fhSeedOk, buildFhChoices,
   encFhScore, decodeFhDisplay,
@@ -189,5 +191,13 @@ describe("factorHunt", () => {
     it("floor case decodes", () => {
       expect(decodeFhDisplay(encFhScore(0, -100, false)) === 0).toBe(true);
     });
+  });
+});
+
+describe("v4 shot-creation factor wiring", () => {
+  it("Factor Hunt, Surgeon and explain all know the new factor", () => {
+    expect(FH_FACTOR_LABELS).toContain("Not enough shot creation");
+    expect(needOf("Not enough shot creation")).toBe("off");
+    expect(factorBlurb("Not enough shot creation (70% demand)")).not.toBe("Contribution to the team rating.");
   });
 });

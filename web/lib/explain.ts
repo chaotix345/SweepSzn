@@ -18,6 +18,7 @@ export function factorBlurb(label: string, value = 0): string {
   if (l.startsWith("star offense")) return "Combined scoring + creation above an average lineup (volume × efficiency, era-adjusted).";
   if (l.startsWith("star defense")) return "Combined defensive impact — steals, blocks, defensive rebounding and rim protection.";
   if (l.startsWith("usage overload")) return "Too many ball-dominant stars: one ball and ~100 possessions can't feed them all, so efficiency drops.";
+  if (l.startsWith("not enough shot creation")) return "Too few players who can create a shot: someone still has to take the hard possessions, and role players do it badly.";
   if (l.startsWith("spacing")) return value >= 0
     ? "Enough outside shooting to bend the defense and open driving lanes."
     : "Cramped floor — not enough shooting, so the paint stays clogged.";

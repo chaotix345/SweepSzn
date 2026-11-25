@@ -207,8 +207,12 @@ export interface Coefficients {
   dwsShrinkK: number;        // Bayesian shrinkage strength for DWS/g toward the league mean
   leagueDwsMean: number;     // prior mean DWS/g
   usgModel: { intercept: number; pts: number; ast: number };
+  // two-sided usage band [usageFloor, usageBudget] = real top-5 p1/p99; penalties only outside it
   usageBudget: number;
+  usageFloor: number;
   overloadGamma: number;
+  overloadPow: number;
+  shortfallGamma: number;
   spacing: { perShooter: number; diminish: number; noneFloor: number; baseline: number };
   // continuous rim protection: best big's blk z (or trb z proxy pre-1974) mapped 0..1 over [lo, lo+span]
   rim: { blkLo: number; blkSpan: number; trbProxyLo: number; trbProxySpan: number };

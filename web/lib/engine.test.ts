@@ -244,3 +244,36 @@ describe("v4 card ratings", () => {
     expect(f.def).toBe(4);
   });
 });
+
+describe("v4 two-sided usage band", () => {
+  const C = { ...DEFAULT_COEFFICIENTS, usageFloor: 95, usageBudget: 125, overloadGamma: 0.2, overloadPow: 1.5, shortfallGamma: 0.3 };
+  const five = (u: number) => [0, 1, 2, 3, 4].map((i) =>
+    mk({ name: `U${i}`, pos: i === 4 ? "C" : "SF", obpm: 1, dbpm: 1, usg: u / 5, z: { blk: 2, trb: 2, stl: 1 } }));
+  const pen = (u: number) => {
+    const r = evaluateLineup(five(u), C);
+    const base = evaluateLineup(five(110), C);
+    return base.ortg - r.ortg;
+  };
+
+  it("usage band is zero at and continuous across both bounds", () => {
+    expect(Math.abs(pen(95))).toBeLessThan(0.1);
+    expect(Math.abs(pen(125))).toBeLessThan(0.1);
+    expect(Math.abs(pen(94.9))).toBeLessThan(0.1);
+    expect(Math.abs(pen(125.1))).toBeLessThan(0.1);
+  });
+
+  it("a low-usage five carries a Not enough shot creation factor with negative winsEst", () => {
+    const r = evaluateLineup(five(70), C);
+    const f = r.factors.find((x) => x.label.startsWith("Not enough shot creation"));
+    expect(f).toBeDefined();
+    expect(f!.value).toBeLessThan(0);
+    expect(f!.winsEst!).toBeLessThan(0);
+  });
+
+  it("no real-team-shaped lineup (sum usage 100-120) pays a usage penalty", () => {
+    for (const u of [100, 105, 110, 115, 120]) {
+      const r = evaluateLineup(five(u), C);
+      expect(r.factors.some((x) => /^(Usage overload|Not enough shot creation)/.test(x.label))).toBe(false);
+    }
+  });
+});

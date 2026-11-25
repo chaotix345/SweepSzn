@@ -19,7 +19,10 @@ export const DEFAULT_COEFFICIENTS: Coefficients = {
   // 110 (was 100): the median real top-5 sums ~107.5% usage, so 100 penalized 91.7% of REAL
   // teams — fantasy-regime penalties must be ~0 in-distribution. See calibrate.py USAGE_BUDGET.
   usageBudget: 110,
+  usageFloor: 0,
   overloadGamma: 0.22,
+  overloadPow: 1,
+  shortfallGamma: 0,
   spacing: { perShooter: 0.987, diminish: 0.55, noneFloor: -3, baseline: 1.6 },
   rim: { blkLo: 0.4, blkSpan: 1.4, trbProxyLo: 0.8, trbProxySpan: 1.6 },
   noRimPenalty: 7,
@@ -181,7 +184,11 @@ function lineupTerms(lineup: Player[], c: Coefficients) {
       perimScore += clamp((zget(p, "stl") - 0.2) / 0.8, 0, 1);
     if (p.year >= 1980) anyModern = true;
   }
-  const overloadPenalty = c.overloadGamma * Math.max(0, totalUsage - c.usageBudget);
+  // Two-sided usage band: zero anywhere real top-5s live ([usageFloor, usageBudget] = real p1/p99).
+  // Above it, too many ball-dominant scorers share one ball; below it, nobody can create a shot and
+  // low-usage players are forced into possessions they can't finish efficiently.
+  const overloadPenalty = c.overloadGamma * Math.pow(Math.max(0, totalUsage - c.usageBudget), c.overloadPow);
+  const shortfallPenalty = c.shortfallGamma * Math.pow(Math.max(0, c.usageFloor - totalUsage), c.overloadPow);
   const effShoot = shooterUnits <= 3 ? shooterUnits : 3 + (shooterUnits - 3) * c.spacing.diminish;
   const spacing = anyModern ? clamp(c.spacing.perShooter * (effShoot - c.spacing.baseline), c.spacing.noneFloor, 3) : 0;
   // Interior-presence penalty: a lineup with no real big (rim score 0) concedes the rim, the post,
@@ -190,9 +197,9 @@ function lineupTerms(lineup: Player[], c: Coefficients) {
   const rimAdj = c.noRimPenalty * (1 - rim);
   const perimAdj = c.thinPerimeterPenalty * clamp(1 - perimScore, 0, 1);
 
-  const ortg = c.ortgBase + c.offScale * sumOff + spacing - overloadPenalty;
+  const ortg = c.ortgBase + c.offScale * sumOff + spacing - overloadPenalty - shortfallPenalty;
   const drtg = c.drtgBase - c.defScale * sumDef + rimAdj + perimAdj;
-  return { sumOff, sumDef, totalUsage, shooterUnits, perimScore, rim, spacing, overloadPenalty, rimAdj, perimAdj, ortg, drtg };
+  return { sumOff, sumDef, totalUsage, shooterUnits, perimScore, rim, spacing, overloadPenalty, shortfallPenalty, rimAdj, perimAdj, ortg, drtg };
 }
 
 function winsFrom(ortg: number, drtg: number, k: number) {
@@ -249,6 +256,8 @@ export function evaluateLineup(lineup: Player[], coeff: Coefficients = DEFAULT_C
   factors.push({ label: "Star defense", value: round1(c.defScale * t.sumDef), kind: "good" });
   if (t.overloadPenalty > 0.2) factors.push({ label: `Usage overload (${Math.round(t.totalUsage)}% demand)`, value: -round1(t.overloadPenalty), kind: "bad",
     winsEst: winsEst(t.overloadPenalty, 0) });
+  if (t.shortfallPenalty > 0.2) factors.push({ label: `Not enough shot creation (${Math.round(t.totalUsage)}% demand)`, value: -round1(t.shortfallPenalty), kind: "bad",
+    winsEst: winsEst(t.shortfallPenalty, 0) });
   if (Math.abs(t.spacing) > 0.2) factors.push({ label: `Spacing (${t.shooterUnits.toFixed(1)} shooters)`, value: round1(t.spacing), kind: t.spacing > 0 ? "good" : "bad",
     winsEst: winsEst(-t.spacing, 0) });
   if (t.rimAdj > 0.2) factors.push({ label: t.rim > 0 ? "Thin interior size" : "No interior size", value: -round1(t.rimAdj), kind: "bad",

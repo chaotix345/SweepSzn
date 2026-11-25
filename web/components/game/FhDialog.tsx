@@ -11,6 +11,7 @@ const FH_BLURB: Record<string, string> = {
   "Star offense": "Your five's raw scoring and shot-creation punch.",
   "Star defense": "Combined defensive impact across the lineup.",
   "Usage overload": "Too many ball-dominant scorers for one basketball.",
+  "Not enough shot creation": "Nobody who can create their own shot when the play breaks down.",
   "Spacing": "Floor spacing from shooting — or the lack of it.",
   "Thin interior size": "Some rim presence, but light on size.",
   "No interior size": "No real big — the rim and glass go uncontested.",
