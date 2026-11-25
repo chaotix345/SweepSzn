@@ -54,8 +54,8 @@ const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1))
 // writing an image Blob (desktop) — the X-compose paste flow; download works everywhere.
 export function SaveCardImage({ path }: { path: string }) {
   const [state, setState] = useState<"idle" | "busy" | "saved" | "copied" | "error">("idle");
-  const canCopyImage =
-    typeof window !== "undefined" && typeof ClipboardItem !== "undefined" && typeof navigator !== "undefined" && !!navigator.clipboard?.write;
+  // hydration-safe: false on the server and first client render, then the real capability
+  const canCopyImage = useSyncExternalStore(subscribeNoop, getCanCopyImage, getServerCanNative);
   const flash = (s: "saved" | "copied" | "error") => { setState(s); setTimeout(() => setState("idle"), 2000); };
   const fetchCard = async (): Promise<Blob> => {
     const res = await fetch(new URL(cardImageUrl(path), window.location.origin).toString());
@@ -336,6 +336,7 @@ export default function ResultCard({
 const subscribeNoop = () => () => {};
 const getCanNative = () => typeof navigator !== "undefined" && "share" in navigator;
 const getServerCanNative = () => false;
+const getCanCopyImage = () => typeof ClipboardItem !== "undefined" && typeof navigator !== "undefined" && !!navigator.clipboard?.write;
 // The share URL is the bare path on the server and absolute + the sharer's own ?ref= on the client.
 // Read through useSyncExternalStore (server snapshot = path) so hydration re-renders with the client
 // value — React 19 never patches a mismatched href, so the SSR'd X/Bluesky links would keep the server's.

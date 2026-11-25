@@ -19,7 +19,7 @@ vi.mock("@/lib/ev", () => ({ ev: vi.fn() }));
 vi.mock("@/lib/streak", () => ({ getUid: () => "test-uid" }));
 
 // --- import the component under test AFTER mocks ---
-import ResultCard, { ShareButton } from "@/components/ResultCard";
+import ResultCard, { ShareButton, SaveCardImage } from "@/components/ResultCard";
 import { headline } from "@/lib/explain";
 import { historyRank } from "@/lib/historyPercentile";
 import { track } from "@vercel/analytics";
@@ -659,5 +659,28 @@ describe("ResultCard — Daily ceiling gap (W2)", () => {
     const { container } = renderCard({ ceiling: { wins: 62, losses: 20 } });
     const share = container.querySelector('a[aria-label="Post to X"]')!;
     expect(gap(container)!.compareDocumentPosition(share) & 4).toBeTruthy();
+  });
+});
+
+describe("SaveCardImage — hydrates cleanly where the browser can copy images", () => {
+  afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ""; });
+
+  it("server HTML has no Copy button; it appears after hydration without a mismatch", async () => {
+    const el = <SaveCardImage path="/r/x" />;
+    vi.stubGlobal("window", undefined);
+    let html: string;
+    try { html = renderToString(el); } finally { vi.unstubAllGlobals(); }
+    expect(html).not.toContain("Copy");
+    vi.stubGlobal("ClipboardItem", class {});
+    Object.defineProperty(navigator, "clipboard", { value: { write: vi.fn(), writeText: vi.fn() }, configurable: true });
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const onRecoverableError = vi.fn();
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    await act(async () => { root = hydrateRoot(container, el, { onRecoverableError }); });
+    expect(onRecoverableError).not.toHaveBeenCalled();
+    expect(container.querySelector('button[aria-label="Copy card image to clipboard"]')).not.toBeNull();
+    await act(async () => { root?.unmount(); });
   });
 });
