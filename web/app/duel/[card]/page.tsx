@@ -7,6 +7,7 @@ import { personaInfo } from "@/lib/duel";
 import DuelResult from "@/components/DuelResult";
 import ShareHeader from "@/components/ShareHeader";
 import Beacon from "@/components/Beacon";
+import SkipLink from "@/components/SkipLink";
 
 // Draft Duel share permalink: /duel/<persona>~<your five>.<bot five>. Both fives are re-evaluated from
 // the ids (resolveDuelCard), so the matchup rebuilds with nothing stored — same scheme as /r/ and /sg/.
@@ -36,14 +37,18 @@ export default async function SharedDuel({ params }: Props) {
   if (!d) notFound();
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      <SkipLink href="#share-content" />
       {/* Share-loop close + first-arrival visit (feeds sourceSplit.visit; device key shared with home). */}
       <Beacon name="share_view" />
       <Beacon name="visit" dedupe={{ scope: "device", key: "szn:ev:visit" }} />
       <div className="mx-auto max-w-3xl px-4 py-8">
         <ShareHeader tagline="draft duel" cta="Duel the bot →" ctaHref="/play?mode=duel" />
+        <div id="share-content" tabIndex={-1} className="outline-none">
+        <h1 className="sr-only">{`Draft Duel against ${personaInfo(d.persona).name}: ${d.you.result.wins}-${d.you.result.losses} to ${d.bot.result.wins}-${d.bot.result.losses}`}</h1>
         <DuelResult persona={d.persona} outcome={d.outcome} you={d.you} bot={d.bot} card={card} shared />
+        </div>
       </div>
-      <footer className="pb-10 text-center text-xs text-zinc-600">engine calibrated to real NBA team-seasons</footer>
+      <footer className="pb-10 text-center text-xs text-zinc-400">engine calibrated to real NBA team-seasons</footer>
     </main>
   );
 }

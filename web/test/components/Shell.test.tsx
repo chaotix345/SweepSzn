@@ -26,3 +26,19 @@ describe("Shell — change-mode escape hatch", () => {
     expect(screen.queryByRole("button", { name: /modes/i })).toBeNull();
   });
 });
+
+describe("Shell — round pills (F10)", () => {
+  afterEach(() => cleanup());
+
+  it("pulses the current round while drafting", () => {
+    const { container } = render(<Shell roundNum={5} mode="classic" onRestart={() => {}}>x</Shell>);
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(1);
+    expect(screen.getByRole("img", { name: "Round 5 of 5" })).toBeTruthy();
+  });
+
+  it("shows every pill solid once all five picks are in", () => {
+    const { container } = render(<Shell roundNum={5} complete mode="classic" onRestart={() => {}}>x</Shell>);
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(0);
+    expect(container.querySelectorAll(".bg-orange-500")).toHaveLength(5);
+  });
+});

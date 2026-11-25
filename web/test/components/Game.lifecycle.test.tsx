@@ -89,8 +89,15 @@ async function draftFive(): Promise<void> {
     await click(btn((t) => /^🎰 spin/i.test(t.trim()))!);
     await act(async () => { vi.advanceTimersByTime(1200); });
     await act(async () => {});
-    await click(screen.getAllByRole("button", { name: /^Select Player/ })[0]);
-    await click(screen.getAllByRole("button", { name: new RegExp(`^${slot} slot`) })[0]);
+    if (slot === "C") {
+      // F25: one open slot left — the row tap only selects; the row's "Place at C" button places
+      await click(screen.getAllByRole("button", { name: /^Select Player/ })[0]);
+      expect(screen.getByRole("dialog", { name: "Choose a position" })).toBeTruthy();
+      await click(screen.getAllByRole("button", { name: /^Place Player .* at C$/ })[0]);
+    } else {
+      await click(screen.getAllByRole("button", { name: /^Select Player/ })[0]);
+      await click(screen.getAllByRole("button", { name: new RegExp(`^${slot} slot`) })[0]);
+    }
   }
 }
 

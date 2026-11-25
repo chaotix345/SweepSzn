@@ -11,6 +11,7 @@ import { bestFiveAnswer, perfectSeasonAnswer, recordAnswer, bullsWarriorsAnswer 
 import { franchiseJsonLdHtml } from "@/lib/franchise";
 import { getEngineMeta } from "@/lib/receipts";
 import { VS_MATCHUPS } from "@/lib/vs";
+import { getLatestPlayers } from "@/lib/data";
 
 type Node = Record<string, unknown>;
 
@@ -80,6 +81,12 @@ describe("JSON-LD structured data", () => {
   it("about: no duplicate FAQPage (the marked-up FAQ lives on /how-it-works)", () => {
     const ld = jsonLd(renderToStaticMarkup(About()));
     expect(ofType(ld, "FAQPage")).toHaveLength(0);
+  });
+
+  it("about: the data-span FAQ reads its last season from the card pool (N09)", () => {
+    const last = Math.max(...getLatestPlayers().map((p) => p.year));
+    expect(last).toBeGreaterThanOrEqual(2026);
+    expect(renderToStaticMarkup(About())).toContain(`box scores from 1950 to ${last}`);
   });
 
   it("teams: ItemList on the index (linking to /vs), SportsTeam + ItemList per franchise", () => {

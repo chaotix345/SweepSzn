@@ -59,7 +59,7 @@ export default async function SharedPickem({ params }: Props) {
         <ResultCard result={data.result} players={data.players} slots={SLOTS} mode="shared" usedHints={data.hinted} shared prime={data.prime} blueprint={data.blueprint ?? undefined} pickem={data.view} />
         </div>
       </div>
-      <footer className="pb-10 text-center text-xs text-zinc-600">
+      <footer className="pb-10 text-center text-xs text-zinc-400">
         engine calibrated to real NBA team-seasons
       </footer>
     </main>

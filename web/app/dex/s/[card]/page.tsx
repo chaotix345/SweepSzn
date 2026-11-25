@@ -84,7 +84,7 @@ export default async function SharedDex({ params }: Props) {
           <ButtonLink href="/play?mode=daily" variant="secondary">Start your own Dex →</ButtonLink>
         </div>
       </div>
-      <footer className="pb-10 text-center text-xs text-zinc-600">every player-season you field is saved to your Dex</footer>
+      <footer className="pb-10 text-center text-xs text-zinc-400">every player-season you field is saved to your Dex</footer>
     </main>
   );
 }

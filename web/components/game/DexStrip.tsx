@@ -29,13 +29,14 @@ export function DexStrip({ lineupIds = [] }: { lineupIds?: string[] }) {
   const plural = count === 1 ? "" : "s";
   return (
     <Link href="/dex" className={STRIP}>
-      {joined ? (
+      {/* one span: bare text + <strong> as separate flex items wrapped as columns on a 390px phone */}
+      <span>{joined ? (
         <>🗂️ Your five joined the Dex — <strong className="text-zinc-200">{count}</strong> player{plural} collected · View →</>
       ) : count > 0 ? (
         <>🗂️ Your Drafted Dex — <strong className="text-zinc-200">{count}</strong> player{plural} collected · View →</>
       ) : (
         <>🗂️ Start your Drafted Dex — every player you field is saved · View →</>
-      )}
+      )}</span>
     </Link>
   );
 }

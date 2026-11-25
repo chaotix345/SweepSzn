@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 //   GET  — the signed-in account's Dex (401 signed out). Kept for compatibility.
 //   POST — local-first: the body carries the device's localStorage history ({ results }), so the Dex
 //          works signed out, and is unioned with the account's Dex when signed in. Never 401s.
-const MODES = new Set(["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon"]);
+const MODES = new Set(["daily", "classic", "hoopiq", "challenge", "factorhunt", "prime", "blueprint", "surgeon", "duel"]);
 const MAX_RESULTS = 60; // the client keeps 50 (lib/resultHistory CAP)
 
 function cleanLocal(input: unknown): DexResult[] {
@@ -19,8 +19,9 @@ function cleanLocal(input: unknown): DexResult[] {
   for (const e of input.slice(0, MAX_RESULTS)) {
     if (!e || typeof e !== "object") continue;
     const r = e as Record<string, unknown>;
-    if (typeof r.encoded !== "string" || !r.encoded || r.encoded.length > 256) continue;
     if (typeof r.mode !== "string" || !MODES.has(r.mode)) continue;
+    // a duel card carries both fives (same cap as /api/profile/sync); only yours counts (fieldedIds)
+    if (typeof r.encoded !== "string" || !r.encoded || r.encoded.length > (r.mode === "duel" ? 640 : 256)) continue;
     out.push({ encoded: r.encoded, mode: r.mode, grade: typeof r.grade === "string" ? r.grade.slice(0, 4) : "" });
   }
   return out;

@@ -94,7 +94,7 @@ export function DexBoard() {
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl leading-none">Drafted Dex</h1>
-          <p className="mt-1 text-sm text-zinc-500">{data.players.length} cards · {data.total} recent games</p>
+          <p className="mt-1 text-sm text-zinc-500">{data.players.length} card{data.players.length === 1 ? "" : "s"} · {data.total} recent game{data.total === 1 ? "" : "s"}</p>
         </div>
         <div className="text-right">
           <div className="font-display text-4xl leading-none tabular-nums text-orange-400">{people}</div>
@@ -114,7 +114,7 @@ export function DexBoard() {
             const got = earned.has(b.key);
             return (
               <span key={b.key} title={got ? b.hint : "Locked — keep drafting to discover"}
-                className={`rounded-lg border px-2.5 py-1 text-xs ${got ? "border-orange-500/50 bg-orange-500/10 text-orange-300" : "border-zinc-800 bg-zinc-900/40 text-zinc-600"}`}>
+                className={`rounded-lg border px-2.5 py-1 text-xs ${got ? "border-orange-500/50 bg-orange-500/10 text-orange-300" : "border-zinc-800 bg-zinc-900/40 text-zinc-500"}`}>
                 {got ? "★ " : "▦ "}{b.name}
               </span>
             );

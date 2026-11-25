@@ -6,6 +6,7 @@ import { encodePickemCard } from "@/lib/pickem";
 import { encodeSurgeonCard } from "@/lib/surgeon";
 import { encodeDexShare } from "@/lib/share";
 import { encodeRankCard } from "@/lib/rankShare";
+import { encodeDuelCard } from "@/lib/duel";
 import { enableRedisEnv, freshFake, ctx } from "@/test/routeHarness";
 
 // Share permalinks are cold-arrival landing pages: each needs one semantic <h1> and a keyboard skip
@@ -24,6 +25,7 @@ const FIVE = [
   "nikola_joki_den_2020s_2024",
   "kevin_garnett_min_2000s_2004",
 ];
+const BOT5 = ["magic_johnson_lal_1980s_1990", "larry_bird_bos_1980s_1985", "hakeem_olajuwon_hou_1990s_1993", "tim_duncan_sas_2000s_2002", "stephen_curry_gsw_2010s_2016"];
 const OTHER = ["stephen_curry_gsw_2010s_2016", ...FIVE.slice(1)];
 const params = <T,>(p: T) => ({ params: Promise.resolve(p) });
 type Page = (a: { params: Promise<Record<string, string>> }) => Promise<React.ReactElement>;
@@ -41,6 +43,7 @@ const pages: [string, () => Promise<{ default: unknown }>, Record<string, string
   ["/c", () => import("@/app/c/[id]/page"), { id: "abc12345" }],
   ["/dex/s", () => import("@/app/dex/s/[card]/page"), { card: encodeDexShare(FIVE, 40, 3) }],
   ["/compare", () => import("@/app/compare/[id1]/[id2]/page"), { id1: encodeLineup(FIVE), id2: encodeLineup(OTHER) }],
+  ["/duel", () => import("@/app/duel/[card]/page"), { card: encodeDuelCard("oldhead", FIVE, BOT5) }],
 ];
 
 describe("share pages: one <h1> and a skip link to the content", () => {
@@ -62,6 +65,14 @@ describe("/compare verdict", () => {
     expect(out).toMatch(/<h1[^>]*>(Five [AB] (wins by \d+ games?|edges it on net rating[^<]*)|Dead even)<\/h1>/);
     expect(out).toContain(`href="/r/${id1}"`);
     expect(out).toContain(`href="/r/${id2}"`);
+  });
+});
+
+describe("/duel shared view", () => {
+  it("names the drafter neutrally, like the OG card", async () => {
+    const out = await html(() => import("@/app/duel/[card]/page"), { card: encodeDuelCard("oldhead", FIVE, BOT5) });
+    expect(out).not.toContain("You beat");
+    expect(out).toMatch(/Player beat Old Head|Old Head wins|Dead even/);
   });
 });
 

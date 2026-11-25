@@ -99,7 +99,7 @@ export default function BpLeaderboard({ date, trace, blueprint, usedHints = fals
           {view && <Board view={view} />}
         </>
       ) : (
-        <div className="mt-2 text-xs text-zinc-600">Board opens soon — your execution grade still counts for bragging rights.</div>
+        <div className="mt-2 text-xs text-zinc-400">Board opens soon — your execution grade still counts for bragging rights.</div>
       )}
     </div>
   );

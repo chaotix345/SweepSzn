@@ -65,9 +65,10 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); localStorage.clear(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
+// A row tap only selects: the position sheet opens and a slot is chosen there.
 const pickIn = async (name: RegExp) => {
   fireEvent.click(await screen.findByRole("button", { name }));
-  const sheet = await screen.findByRole("dialog", { name: /choose a position/i });
+  const sheet = screen.getByRole("dialog", { name: /choose a position/i });
   const open = within(sheet).getAllByRole("button").find((b) => SLOTS.includes(b.textContent ?? "") && !(b as HTMLButtonElement).disabled)!;
   fireEvent.click(open);
 };
@@ -98,6 +99,25 @@ describe("DuelGame — setup", () => {
 });
 
 describe("DuelGame — draft", () => {
+  it("F25: with one open slot left, a row tap only selects; the row's Place button places in one tap", async () => {
+    render(<DuelGame onModeSelect={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /duel old head/i }));
+    for (let r = 0; r < 4; r++) await pickIn(new RegExp(`Select Player lo${r}`));
+    fireEvent.click(await screen.findByRole("button", { name: /Select Player lo4/ }));
+    expect(screen.getByRole("dialog", { name: /choose a position/i })).toBeTruthy();
+    expect(calls.filter((c) => c.url === "/api/duel/bot-pick").at(-1)!.body.picks).toHaveLength(4);
+    fireEvent.click(screen.getByRole("button", { name: "Place Player lo4 at C" }));
+    expect(await screen.findByTestId("duel-result")).toBeTruthy();
+    expect(calls.filter((c) => c.url === "/api/duel/bot-pick").at(-1)!.body.picks).toHaveLength(5);
+  });
+
+  it("no Place button while a player still fits two or more open slots", async () => {
+    render(<DuelGame onModeSelect={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /duel old head/i }));
+    await screen.findByRole("button", { name: /Select Player lo0/ });
+    expect(screen.queryByRole("button", { name: /^Place Player/ })).toBeNull();
+  });
+
   it("plays a full duel: spins with every taken id excluded, never asks for fit, scores, saves the W-L", async () => {
     render(<DuelGame onModeSelect={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /duel old head/i }));

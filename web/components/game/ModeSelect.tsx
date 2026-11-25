@@ -24,7 +24,7 @@ type ModeCard = { id: Mode; title: string; desc: string; accent: AccentKey; diff
 const MODES: ModeCard[] = [
   { id: "classic", title: "Classic", desc: "Full stats visible — draft on what you can see.", accent: "orange", diff: 1 },
   { id: "factorhunt", title: "Factor Hunt", desc: "Draft your five, then guess what the engine rewards or punishes most. Call it right, earn a bonus.", accent: "violet", diff: 2 },
-  { id: "prime", title: "Prime Draft", desc: "No eras — every legend at his peak. Build cross-era fives.", accent: "violet", diff: 2 },
+  { id: "prime", title: "Prime Draft", desc: "No eras — every legend in his best season with that franchise. Build cross-era fives.", accent: "violet", diff: 2 },
   { id: "hoopiq", title: "HoopIQ", desc: "Stats hidden — draft from memory and test your ball knowledge.", accent: "orange", diff: 3 },
   { id: "blueprint", title: "Blueprint", desc: "Pick a game plan before the spin. The engine grades how well you follow it.", accent: "cyan", diff: 3 },
   { id: "surgeon", title: "Surgeon", desc: "The engine finds your lineup's weakest link. One swap to fix it.", accent: "rose", diff: 3 },
@@ -126,14 +126,14 @@ export function ModeSelect({ onPick, onOpenChallenge, onViewDaily }: { onPick: (
       <p className="mt-2 text-lg text-zinc-400">Build an all-time NBA starting five. The best ever found is 80-2 — can you top it?</p>
 
       {showIntro && (
-        <div className="relative mx-auto mt-6 max-w-xl rounded-xl border border-zinc-800 bg-zinc-900/70 px-4 py-3 pr-10 text-left text-sm text-zinc-300">
+        <div className="relative mx-auto mt-6 max-w-xl rounded-xl border border-zinc-800 bg-zinc-900/70 px-4 py-3 pr-12 text-left text-sm text-zinc-300">
           <span className="font-bold text-orange-400">New here?</span>{" "}
           Spin a team + era reel → draft your five → simulate 82 games. Under two minutes.{" "}
           <span className="text-zinc-400">Daily is the best place to start.</span>
           <button
             onClick={dismissIntro}
             aria-label="Dismiss"
-            className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition hover:text-zinc-200"
+            className="absolute right-0.5 top-0.5 flex min-h-11 min-w-11 items-center justify-center rounded-md text-zinc-400 transition hover:text-zinc-200"
           >
             <CloseIcon className="h-4 w-4" />
           </button>

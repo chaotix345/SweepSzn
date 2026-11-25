@@ -89,7 +89,33 @@ describe("Browser — era-adjustment disclosure at draft (R4)", () => {
   it("flags a pre-1985 player's decade in Prime (per-row)", () => {
     const spin = { team: "CHI", decade: "PRIME", candidates: [cand({ id: "a", name: "A", decade: "1960s", year: 1962 })] };
     render(<Browser spin={spin} {...baseProps} mode={"prime" as const} />);
-    expect(screen.queryByTitle(/discount|era-adjust|before 1985/i)).toBeTruthy();
+    expect(screen.queryAllByTitle(/discount|era-adjust|before 1985/i).length).toBeGreaterThan(0);
+  });
+});
+
+describe("Browser — F23 era legend and long pools", () => {
+  it("states the era-adjustment rule as visible text (not only a hover tooltip)", () => {
+    const spin = { team: "BOS", decade: "1970s", candidates: [cand({ id: "a", name: "A", decade: "1970s", year: 1972 })] };
+    render(<Browser spin={spin} {...baseProps} />);
+    expect(screen.getByText(/pre-1985 box stats era-adjusted/i)).toBeTruthy();
+  });
+
+  it("renders 50 rows at a time and reveals more on demand", async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 120 }, (_, i) => cand({ id: `p${i}`, name: `Player ${String(i).padStart(3, "0")}`, rank: i }));
+    render(<Browser spin={{ team: "CHI", decade: "PRIME", candidates: many }} {...baseProps} mode={"prime" as const} />);
+    expect(screen.getAllByRole("button", { name: /^Select / })).toHaveLength(50);
+    await user.click(screen.getByRole("button", { name: /Show 50 more/ }));
+    expect(screen.getAllByRole("button", { name: /^Select / })).toHaveLength(100);
+    await user.click(screen.getByRole("button", { name: /Show 20 more/ }));
+    expect(screen.getAllByRole("button", { name: /^Select / })).toHaveLength(120);
+    expect(screen.queryByRole("button", { name: /more/ })).toBeNull();
+  });
+
+  it("puts a space between positions and the decade on a Prime row", () => {
+    const spin = { team: "CHI", decade: "PRIME", candidates: [cand({ id: "a", name: "A", decade: "2000s", year: 2004, eligible: ["SF"] })] };
+    render(<Browser spin={spin} {...baseProps} mode={"prime" as const} />);
+    expect(screen.getByRole("button", { name: /^Select A/ }).textContent).toMatch(/SF · 00/);
   });
 });
 
@@ -104,5 +130,33 @@ describe("Browser — no-slot guard", () => {
     expect(row.className).toContain("cursor-not-allowed");
     await userEvent.setup().click(row);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+});
+
+describe("Browser — one-tap Place button (F25)", () => {
+  const spin = { team: "CHI", decade: "2000s", candidates: [
+    cand({ id: "a", name: "Adam Aaronson", eligible: ["C"], rank: 0 }),
+    cand({ id: "z", name: "Zane Zykov", eligible: ["PG", "SG"], rank: 1 }),
+  ] };
+  const only = (c: DraftCandidate) => (c.id === "a" ? "C" as const : null);
+
+  it("a row tap only selects; the labelled Place button places in one tap", async () => {
+    const onSelect = vi.fn(), onPlace = vi.fn();
+    render(<Browser spin={spin} {...baseProps} onSelect={onSelect} placeSlot={only} onPlace={onPlace} />);
+    await userEvent.click(screen.getByRole("button", { name: /^Select Adam Aaronson, plays C/ }));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onPlace).not.toHaveBeenCalled();
+    const place = screen.getByRole("button", { name: "Place Adam Aaronson at C" });
+    expect(place.textContent).toBe("Place atC");
+    expect(place.className).toContain("min-h-11");
+    await userEvent.click(place);
+    expect(onPlace).toHaveBeenCalledWith(spin.candidates[0], "C");
+    expect(screen.queryByRole("button", { name: /^Place Zane Zykov/ })).toBeNull(); // two open fits: no Place
+  });
+
+  it("hides Place in compare mode", async () => {
+    render(<Browser spin={spin} {...baseProps} placeSlot={only} onPlace={() => {}} />);
+    await userEvent.click(screen.getByRole("button", { name: /compare/i }));
+    expect(screen.queryByRole("button", { name: /^Place / })).toBeNull();
   });
 });

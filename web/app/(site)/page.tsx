@@ -28,7 +28,7 @@ const SEO_COPY =
   "each day and ranks results on a verified server-side leaderboard with streak tracking. Classic " +
   "mode shows player statistics during the draft; HoopIQ mode hides them so you draft entirely from " +
   "memory. Factor Hunt mode asks you to predict which engine factor matters most before the reveal; " +
-  "Prime Draft drops the era reel so you can build cross-era fives with every player at his peak; " +
+  "Prime Draft drops the era reel so you can build cross-era fives with every player in his best season with that franchise; " +
   "Blueprint mode has you commit to a tactical objective before the spin and grades your execution; " +
   "and Surgeon mode diagnoses your lineup's worst factor and gives you one targeted swap to fix it. " +
   "Draft Duel pits you against a bot drafting from the same spins in snake order, at three difficulty levels. " +

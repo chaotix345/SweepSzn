@@ -3,11 +3,17 @@ import { ButtonLink } from "@/components/ui/Button";
 import ResultPreview from "@/components/ResultPreview";
 import { marketingMetadata } from "@/lib/marketingMeta";
 import { bestFiveAnswer, perfectSeasonAnswer } from "@/lib/answers";
+import { getLatestPlayers } from "@/lib/data";
 
 export const metadata: Metadata = {
   ...marketingMetadata("about"),
   alternates: { canonical: "/about" },
 };
+
+// the box-score span of the card pool, so a new season's release updates the FAQ by itself
+const years = getLatestPlayers().map((p) => p.year);
+const FIRST_YEAR = years.reduce((a, b) => Math.min(a, b));
+const LAST_YEAR = years.reduce((a, b) => Math.max(a, b));
 
 const FAQ: { q: string; a: string }[] = [
   {
@@ -26,11 +32,11 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Where does the player data come from?",
-    a: "Basketball-Reference box scores from 1950 to 2025, normalized per season so different eras can be compared fairly. Pre-1974 defense (before steals and blocks were tracked) is estimated honestly rather than guessed.",
+    a: `Basketball-Reference box scores from ${FIRST_YEAR} to ${LAST_YEAR}, normalized per season so different eras can be compared fairly. Pre-1974 defense (before steals and blocks were tracked) is estimated honestly rather than guessed.`,
   },
   {
     q: "What are the game modes?",
-    a: "Nine ways to play. Daily gives everyone the same spins each day and ranks results on a verified leaderboard with streaks. Classic shows full stats while you draft; HoopIQ hides them so you draft from memory. Challenge sends a friend the same spins to beat your record, and Draft Duel pits you against a bot (easy, medium or hard) drafting from the same spins in snake order. Then four modes that lean on the explainable engine: Factor Hunt asks you to predict which factor matters most before the reveal; Prime Draft drops the era reel so you can build cross-era fives with every legend at his peak; Blueprint has you commit to a tactical objective (spacing, defense, usage discipline, rim, or balanced) before the spin and grades your execution on that axis; and Surgeon diagnoses your lineup's single worst factor and gives you one targeted swap to fix it, scored on the win delta.",
+    a: "Nine ways to play. Daily gives everyone the same spins each day and ranks results on a verified leaderboard with streaks. Classic shows full stats while you draft; HoopIQ hides them so you draft from memory. Challenge sends a friend the same spins to beat your record, and Draft Duel pits you against a bot (easy, medium or hard) drafting from the same spins in snake order. Then four modes that lean on the explainable engine: Factor Hunt asks you to predict which factor matters most before the reveal; Prime Draft drops the era reel so you can build cross-era fives with every legend in his best season with that franchise; Blueprint has you commit to a tactical objective (spacing, defense, usage discipline, rim, or balanced) before the spin and grades your execution on that axis; and Surgeon diagnoses your lineup's single worst factor and gives you one targeted swap to fix it, scored on the win delta.",
   },
   {
     q: "What makes Factor Hunt, Blueprint, and Surgeon possible?",

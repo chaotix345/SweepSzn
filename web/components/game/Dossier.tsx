@@ -70,9 +70,9 @@ export function Dossier({ cand }: { cand: Pick<DraftCandidate, "id" | "z" | "pts
             {data.g != null && <span><b className="text-zinc-400">GP</b> {data.g}</span>}
             {data.mp != null && <span><b className="text-zinc-400">MPG</b> {data.mp.toFixed(1)}</span>}
             {data.ts != null && <span><b className="text-zinc-400">TS%</b> {(data.ts * 100).toFixed(1)}</span>}
-            {data.defense_estimated && <span className="text-zinc-600">· defense estimated</span>}
+            {data.defense_estimated && <span className="text-zinc-400">· defense estimated</span>}
           </div>
-          <div className="mt-2 text-[10px] text-zinc-600">Real career &amp; stats vs his era — not a fit rating.</div>
+          <div className="mt-2 text-[10px] text-zinc-400">Real career &amp; stats vs his era — not a fit rating.</div>
         </>
       )}
     </div>

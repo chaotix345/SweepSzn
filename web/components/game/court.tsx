@@ -26,21 +26,22 @@ export function MiniRoster({ roster, maskColors }: { roster: Roster; maskColors?
             <span className="mt-0.5 text-[7px] opacity-80">{s}</span>
           </span>
         ) : (
-          <span key={s} className="flex h-10 flex-1 items-center justify-center rounded-lg border border-dashed border-zinc-700 text-[10px] font-bold text-zinc-600">{s}</span>
+          <span key={s} className="flex h-10 flex-1 items-center justify-center rounded-lg border border-dashed border-zinc-700 text-[10px] font-bold text-zinc-400">{s}</span>
         );
       })}
     </div>
   );
 }
 
-export function Court({ roster, selSlot, isTarget, onSlot, maskColors, idle }: {
+export function Court({ roster, selSlot, isTarget, onSlot, maskColors, idle, sticky = true }: {
   roster: Roster; selSlot: Slot | null; isTarget: (s: Slot) => boolean; onSlot: (s: Slot) => void; maskColors?: boolean;
   // idle = no pick/swap in progress; filled slots then advertise that tapping picks them up to move/swap
   // (the mechanic was implemented but undiscoverable pre-tap, and the textual hints were desktop-only).
   idle?: boolean;
+  sticky?: boolean; // false when the parent rail is the sticky unit (Draft Duel)
 }) {
   return (
-    <div className="relative mx-auto aspect-[4/3.4] w-full max-w-sm overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-b from-[#14223b] to-[#0c1626] lg:sticky lg:top-4">
+    <div className={`relative mx-auto aspect-[4/3.4] w-full max-w-sm overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-b from-[#14223b] to-[#0c1626] ${sticky ? "lg:sticky lg:top-20" : ""}`}>
       <svg viewBox="0 0 100 85" className="absolute inset-0 h-full w-full text-zinc-600/40" fill="none" stroke="currentColor" strokeWidth="0.6">
         <rect x="2" y="2" width="96" height="81" rx="2" />
         <rect x="38" y="2" width="24" height="30" />
@@ -57,8 +58,8 @@ export function Court({ roster, selSlot, isTarget, onSlot, maskColors, idle }: {
         const c = p ? (maskColors ? { bg: "#3f3f46", text: "#e4e4e7" } : teamColors(p.team)) : null;
         return (
           <button key={s} onClick={() => onSlot(s)} style={{ left: `${COURT[s].left}%`, top: `${COURT[s].top}%` }}
-            title={movable ? "Tap to move" : undefined}
-            aria-label={p ? `${p.name} at ${s}${target ? ", swap target" : movable ? ", tap to move" : ""}` : `${s} slot${target ? ", eligible — tap to place" : " (empty)"}`}
+            title={movable ? "Select to move" : undefined}
+            aria-label={p ? `${p.name} at ${s}${target ? ", swap target" : movable ? ", select to move" : ""}` : `${s} slot${target ? ", eligible — select to place" : " (empty)"}`}
             className={`absolute -translate-x-1/2 -translate-y-1/2 transition ${target ? "animate-pulse" : ""}`}>
             {p && c ? (
               // key on the player id so the snap replays exactly when a slot fills (or a swap lands)

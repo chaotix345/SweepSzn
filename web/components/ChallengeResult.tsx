@@ -116,7 +116,7 @@ export default function ChallengeResult({ id, role, result, players, trace, seed
         <div className={`text-2xl font-black ${tone}`}>{banner}</div>
         <div className="mt-2 flex items-center justify-center gap-4 text-sm">
           <span className="font-bold text-zinc-100">You {result.wins}-{result.losses}</span>
-          <span className="text-zinc-600">vs</span>
+          <span className="text-zinc-400">vs</span>
           <span className="font-bold text-zinc-300">{resp.creator.name} {resp.creator.wins}-{resp.creator.losses}{resp.creator.hinted && <span className="ml-1 text-[10px] font-normal text-zinc-500">(hints)</span>}</span>
         </div>
         <div className="mt-1 text-xs text-zinc-500">{margin}</div>

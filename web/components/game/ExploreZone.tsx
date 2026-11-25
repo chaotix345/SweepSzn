@@ -47,7 +47,7 @@ export function ExploreZone({ summary, children, defaultOpen = false, onOpen }: 
           {open ? "Show less" : "Dig deeper"}
         </span>
         {!open && summary && (
-          <span className="truncate text-[11px] font-normal normal-case tracking-normal text-zinc-600">{summary}</span>
+          <span className="truncate text-[11px] font-normal normal-case tracking-normal text-zinc-400">{summary}</span>
         )}
       </button>
       {/* Panel is always in the DOM so aria-controls always resolves; aria-label is stable (the

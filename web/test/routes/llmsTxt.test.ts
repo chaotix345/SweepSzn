@@ -21,6 +21,13 @@ describe("GET /llms.txt", () => {
     for (const m of VS_MATCHUPS) expect(text).toContain(`${baseUrl}/vs/${m.slug}`);
   });
 
+  it("lists every game mode, Draft Duel included", async () => {
+    const text = await route.GET().text();
+    for (const m of ["Daily", "Classic", "HoopIQ", "Prime Draft", "Factor Hunt", "Blueprint", "Surgeon", "Challenge a Friend", "Draft Duel"]) {
+      expect(text).toContain(`- ${m}: `);
+    }
+  });
+
   it("quotes the engine's numbers from coefficients.json, not hand-typed copies", async () => {
     const m = getEngineMeta();
     const text = await route.GET().text();

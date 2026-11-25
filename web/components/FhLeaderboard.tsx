@@ -89,7 +89,7 @@ export default function FhLeaderboard({ date, trace, prediction, readOnly = fals
           {view && <Board view={view} />}
         </>
       ) : (
-        <div className="mt-2 text-xs text-zinc-600">Board opens soon — your prediction still counts for bragging rights.</div>
+        <div className="mt-2 text-xs text-zinc-400">Board opens soon — your prediction still counts for bragging rights.</div>
       )}
     </div>
   );

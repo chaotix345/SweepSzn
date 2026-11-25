@@ -140,7 +140,29 @@ describe("Leaderboard D1 auto-submit", () => {
     expect(body).toMatchObject({ date: "2026-6-15", trace: TRACE });
     expect(m.calls("/api/daily/leaderboard")).toHaveLength(0); // the submit response is the view
     expect(m.container.textContent).toContain("1-day streak");
-    expect(m.container.querySelector("input")).toBeNull(); // no manual submit form any more
+    expect(m.container.querySelector("input:not(#board-name)")).toBeNull(); // no manual submit form any more
+    act(() => m.root.unmount());
+  });
+
+  it("posts under this device's board name, and lets an anonymous player set one for next time", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-06-15T12:00:00Z"), toFake: ["Date"] });
+    localStorage.setItem("82-0:name", "Hoops Fan");
+    const m = mount(<Leaderboard date="2026-6-15" trace={TRACE} />);
+    await act(async () => { m.root.render(<Leaderboard date="2026-6-15" trace={TRACE} />); });
+    await settle();
+    const body = JSON.parse(String((m.calls("/api/daily/submit")[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.name).toBe("Hoops Fan");
+
+    const input = m.container.querySelector<HTMLInputElement>("#board-name")!;
+    expect(input.value).toBe("Hoops Fan");
+    await act(async () => {
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      set.call(input, "  Sixth Man  ");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { input.form!.requestSubmit(); });
+    expect(localStorage.getItem("82-0:name")).toBe("Sixth Man");
+    expect(m.container.textContent).toContain("post as Sixth Man from your next Daily");
     act(() => m.root.unmount());
   });
 
@@ -209,7 +231,8 @@ describe("Leaderboard D1 auto-submit", () => {
     const m = mount(<Leaderboard date="2026-6-15" trace={TRACE} />, 503);
     await act(async () => { m.root.render(<Leaderboard date="2026-6-15" trace={TRACE} />); });
     await settle();
-    expect(m.container.textContent).toMatch(/warming up/i);
+    expect(m.container.textContent).toMatch(/warming up — your result is saved on this device/i);
+    expect(m.container.querySelector('a[href="/play?mode=daily"]')).toBeNull(); // N07: no link back to the Daily just played
     expect(m.container.textContent).not.toContain("streak");
     act(() => m.root.unmount());
   });

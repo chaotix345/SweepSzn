@@ -27,6 +27,18 @@ No account is needed. The engine models finite possessions and usage overload, e
 - [Head-to-head matchups](${u("/vs")}): famous real starting fives scored side by side (fantasy simulations)
 - [Leaderboards](${u("/leaderboards")}): Daily, Weekly and All-time boards
 
+## Game modes
+
+- Daily: the same spins for everyone each day, with a shared leaderboard
+- Classic: free play with a few hints
+- HoopIQ: player stats hidden, so you draft from memory
+- Prime Draft: each franchise's all-time peak pool
+- Factor Hunt: predict why a lineup wins before the reveal
+- Blueprint: commit to a tactic, then draft to prove it
+- Surgeon: make one swap to fix your five's worst factor
+- Challenge a Friend: head-to-head on the same draft
+- Draft Duel: a snake draft against a bot from the same spins, at three difficulty levels
+
 ## Straight answers
 
 ${qa.map((a) => `### ${a.q}\n\n${a.a}`).join("\n\n")}
