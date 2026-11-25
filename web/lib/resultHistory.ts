@@ -3,8 +3,8 @@
 // recent one restores in place on refresh. No server. Mirrors streak.ts's try/catch resilience:
 // private mode / quota just degrades to "no history", never throws.
 
-export type ResultMode = "daily" | "classic" | "hoopiq" | "challenge" | "factorhunt" | "prime" | "blueprint" | "surgeon";
-export interface ResultEntry { encoded: string; mode: ResultMode; wins: number; losses: number; grade: string; ts: number; challengeId?: string }
+export type ResultMode = "daily" | "classic" | "hoopiq" | "challenge" | "factorhunt" | "prime" | "blueprint" | "surgeon" | "duel";
+export interface ResultEntry { encoded: string; mode: ResultMode; wins: number; losses: number; grade: string; ts: number; challengeId?: string; outcome?: "w" | "l" | "t" }
 
 const KEY = "82-0:results";
 const LAST = "82-0:lastResult";

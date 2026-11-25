@@ -129,4 +129,24 @@ describe("ModeSelect", () => {
     fireEvent.click(screen.getByRole("button", { name: /more modes/i }));
     expect(screen.getByText("Surgeon")).toBeTruthy();
   });
+
+  it("puts Draft Duel at the top level right after Daily (not in the drawer) and starts it", () => {
+    const onPick = vi.fn();
+    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} />);
+    const daily = screen.getByLabelText(/Play Daily mode/i);
+    const duel = screen.getByLabelText("Play Draft Duel mode");
+    expect(daily.compareDocumentPosition(duel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(duel.closest("#more-modes-panel")).toBeNull();
+    expect(duel.compareDocumentPosition(screen.getByLabelText("Play Classic mode")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(duel);
+    expect(onPick).toHaveBeenCalledWith("duel");
+  });
+
+  it("offers 'Play Draft Duel again' when a duel was the last solo game", async () => {
+    mockList.mockReturnValue([{ encoded: "do~a,b,c,d,e.f,g,h,i,j", mode: "duel", wins: 50, losses: 32, grade: "B", ts: Date.now(), outcome: "w" }]);
+    const onPick = vi.fn();
+    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} />);
+    fireEvent.click(await screen.findByText(/Play Draft Duel again/));
+    expect(onPick).toHaveBeenCalledWith("duel");
+  });
 });

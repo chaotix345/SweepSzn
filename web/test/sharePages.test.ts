@@ -5,6 +5,7 @@ import { encodePickemCard } from "@/lib/pickem";
 import { encodeSurgeonCard } from "@/lib/surgeon";
 import { encodeDexShare } from "@/lib/share";
 import { encodeRankCard } from "@/lib/rankShare";
+import { encodeDuelCard } from "@/lib/duel";
 import { enableRedisEnv, freshFake, ctx } from "@/test/routeHarness";
 import { SITE_NAME } from "@/lib/site";
 
@@ -38,6 +39,9 @@ function findProps(node: unknown, type: unknown): Record<string, unknown> | null
   if (el.type === type) return el.props;
   return findProps(el.props?.children, type);
 }
+
+const BOT5 = ["magic_johnson_lal_1980s_1990", "larry_bird_bos_1980s_1985", "hakeem_olajuwon_hou_1990s_1993", "tim_duncan_sas_2000s_2002", "stephen_curry_gsw_2010s_2016"];
+const DUEL = encodeDuelCard("analyst", FIVE, BOT5);
 
 const MJS = ["michael_jordan_chi_1980s_1988", "michael_jordan_chi_1990s_1991", "michael_jordan_was_2000s_2003"];
 
@@ -94,6 +98,7 @@ describe("dynamic OG cards are CDN-cacheable", () => {
     ["/pe", () => import("@/app/pe/[card]/opengraph-image"), { card: encodePickemCard(encodeLineup(FIVE), VIEW) }, { card: "nope" }],
     ["/sg", () => import("@/app/sg/[card]/opengraph-image"), { card: encodeSurgeonCard(FIVE.slice(0, 4).concat("shaquille_o_neal_lal_2000s_2001"), 4, FIVE[4]) }, { card: "nope" }],
     ["/dex/s", () => import("@/app/dex/s/[card]/opengraph-image"), { card: encodeDexShare(FIVE, 40, 3) }, { card: "nope" }],
+    ["/duel", () => import("@/app/duel/[card]/opengraph-image"), { card: DUEL }, { card: "nope" }],
     ["/rank", () => import("@/app/rank/[card]/opengraph-image"), { card: encodeRankCard({ scope: "daily", rank: 3, total: 50, name: "Sam", wins: 60, losses: 22, net: 8.1 }) }, { card: "nope" }],
     ["/compare", () => import("@/app/compare/[id1]/[id2]/opengraph-image"), { id1: encodeLineup(FIVE), id2: encodeLineup(FIVE) }, { id1: "nope", id2: "nope" }],
   ];
@@ -131,6 +136,7 @@ describe("share pages keep og:site_name", () => {
     ["/sg", () => import("@/app/sg/[card]/page"), { card: encodeSurgeonCard(FIVE.slice(0, 4).concat("shaquille_o_neal_lal_2000s_2001"), 4, FIVE[4]) }],
     ["/rank", () => import("@/app/rank/[card]/page"), { card: encodeRankCard({ scope: "daily", rank: 3, total: 50, name: "Sam", wins: 60, losses: 22, net: 8.1 }) }],
     ["/c", () => import("@/app/c/[id]/page"), { id: "abc12345" }],
+    ["/duel", () => import("@/app/duel/[card]/page"), { card: DUEL }],
     ["/dex/s", () => import("@/app/dex/s/[card]/page"), { card: encodeDexShare(FIVE, 40, 3) }],
     ["/compare", () => import("@/app/compare/[id1]/[id2]/page"), { id1: encodeLineup(FIVE), id2: encodeLineup(FIVE) }],
   ];
@@ -142,4 +148,24 @@ describe("share pages keep og:site_name", () => {
       expect(meta.openGraph!.siteName).toBe(SITE_NAME);
     });
   }
+});
+
+describe("/duel/[card] — Draft Duel permalink", () => {
+  it("re-evaluates both fives and names the persona in the metadata", async () => {
+    const { generateMetadata } = await import("@/app/duel/[card]/page");
+    const meta = await generateMetadata(params({ card: DUEL }));
+    expect(String(meta.title)).toMatch(/The Analyst/);
+    expect(String(meta.title)).toMatch(/\d+-\d+ vs \d+-\d+/);
+    expect(meta.robots).toMatchObject({ index: false });
+  });
+
+  it("a crafted card (same person on both sides, stale id, garbage) is a 404 / brand card", async () => {
+    const page = (await import("@/app/duel/[card]/page")).default;
+    for (const card of [encodeDuelCard("bro", FIVE, [FIVE[0], ...BOT5.slice(1)]), encodeDuelCard("bro", FIVE, ["zz_nope", ...BOT5.slice(1)]), "garbage"]) {
+      await expect(page(params({ card }))).rejects.toThrow();
+    }
+    const Image = (await import("@/app/duel/[card]/opengraph-image")).default;
+    await Image(params({ card: encodeDuelCard("bro", FIVE, [FIVE[0], ...BOT5.slice(1)]) }));
+    expect(og.brandOgElement).toHaveBeenCalled();
+  });
 });

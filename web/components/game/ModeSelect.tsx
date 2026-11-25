@@ -110,7 +110,7 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
   useEffect(() => { (async () => { try { setHistory(listResults()); } catch { /* private mode */ } })(); }, []);
   // Returning-user fast path: most recent SOLO game's mode (daily is featured above; challenge has its own).
   const lastReplay = history?.find((e) => e.mode !== "daily" && e.mode !== "challenge");
-  const lastReplayMode = MODES.find((m) => m.id === lastReplay?.mode);
+  const lastReplayMode = lastReplay?.mode === "duel" ? { id: "duel" as Mode, title: "Draft Duel" } : MODES.find((m) => m.id === lastReplay?.mode);
   // Daily already played today? Deep-link to its result instead of re-drafting the already-scored board.
   const dailyToday = history?.find((e) => e.mode === "daily" && dayUTC(new Date(e.ts)) === dayUTC());
 
@@ -154,6 +154,22 @@ export function ModeSelect({ onPick, onOpenChallenge }: { onPick: (m: Mode) => v
           {dailyToday ? "View today's result →" : "Play Daily →"}
         </div>
       </DailyCardShell>
+
+      {/* Draft Duel: a solo opponent, right after Daily (W4) */}
+      <button
+        onClick={() => onPick("duel")}
+        aria-label="Play Draft Duel mode"
+        className="group mt-4 flex w-full items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-left transition hover:border-zinc-600 hover:shadow-[0_10px_28px_rgba(0,0,0,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-500/15 text-orange-400">
+          <ModeGlyph mode="duel" className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 font-bold text-zinc-100">Draft Duel <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-orange-300">New</span></div>
+          <p className="mt-0.5 text-sm text-zinc-400">Draft against a bot from the same spins, snake order. Three opponents, easy to hard.</p>
+        </div>
+        <span className="shrink-0 text-sm font-bold text-orange-400 group-hover:underline">Play →</span>
+      </button>
 
       {/* Returning-user fast path: jump straight back into your last solo mode */}
       {lastReplayMode && (

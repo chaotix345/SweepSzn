@@ -79,7 +79,7 @@ export default function HowItWorks() {
 
       {/* game modes */}
       <section className="mt-14">
-        <h2 className="font-display text-2xl tracking-tight">Eight ways to play</h2>
+        <h2 className="font-display text-2xl tracking-tight">Nine ways to play</h2>
         <p className="mt-2 max-w-2xl text-sm text-zinc-400">
           The same engine drives every mode. Four of them are only possible because the engine explains itself —
           a tool that just prints a number can&apos;t ask you to predict a factor, grade you on one, or diagnose your worst.
@@ -87,6 +87,11 @@ export default function HowItWorks() {
         <div className="mt-6 space-y-5">
           <Principle term="Daily">
             Everyone gets the same spins each day, ranked on a server-verified leaderboard with streaks.
+          </Principle>
+          <Principle term="Draft Duel">
+            Draft against a bot from the same spins in snake order, five rounds, no re-spins. Pick your opponent:
+            Box-Score Bro chases points, Old Head trusts old-school bigs, and The Analyst takes whoever adds the most
+            net rating. Both fives play the season; the better record wins.
           </Principle>
           <Principle term="Classic">
             Full stats visible while you draft, with a couple of optional fit hints per game.

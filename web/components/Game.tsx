@@ -13,6 +13,7 @@ import { BlueprintDialog } from "@/components/game/BlueprintDialog";
 import { useSurgeon } from "@/components/game/useSurgeon";
 import { SurgeonDialog } from "@/components/game/SurgeonDialog";
 import { DraftView } from "@/components/game/DraftView";
+import { DuelGame } from "@/components/game/DuelGame";
 import { GameResultView, SurgeonResultView } from "@/components/game/GameResultView";
 import { useReelSpin, initialReel } from "@/components/game/useReelSpin";
 import { useRestoreFromUrl } from "@/components/game/useRestoreFromUrl";
@@ -321,6 +322,8 @@ export default function Game() {
     );
     return <ModeSelect onPick={start} onOpenChallenge={(cid) => setOwnerId(cid)} />;
   }
+  // Draft Duel runs its own draft (shared spins vs a server-side bot) — see components/game/DuelGame.
+  if (mode === "duel") return <DuelGame onModeSelect={goToModes} />;
   if (mode === "surgeon" && sgResult) return (
     <SurgeonResultView mode={mode} seed={seed} sgResult={sgResult} onRestart={() => start("surgeon")} onModeSelect={goToModes} />
   );

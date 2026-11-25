@@ -9,6 +9,7 @@
 // than the record) are left as they were: finished competitions that expire within 31 days.
 import { encScore, RELEASE_LOCK_LUA } from "./score";
 import { decodeLineup } from "./share";
+import { decodeDuelCard } from "./duel";
 import { decodeSurgeonCard } from "./surgeon";
 import type { LineupResult } from "./types";
 
@@ -40,6 +41,7 @@ interface BoardRow { uid: string; name: string; wins: number; losses: number; ne
 const RESULTS_LOCK_SEC = 5;
 
 function idsFor(mode: string, encoded: string): string[] | null {
+  if (mode === "duel") return decodeDuelCard(encoded)?.youIds ?? null; // the player's own five
   if (mode !== "surgeon") return decodeLineup(encoded);
   const card = decodeSurgeonCard(encoded);
   return card ? card.afterIds : null; // a Surgeon result records the after-swap five

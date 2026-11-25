@@ -420,3 +420,61 @@ export function compareOgElement(a: { result: LineupResult; players: Player[] },
     </div>
   );
 }
+
+// Draft Duel card: you vs the bot persona, both records + both fives (post-commit — both are locked,
+// so showing the lineups leaks nothing; DESIGN.md §12). The verdict color follows win/loss semantics.
+export function duelOgElement(
+  personaName: string, outcome: "w" | "l" | "t",
+  you: { result: LineupResult; players: Player[] }, bot: { result: LineupResult; players: Player[] },
+) {
+  const verdict = outcome === "w" ? `Beat ${personaName}` : outcome === "l" ? `${personaName} wins` : "Dead even";
+  const vColor = outcome === "w" ? "#34d399" : outcome === "l" ? "#f87171" : "#e4e4e7";
+  const side = (label: string, s: { result: LineupResult; players: Player[] }, dot: string) => {
+    const g = GRADE_HEX[s.result.grade] ?? "#e4e4e7";
+    return (
+      <div style={{ display: "flex", flexDirection: "column", width: 500 }}>
+        <div style={{ display: "flex", alignItems: "center", fontSize: 22, fontWeight: 700, color: "#a1a1aa" }}>
+          <div style={{ display: "flex", width: 14, height: 14, borderRadius: 7, background: dot, marginRight: 10 }} />{ascii(label)}
+        </div>
+        <div style={{ display: "flex", alignItems: "baseline", marginTop: 6 }}>
+          <div style={{ display: "flex", fontSize: 96, fontWeight: 900, lineHeight: 1, color: g }}>
+            <span>{s.result.wins}</span><span style={{ color: "#3f3f46" }}>–</span><span>{s.result.losses}</span>
+          </div>
+          <span style={{ display: "flex", marginLeft: 18, fontSize: 40, fontWeight: 800, color: g }}>{s.result.grade}</span>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+          {s.players.map((p, i) => {
+            const c = teamColors(p.team);
+            return (
+              <div key={p.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: 88, height: 64, borderRadius: 12, background: c.bg, color: c.text }}>
+                <span style={{ fontSize: 22, fontWeight: 800 }}>{initials(p.name)}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, opacity: 0.85 }}>{SLOTS[i]}</span>
+              </div>
+            );
+          })}
+        </div>
+        <span style={{ display: "flex", marginTop: 10, fontSize: 17, color: "#71717a" }}>{ascii(s.players.map((p) => displayName(p.name)).join(" · "))}</span>
+      </div>
+    );
+  };
+  return (
+    <div style={shell}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "baseline" }}>
+          <Wordmark />
+          <span style={{ marginLeft: 16, fontSize: 22, color: "#a1a1aa", fontWeight: 600 }}>draft duel</span>
+        </div>
+        <span style={{ display: "flex", fontSize: 22, color: "#71717a" }}>same spins · snake draft · vs the bot</span>
+      </div>
+      <span style={{ display: "flex", marginTop: 28, fontSize: 64, fontWeight: 900, color: vColor }}>{ascii(verdict)}</span>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "auto" }}>
+        {side("You", you, "#ff6a00")}
+        {side(personaName, bot, "#38bdf8")}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 26 }}>
+        <span style={{ display: "flex", fontSize: 26, fontWeight: 700, color: "#fafafa" }}>Can you take the bot?</span>
+        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#ff6a00" }}>Duel it →</span>
+      </div>
+    </div>
+  );
+}
