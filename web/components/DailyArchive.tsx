@@ -69,10 +69,10 @@ export default function DailyArchive() {
     <div className="mt-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-zinc-400" data-testid="archive-count"><span className="font-semibold tabular-nums text-zinc-200">{playedCount}</span> of <span className="tabular-nums">{data.days.length}</span> played on this device</p>
-        <div role="tablist" aria-label="Filter days" className="flex gap-1 rounded-lg bg-zinc-900 p-1 text-xs font-semibold">
+        <div role="group" aria-label="Filter days" className="flex gap-1 rounded-lg bg-zinc-900 p-1 text-xs font-semibold">
           {FILTERS.map(([k, label]) => (
-            <button key={k} role="tab" aria-selected={filter === k} onClick={() => { setFilter(k); setLimit(PAGE); }}
-              className={cn("min-h-9 rounded-md px-3", filter === k ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-200")}>{label}</button>
+            <button key={k} aria-pressed={filter === k} onClick={() => { setFilter(k); setLimit(PAGE); }}
+              className={cn("min-h-11 rounded-md px-3", filter === k ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-200")}>{label}</button>
           ))}
         </div>
       </div>

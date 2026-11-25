@@ -63,11 +63,12 @@ describe("DailyComeback (W3)", () => {
     expect(screen.getByText(/Yesterday's perfect five went/).closest("a")!.textContent).toContain("you matched it");
   });
 
-  it("leaves yesterday out when the player didn't play it, or the reveal fails", async () => {
+  it("shows yesterday's perfect five to non-players too (no gap), and hides it when the reveal fails", async () => {
     vi.stubGlobal("fetch", respond(200, { date: YDAY, ceiling: { wins: 74, losses: 8, lineup: [] } }));
     render(<DailyComeback streak={1} />);
     await settle();
-    expect(screen.queryByText(/Yesterday's perfect five/)).toBeNull();
+    expect(screen.getByText(/Yesterday's perfect five/)).toBeTruthy();
+    expect(screen.queryByText(/you were|you matched|you beat/)).toBeNull();
     cleanup();
     localStorage.setItem("82-0:daily:history", JSON.stringify([YDAY]));
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));

@@ -19,8 +19,8 @@ export default function DailyComeback({ streak }: { streak: number }) {
   useEffect(() => {
     const date = yesterdayUTC();
     let local: number | undefined;
-    let played = false;
-    try { const p = playedDays()[date]; played = !!p; local = bestWins(p); } catch { /* private mode */ }
+
+    try { local = bestWins(playedDays()[date]); } catch { /* private mode */ }
     const ctl = new AbortController();
     // the anon uid rides the body, never a URL; the server adds your board row for that day if it has one
     fetch("/api/daily/ceiling", {
@@ -33,7 +33,7 @@ export default function DailyComeback({ streak }: { streak: number }) {
         if (!c || typeof c.wins !== "number" || typeof c.losses !== "number") return;
         const board = typeof v?.you?.wins === "number" ? v.you.wins : undefined;
         const mine = board == null ? local : local == null ? board : Math.max(board, local);
-        if (played || mine != null) setY({ date, wins: c.wins, losses: c.losses, mine });
+        setY({ date, wins: c.wins, losses: c.losses, mine }); // shown to everyone: the example is the hook
       })
       .catch(() => { /* quietly hidden */ });
     return () => ctl.abort();

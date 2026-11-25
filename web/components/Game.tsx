@@ -32,7 +32,7 @@ import { getUid } from "@/lib/streak";
 import ChallengeOwner from "@/components/ChallengeOwner";
 import { newChallengeId, challengeSeed } from "@/lib/challenge";
 import { encodeLineup } from "@/lib/share";
-import { saveResult, writeLastResult } from "@/lib/resultHistory";
+import { saveResult, writeLastResult, readLastResult } from "@/lib/resultHistory";
 import { useSessionContext } from "@/components/SessionProvider";
 import { pushResult } from "@/lib/account";
 import { pickemSeedOk, getPickemSkip, getLocalVote } from "@/lib/pickem";
@@ -156,7 +156,10 @@ export default function Game() {
       setResult(full);
       // Persist so the result survives a refresh (full object, incl. trace) and shows under "Your
       // results". A challenge entry is upgraded with its challengeId later, when the link is created.
-      writeLastResult({ mode, seed, asOf, result: full, fh: fhPred, bp: blueprint, archive: archiveDate ?? undefined });
+      // An archive replay must not clobber today's ranked Daily (its trace is what a retried submit needs).
+      const prev = archiveDate ? readLastResult<{ mode?: string; seed?: string; archive?: string }>() : null;
+      const keepToday = !!prev && prev.mode === "daily" && !prev.archive && prev.seed === `daily-${todaySeed()}`;
+      if (!keepToday) writeLastResult({ mode, seed, asOf, result: full, fh: fhPred, bp: blueprint, archive: archiveDate ?? undefined });
       if (archiveDate) {
         // unranked: kept out of the ranked history, so no stats, Dex, account sync or "played today"
         saveArchiveRun(archiveDate, { encoded: encodeLineup(full.players.map((p) => p.id), full.usedHints), wins: data.result.wins, losses: data.result.losses, grade: data.result.grade });

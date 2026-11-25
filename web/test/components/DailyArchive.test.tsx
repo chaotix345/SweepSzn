@@ -57,11 +57,11 @@ describe("DailyArchive (W3)", () => {
     expect(screen.getByRole("link", { name: "Replay the Daily for Tue, Nov 24" })).toBeTruthy();
     expect(screen.getByText(/· 61-21/)).toBeTruthy();
     expect(screen.getByText("Replay · 58-24")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "Played" }));
+    fireEvent.click(screen.getByRole("button", { name: "Played" }));
     expect(screen.getAllByRole("link", { name: /Daily for/ }).map((a) => a.getAttribute("href"))).toEqual([
       "/play?mode=daily&date=2026-11-24", "/play?mode=daily&date=2026-11-20",
     ]);
-    fireEvent.click(screen.getByRole("tab", { name: "Not played" }));
+    fireEvent.click(screen.getByRole("button", { name: "Not played" }));
     expect(screen.queryByRole("link", { name: /Tue, Nov 24/ })).toBeNull();
   });
 
