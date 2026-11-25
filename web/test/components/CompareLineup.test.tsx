@@ -108,3 +108,31 @@ describe("CompareLineup — post-game compare (vs real team / vs friend)", () =>
     await waitFor(() => expect(container.textContent).toMatch(/couldn.t|not find|invalid/i));
   });
 });
+
+describe("CompareLineup — dialog focus (F20)", () => {
+  it("moves focus into the dialog, traps Tab, closes on Escape and returns focus to the trigger", () => {
+    const { getByRole, container } = setup();
+    const trigger = getByRole("button", { name: /compare your lineup/i });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = getByRole("dialog", { name: /compare lineup/i });
+    expect(document.activeElement).toBe(dialog);
+    const focusables = dialog.querySelectorAll<HTMLElement>("button:not([disabled]), select, input, a[href]");
+    focusables[focusables.length - 1].focus();
+    fireEvent.keyDown(dialog, { key: "Tab" });
+    expect(document.activeElement).toBe(focusables[0]);
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("closes on a backdrop tap but not on a tap inside the panel", () => {
+    const { getByRole, container } = setup();
+    fireEvent.click(getByRole("button", { name: /compare your lineup/i }));
+    const dialog = getByRole("dialog", { name: /compare lineup/i });
+    fireEvent.click(dialog);
+    expect(container.querySelector('[role="dialog"]')).toBeTruthy();
+    fireEvent.click(dialog.parentElement!);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+});

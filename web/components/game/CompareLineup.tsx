@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { track } from "@vercel/analytics";
 import Link from "next/link";
 import type { Player, LineupResult } from "@/lib/types";
@@ -9,6 +9,8 @@ import { ev } from "@/lib/ev";
 import { getUid } from "@/lib/streak";
 import { avgZ } from "@/lib/radar";
 import { ZRadar } from "@/components/game/ZRadar";
+import { useDialogFocus } from "@/components/game/useDialogFocus";
+import { buildFocusTrapHandler } from "@/components/game/useFocusTrap";
 
 // Post-game compare. Two descriptive, post-commit views (DESIGN.md §12): "vs Real Team" puts your
 // five's already-shown projected ratings beside a famous team's actuals (a yardstick); "vs a Friend"
@@ -29,7 +31,7 @@ function RatingTable({ you, them }: {
   ];
   return (
     <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-      <div className="grid grid-cols-[1fr_3.25rem_3.25rem_3.25rem] gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-600">
+      <div className="grid grid-cols-[1fr_3.25rem_3.25rem_3.25rem] gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-400">
         <span /><span className="text-right">ORtg</span><span className="text-right">DRtg</span><span className="text-right">Net</span>
       </div>
       <div className="mt-1 space-y-1">
@@ -49,7 +51,7 @@ function RatingTable({ you, them }: {
 export function RecordPill({ label, wins, losses, grade }: { label: string; wins: number; losses: number; grade: string }) {
   return (
     <div className="rounded-xl bg-zinc-950/60 p-2">
-      <div className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</div>
+      <div className="text-[10px] uppercase tracking-wide text-zinc-400">{label}</div>
       <div className="font-display text-2xl tabular-nums text-zinc-100">{wins}<span className="text-zinc-600">–</span>{losses}</div>
       <div className="text-[11px] text-zinc-400">{grade}</div>
     </div>
@@ -72,12 +74,10 @@ export function CompareLineup({ players, result, lineupSeg }: { players: Player[
   const [friendSeg, setFriendSeg] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error" | "ok">("idle");
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
+  // F20: focus moves into the dialog on open and back to the trigger on close; Tab is trapped inside,
+  // Escape or a tap on the backdrop closes it
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(open, dialogRef);
 
   async function loadFriend() {
     const seg = extractLineupSegment(link);
@@ -95,31 +95,32 @@ export function CompareLineup({ players, result, lineupSeg }: { players: Player[
     } catch { setStatus("error"); }
   }
 
-  if (!open) {
-    return (
-      <button onClick={() => { setOpen(true); track("compare_open", { grade: result.grade, wins: result.wins }); ev("compare_open", { uid: getUid() }); }} aria-label="Compare your lineup"
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/60 py-2.5 text-sm font-bold text-zinc-300 transition hover:border-cyan-600/60 hover:text-cyan-300">
-        ⚖️ Compare lineup — vs a real team or a friend
-      </button>
-    );
-  }
-
   const team = FAMOUS_TEAMS[teamIdx];
+  const close = () => setOpen(false);
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Compare lineup"
+    <>
+    {/* the trigger stays mounted while the dialog is open, so focus can return to it on close */}
+    <button onClick={() => { setOpen(true); track("compare_open", { grade: result.grade, wins: result.wins }); ev("compare_open", { uid: getUid() }); }} aria-label="Compare your lineup"
+      className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/60 py-2.5 text-sm font-bold text-zinc-300 transition hover:border-cyan-600/60 hover:text-cyan-300">
+      ⚖️ Compare lineup — vs a real team or a friend
+    </button>
+    {open && (
+    <div onClick={(e) => { if (e.target === e.currentTarget) close(); }}
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center sm:p-4">
-      <div className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-zinc-700 bg-zinc-900 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl sm:rounded-2xl">
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Compare lineup"
+        onKeyDown={(e) => buildFocusTrapHandler(dialogRef, close, { selector: "button:not([disabled]), select, input, a[href]" })(e)}
+        className="max-h-[88vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-zinc-700 bg-zinc-900 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl outline-none sm:rounded-2xl">
         <div className="flex items-center justify-between">
           <span className="text-sm font-black uppercase tracking-widest text-cyan-400">⚖️ Compare</span>
-          <button onClick={() => setOpen(false)} aria-label="Close compare" className="px-1 text-zinc-400 hover:text-zinc-200">✕</button>
+          <button onClick={close} aria-label="Close compare" className="-my-2 -mr-2 grid min-h-11 min-w-11 place-items-center text-zinc-400 hover:text-zinc-200">✕</button>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-zinc-950/70 p-1 text-xs font-semibold">
           <button onClick={() => setTab("team")} aria-pressed={tab === "team"}
-            className={`rounded-md py-1.5 ${tab === "team" ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}>vs Real Team</button>
+            className={`min-h-11 rounded-md py-1.5 ${tab === "team" ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}>vs Real Team</button>
           <button onClick={() => setTab("friend")} aria-pressed={tab === "friend"}
-            className={`rounded-md py-1.5 ${tab === "friend" ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}>vs a Friend</button>
+            className={`min-h-11 rounded-md py-1.5 ${tab === "friend" ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"}`}>vs a Friend</button>
         </div>
 
         {tab === "team" ? (
@@ -134,7 +135,7 @@ export function CompareLineup({ players, result, lineupSeg }: { players: Player[
               you={{ ortg: result.ortg, drtg: result.drtg, net: result.netRtg }}
               them={{ label: `${team.record} ${team.team}`, ortg: team.ortg, drtg: team.drtg, net: team.nrtg }}
             />
-            <p className="mt-2 text-[10px] leading-snug text-zinc-600">
+            <p className="mt-2 text-[10px] leading-snug text-zinc-400">
               Your five&apos;s engine projection beside {team.team}&apos;s actual {team.season} ratings — a real-history yardstick, not a fit score.
             </p>
           </div>
@@ -144,7 +145,7 @@ export function CompareLineup({ players, result, lineupSeg }: { players: Player[
             <div className="mt-1 flex gap-2">
               <input id="cmp-friend-link" value={link} onChange={(e) => setLink(e.target.value)}
                 placeholder="Paste a friend's result link (sweepszn.com/r/…)"
-                className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2 text-sm text-zinc-200 placeholder:text-zinc-600" />
+                className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-2 text-sm text-zinc-200 placeholder:text-zinc-500" />
               <button onClick={loadFriend} aria-label="Compare with friend" disabled={status === "loading"}
                 className="shrink-0 rounded-lg bg-cyan-500 px-3 py-2 text-sm font-bold text-black transition hover:bg-cyan-400 disabled:opacity-50">
                 {status === "loading" ? "…" : "Compare"}
@@ -179,5 +180,7 @@ export function CompareLineup({ players, result, lineupSeg }: { players: Player[
         )}
       </div>
     </div>
+    )}
+    </>
   );
 }

@@ -16,9 +16,10 @@ const ROWS: { k: "pts" | "trb" | "ast" | "stl" | "blk"; label: string }[] = [
 ];
 const lastName = (n: string) => n.split(" ").slice(-1)[0];
 
-export function ComparePanel({ a, b, dialogRef, onClose, onPick }: {
+export function ComparePanel({ a, b, dialogRef, onClose, onPick, canPick }: {
   a: DraftCandidate; b: DraftCandidate; dialogRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void; onPick: (c: DraftCandidate) => void;
+  canPick?: (c: DraftCandidate) => boolean; // false = no open slot fits him: the Pick button says so instead of no-oping
 }) {
   useEffect(() => { dialogRef.current?.focus(); }, [dialogRef]); // move focus into the dialog for a11y
   const cell = (c: DraftCandidate, other: DraftCandidate, k: typeof ROWS[number]["k"]) => {
@@ -34,14 +35,14 @@ export function ComparePanel({ a, b, dialogRef, onClose, onPick }: {
       <div className="animate-slide-up w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
         <div className="flex items-center justify-between">
           <span className="text-xs font-black uppercase tracking-widest text-orange-500">⚖️ Compare</span>
-          <button onClick={onClose} aria-label="Close compare" className="px-2 text-zinc-400 hover:text-zinc-200">✕</button>
+          <button onClick={onClose} aria-label="Close compare" className="-my-2 -mr-2 grid min-h-11 min-w-11 place-items-center text-zinc-400 hover:text-zinc-200">✕</button>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-3 text-center">
           {[{ c: a, col: A_COLOR }, { c: b, col: B_COLOR }].map(({ c, col }) => (
             <div key={c.id} className="min-w-0">
               <div className="truncate text-sm font-bold" style={{ color: col }}>{c.name}</div>
-              <div className="truncate text-[11px] text-zinc-500">{meta(c)}</div>
+              <div className="truncate text-[11px] text-zinc-400">{meta(c)}</div>
             </div>
           ))}
         </div>
@@ -50,7 +51,7 @@ export function ComparePanel({ a, b, dialogRef, onClose, onPick }: {
           {ROWS.map((r) => (
             <div key={r.k} className="grid grid-cols-[1fr_3rem_1fr] items-center gap-3 text-sm">
               <div className="text-right">{cell(a, b, r.k)}</div>
-              <div className="text-center text-[10px] font-bold uppercase tracking-wide text-zinc-600">{r.label}</div>
+              <div className="text-center text-[10px] font-bold uppercase tracking-wide text-zinc-400">{r.label}</div>
               <div className="text-left">{cell(b, a, r.k)}</div>
             </div>
           ))}
@@ -60,15 +61,22 @@ export function ComparePanel({ a, b, dialogRef, onClose, onPick }: {
           <ZRadar players={[{ label: a.name, z: a.z, color: A_COLOR }, { label: b.name, z: b.z, color: B_COLOR }]} />
         </div>
         {(a.defense_estimated || b.defense_estimated) && (
-          <p className="mt-1 text-center text-[10px] text-zinc-600">Pre-1974 defensive stats are estimated.</p>
+          <p className="mt-1 text-center text-[10px] text-zinc-400">Pre-1974 defensive stats are estimated.</p>
         )}
-        <p className="mt-2 text-center text-[11px] text-zinc-500">Real stats &amp; era standing — not a fit rating.</p>
+        <p className="mt-2 text-center text-[11px] text-zinc-400">Real stats &amp; era standing — not a fit rating.</p>
 
         <div className="mt-3 grid grid-cols-2 gap-3">
-          <button onClick={() => onPick(a)} style={{ color: A_COLOR }}
-            className="rounded-xl border border-zinc-700 py-2 text-sm font-bold hover:border-zinc-500">Pick {lastName(a.name)}</button>
-          <button onClick={() => onPick(b)} style={{ color: B_COLOR }}
-            className="rounded-xl border border-zinc-700 py-2 text-sm font-bold hover:border-zinc-500">Pick {lastName(b.name)}</button>
+          {[{ c: a, col: A_COLOR }, { c: b, col: B_COLOR }].map(({ c, col }) => {
+            const ok = canPick ? canPick(c) : true;
+            return (
+              <button key={c.id} onClick={() => onPick(c)} disabled={!ok} style={ok ? { color: col } : undefined}
+                aria-label={ok ? `Pick ${c.name}` : `Can't pick ${c.name} — no open slot`}
+                className="flex min-h-11 flex-col items-center justify-center rounded-xl border border-zinc-700 py-2 text-sm font-bold hover:border-zinc-500 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-400">
+                Pick {lastName(c.name)}
+                {!ok && <span className="text-[10px] font-semibold">no open slot</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

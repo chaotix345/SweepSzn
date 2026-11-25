@@ -163,7 +163,7 @@ describe("ResultCard — grade/verdict render branches", () => {
   it("shows PRIME badge when prime is true", () => {
     const { container } = renderCard({ prime: true });
     // The PRIME badge has title="All-eras roster..."
-    const badge = container.querySelector('[title="All-eras roster — every player at his statistical peak"]');
+    const badge = container.querySelector('[title="All-eras roster — every player in his best season with that franchise"]');
     expect(badge).toBeTruthy();
     expect(badge!.textContent).toContain("PRIME");
   });

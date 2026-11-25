@@ -23,6 +23,7 @@ import { DexStrip } from "@/components/game/DexStrip";
 import { CompareLineup } from "@/components/game/CompareLineup";
 import { ExploreZone } from "@/components/game/ExploreZone";
 import FiveStrip from "@/components/FiveStrip";
+import Link from "next/link";
 
 // Crowd snapshot + your vote (and, same-session only, the spun team/era the vote was about).
 type PickemProp = { y: number; n: number; vote: "y" | "n" | null; subject?: string | null };
@@ -57,6 +58,27 @@ function shareNudge(result: LineupResult, kind: "challenge" | "daily" | "shared"
 }
 
 const fmt = (n: number | null | undefined) => (n == null ? "–" : n.toFixed(1));
+
+const prefersReducedMotion = () => typeof window !== "undefined" && (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false);
+
+// F29: a brisk ease-out count-up from 0 into the record slam (in-game reveal only; reduced motion
+// and shared permalinks show the final number straight away, so SSR markup never changes).
+function useCountUp(target: number, run: boolean, ms = 320): number {
+  const [v, setV] = useState(() => (run && !prefersReducedMotion() ? 0 : target));
+  useEffect(() => {
+    if (!run || prefersReducedMotion()) return;
+    const t0 = performance.now();
+    let id = requestAnimationFrame(function step(t) {
+      const k = Math.min(1, (t - t0) / ms);
+      setV(Math.round(target * (1 - (1 - k) ** 3)));
+      if (k < 1) id = requestAnimationFrame(step);
+    });
+    // rAF never runs in a hidden tab: land the real record on a timer regardless
+    const done = setTimeout(() => { cancelAnimationFrame(id); setV(target); }, ms + 60);
+    return () => { cancelAnimationFrame(id); clearTimeout(done); };
+  }, [target, run, ms]);
+  return run && !prefersReducedMotion() ? v : target;
+}
 
 // Saveable/copyable breakdown card. The OG route already renders a clean 1200×630 PNG; this
 // fetches it so a user (or the launch content workflow) can attach the card as a native image
@@ -156,6 +178,13 @@ export default function ResultCard({
   const names = players.map((p) => displayName(p.name));
 
   const elite = isEliteGrade(result.grade);
+  const shownWins = useCountUp(result.wins, !shared);
+  const shownLosses = useCountUp(result.losses, !shared);
+  // F29: a short buzz on an S / A+ reveal, where the device supports it (never on a shared permalink)
+  useEffect(() => {
+    if (shared || !elite || prefersReducedMotion()) return;
+    try { navigator.vibrate?.([30, 50, 70]); } catch { /* unsupported */ }
+  }, [shared, elite]);
   const [challengeDown, setChallengeDown] = useState(false); // the challenge share fell back to /r/
   // one roster row's dossier open at a time (tap ⓘ) — reuses the draft-board Dossier, post-commit
   const [openRosterId, setOpenRosterId] = useState<string | null>(null);
@@ -170,9 +199,10 @@ export default function ResultCard({
         {/* elite-only radial gold wash behind the record — gold stays reserved for S/A+ / 82-0 */}
         {elite && <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-gold-glow" />}
         <div aria-live="polite" aria-atomic="true">
-          <div className="text-xs font-semibold uppercase tracking-widest text-zinc-500">{mode} · simulated record</div>
+          <div className="text-xs font-semibold uppercase tracking-widest text-zinc-400">{mode} · simulated record</div>
           <div className={`mt-1 font-display text-7xl tabular-nums sm:text-8xl ${gradeColor} animate-record-slam`}>
-            {result.wins}<span className="text-zinc-600">–</span>{result.losses}
+            <span aria-hidden>{shownWins}<span className="text-zinc-600">–</span>{shownLosses}</span>
+            <span className="sr-only">{result.wins}–{result.losses}</span>
           </div>
           <div className="mt-1 text-lg font-bold tracking-wide">
             <span className={gradeColor}>{result.grade}</span> <span className="text-zinc-300">{result.label}</span>
@@ -194,8 +224,8 @@ export default function ResultCard({
         {prime && (
           <>
             <div className="mt-2 ml-1 inline-flex items-center gap-1 rounded-full bg-violet-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-violet-300"
-              title="All-eras roster — every player at his statistical peak">⚡ PRIME</div>
-            <p className="mt-2 text-[11px] text-violet-300/70">Fantasy simulation, not historical simulation — every player at his peak, eras crossed freely.</p>
+              title="All-eras roster — every player in his best season with that franchise">⚡ PRIME</div>
+            <p className="mt-2 text-[11px] text-violet-300/70">Fantasy simulation, not historical simulation — every player in his best season with that franchise, eras crossed freely.</p>
           </>
         )}
         {blueprint && (
@@ -270,7 +300,7 @@ export default function ResultCard({
       <div className="border-t border-zinc-800 px-6 py-5">
         <div className="mb-3 flex items-baseline justify-between gap-3">
           <div className="text-xs font-bold uppercase tracking-wide text-zinc-500">Why this record</div>
-          <a href="/how-it-works#receipts" className="text-[11px] text-zinc-600 hover:text-zinc-400">How accurate is this?</a>
+          <Link href="/how-it-works#receipts" className="inline-flex min-h-11 items-center text-[11px] text-zinc-400 hover:text-zinc-200">How accurate is this?</Link>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <FactorColumn title="What's helping" items={helps} kind="good" contrib={contrib} />
@@ -319,7 +349,7 @@ export default function ResultCard({
                         <span className="truncate text-sm font-semibold">{p.name}</span>
                         <span className="shrink-0 text-[10px] text-zinc-500">{p.team} · {eraLabel(p.decade)}</span>
                       </div>
-                      <div className="text-[11px] text-orange-400/90">{role.role}<span className="text-zinc-600"> · {role.blurb}</span></div>
+                      <div className="text-[11px] text-orange-400/90">{role.role}<span className="text-zinc-400"> · {role.blurb}</span></div>
                       <RoleBars pb={result.players[i]} />
                     </div>
                     <StatRow p={p} className="hidden shrink-0 sm:flex" />
@@ -327,8 +357,8 @@ export default function ResultCard({
                     <button onClick={() => setOpenRosterId(open ? null : p.id)} aria-expanded={open}
                       aria-label={`${open ? "Hide" : "Show"} ${p.name} details`}
                       title="Player details — accolades, career, era context"
-                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border text-sm transition ${
-                        open ? "border-orange-500 bg-orange-500/10 text-orange-400" : "border-zinc-800 text-zinc-500 hover:text-orange-400"}`}>
+                      className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg border text-sm transition ${
+                        open ? "border-orange-500 bg-orange-500/10 text-orange-400" : "border-zinc-800 text-zinc-400 hover:text-orange-400"}`}>
                       {open ? "▴" : "ⓘ"}
                     </button>
                   </div>
@@ -338,13 +368,15 @@ export default function ResultCard({
               );
             })}
           </div>
-          {/* totals */}
-          <div className="mt-2 flex items-center justify-between gap-2 px-2.5 sm:justify-end sm:gap-2.5">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-500 sm:mr-auto">Team totals</span>
-            <div className="flex gap-2 sm:gap-2.5">
-              <Stat v={totals.pts} k="PPG" strong /><Stat v={totals.trb} k="RPG" strong /><Stat v={totals.ast} k="APG" strong />
-              <Stat v={totals.stl} k="SPG" strong /><Stat v={totals.blk} k="BPG" strong />
+          {/* totals (F12): the same columns as the player rows above — the desktop stat group with a
+              spacer where the ⓘ button sits, the mobile full-width row under the label */}
+          <div className="mt-2 px-2.5">
+            <div className="flex items-center gap-3">
+              <span className="min-w-0 flex-1 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Team totals</span>
+              <TotalsRow t={totals} className="hidden shrink-0 sm:flex" />
+              <span aria-hidden className="hidden w-11 shrink-0 sm:block" />
             </div>
+            <TotalsRow t={totals} className="mt-1.5 flex justify-between px-1 sm:hidden" />
           </div>
         </div>
         <ScoutingAnchor result={result} shared={shared} />
@@ -653,9 +685,9 @@ function ScoutingAnchor({ result, shared }: { result: LineupResult; shared?: boo
     <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
       <div className="mb-1.5 flex items-baseline justify-between">
         <span className="text-xs font-bold uppercase tracking-wide text-zinc-500">📋 Scouting report</span>
-        <span className="text-[10px] text-zinc-600">per 100 possessions</span>
+        <span className="text-[10px] text-zinc-400">per 100 possessions</span>
       </div>
-      <div className="grid grid-cols-[1fr_3.25rem_3.25rem_3.25rem] gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-600">
+      <div className="grid grid-cols-[1fr_3.25rem_3.25rem_3.25rem] gap-1 text-[9px] font-semibold uppercase tracking-wide text-zinc-400">
         <span /><span className="text-right">ORtg</span><span className="text-right">DRtg</span><span className="text-right">Net</span>
       </div>
       <div className="mt-1 space-y-1">
@@ -668,7 +700,7 @@ function ScoutingAnchor({ result, shared }: { result: LineupResult; shared?: boo
           </div>
         ))}
       </div>
-      <p className="mt-2 text-[10px] leading-snug text-zinc-600">
+      <p className="mt-2 text-[10px] leading-snug text-zinc-400">
         {shared ? "This" : "Your"} five&apos;s engine projection beside {s.anchor.team}&apos;s actual {s.anchor.season} ratings — a real-history yardstick, not a fit score.
       </p>
     </div>
@@ -696,7 +728,7 @@ function GradeLadder({ wins, grade, shared }: { wins: number; grade: string; sha
             title={`${g.label} — ${g.min}+ wins`}
             aria-label={g.grade === grade ? `${g.grade} — ${g.label}, ${shared ? "this five's" : "your"} grade` : `${g.grade} — ${g.label}`}
             className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-              g.grade === grade ? `${GRADE_COLOR[g.grade] ?? "text-zinc-200"} bg-zinc-800` : "text-zinc-600"}`}>
+              g.grade === grade ? `${GRADE_COLOR[g.grade] ?? "text-zinc-200"} bg-zinc-800` : "text-zinc-400"}`}>
             {g.grade}
           </span>
         ))}
@@ -718,8 +750,8 @@ function GradeLadder({ wins, grade, shared }: { wins: number; grade: string; sha
 function StarContrib({ rows, side }: { rows: ContribRow[]; side: "off" | "def" }) {
   return (
     <details className="mt-1">
-      <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-wide text-zinc-600 hover:text-zinc-400">
-        Per-player impact
+      <summary className="flex min-h-11 cursor-pointer items-center text-[10px] font-semibold uppercase tracking-wide text-zinc-400 hover:text-zinc-200 sm:min-h-0">
+        ▸ Per-player impact
       </summary>
       <div className="mt-1 space-y-0.5">
         {rows.map((r) => {
@@ -734,7 +766,7 @@ function StarContrib({ rows, side }: { rows: ContribRow[]; side: "off" | "def" }
           );
         })}
       </div>
-      <p className="mt-1 text-[10px] leading-snug text-zinc-600">Engine impact on this lineup — not a career grade.</p>
+      <p className="mt-1 text-[10px] leading-snug text-zinc-400">Engine impact on this lineup — not a career grade.</p>
     </details>
   );
 }
@@ -788,13 +820,22 @@ function RoleBars({ pb }: { pb: PlayerBreakdown }) {
         return (
           <div key={b.key} role="img" aria-label={`${b.label}: ${Math.round(v * 100)} out of 100`}
             className="flex items-center gap-1.5" title={`${b.label} — engine score ${Math.round(v * 100)} / 100`}>
-            <span className="text-[8px] font-semibold uppercase tracking-wide text-zinc-600">{b.label}</span>
+            <span className="text-[8px] font-semibold uppercase tracking-wide text-zinc-400">{b.label}</span>
             <div className="h-1 w-8 overflow-hidden rounded-full bg-zinc-800">
               <div className={`h-full rounded-full ${b.tint}`} style={{ width: `${Math.round(v * 100)}%` }} />
             </div>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function TotalsRow({ t, className }: { t: { pts: number; trb: number; ast: number; stl: number; blk: number }; className?: string }) {
+  return (
+    <div className={`gap-2.5 text-center text-[11px] ${className ?? ""}`}>
+      <Stat v={t.pts} k="PPG" strong /><Stat v={t.trb} k="RPG" strong /><Stat v={t.ast} k="APG" strong />
+      <Stat v={t.stl} k="SPG" strong /><Stat v={t.blk} k="BPG" strong />
     </div>
   );
 }
@@ -812,7 +853,7 @@ function Stat({ v, k, strong }: { v: number | null | undefined; k: string; stron
   return (
     <div className="w-9">
       <div className={`tabular-nums ${strong ? "font-bold text-zinc-200" : "font-semibold text-zinc-300"}`}>{fmt(v)}</div>
-      <div className="text-[8px] uppercase tracking-wide text-zinc-500">{k}</div>
+      <div className="text-[8px] uppercase tracking-wide text-zinc-400">{k}</div>
     </div>
   );
 }
