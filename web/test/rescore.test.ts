@@ -28,6 +28,16 @@ describe("rescoreProfileResults", () => {
     expect(after.map((e) => e.ts)).toEqual([2, 1]);
     expect(after.every((e) => e.wins === 60 && e.grade === "B")).toBe(true);
     expect(await rescoreProfileResults(r, "u1", evaluate)).toBe(0);
+    expect(await r.get("results:lock:u1")).toBeNull(); // released
+  });
+
+  it("does not touch a history whose sync lock another writer holds", async () => {
+    const r = fake();
+    await r.lpush("results:u2", { encoded: IDS.join(","), mode: "classic", wins: 41, losses: 41, grade: "D", ts: 1 });
+    await r.set("results:lock:u2", "someone-else", { nx: true, ex: 5 });
+    expect(await rescoreProfileResults(r, "u2", evaluate)).toBe(-1);
+    expect((await r.lrange<{ wins: number }>("results:u2", 0, -1))[0].wins).toBe(41);
+    expect(await r.get("results:lock:u2")).toBe("someone-else");
   });
 });
 
@@ -46,11 +56,12 @@ describe("rescoreChallenge", () => {
     const order = await r.zrange<string[]>("chal:abc123", 0, -1);
     expect(order.map(String)).toEqual(["f", "c"]); // ascending: f (60) below c (70)
     expect(await rescoreChallenge(r, "abc123", evaluate, 100)).toBe(false);
+    for (const k of ["chal:abc123", "chal:abc123:meta", "chal:abc123:info"]) expect(r.ttls.get(k)).toBe(100);
   });
 });
 
 describe("archiveBoard", () => {
-  it("moves the all-time board under :v3 and leaves the live key empty, once", async () => {
+  it("renames the all-time board under :v3 atomically and only once", async () => {
     const r = fake();
     await r.zadd("lb:alltime", { score: 120, member: "u1" }, { score: 80, member: "u2" });
     await r.hset("lb:alltime:meta", { u1: { uid: "u1", name: "A", wins: 120 } });
@@ -60,6 +71,15 @@ describe("archiveBoard", () => {
     expect(await r.hgetall("lb:alltime:meta:v3")).toEqual({ u1: { uid: "u1", name: "A", wins: 120 } });
     await r.zadd("lb:alltime", { score: 5, member: "u3" });
     expect(await archiveBoard(r, "lb:alltime", "lb:alltime:meta", 3)).toBe(false);
+    expect(await r.zrange<unknown[]>("lb:alltime", 0, -1)).toEqual(["u3"]);
+  });
+
+  it("gives an archived weekly board the weekly TTL, and skips a board that doesn't exist", async () => {
+    const r = fake();
+    await r.zadd("lb:week:2026-W48", { score: 50, member: "u1" });
+    expect(await archiveBoard(r, "lb:week:2026-W48", "lb:week:2026-W48:meta", 3, 3024000)).toBe(true);
+    expect(r.ttls.get("lb:week:2026-W48:v3")).toBe(3024000);
+    expect(await archiveBoard(r, "lb:week:2026-W49", "lb:week:2026-W49:meta", 3, 3024000)).toBe(false);
   });
 });
 

@@ -7,27 +7,37 @@
 // all-time boards only keep running totals, so they are archived under a version suffix and restart
 // empty. Closed daily boards and the mode boards (Factor Hunt / Blueprint / Surgeon, scored from more
 // than the record) are left as they were: finished competitions that expire within 31 days.
-import { encScore } from "./score";
+import { encScore, RELEASE_LOCK_LUA } from "./score";
 import { decodeLineup } from "./share";
 import { decodeSurgeonCard } from "./surgeon";
 import type { LineupResult } from "./types";
 
 export type Evaluate = (ids: string[]) => LineupResult | null;
 
+export interface RescoreMulti {
+  del(...ks: string[]): RescoreMulti;
+  lpush(k: string, ...vs: unknown[]): RescoreMulti;
+  rename(src: string, dst: string): RescoreMulti;
+  expire(k: string, sec: number): RescoreMulti;
+  exec(): Promise<unknown>;
+}
 export interface RescoreRedis {
   get<T>(k: string): Promise<T | null>;
-  set(k: string, v: unknown, opts?: { ex?: number }): Promise<unknown>;
+  set(k: string, v: unknown, opts?: { ex?: number; nx?: boolean }): Promise<unknown>;
+  exists(...ks: string[]): Promise<number>;
   hgetall<T>(k: string): Promise<Record<string, T> | null>;
   hset(k: string, obj: Record<string, unknown>): Promise<unknown>;
   zadd(k: string, ...entries: { score: number; member: string }[]): Promise<unknown>;
   zrange<T>(k: string, start: number, stop: number, opts?: { withScores?: boolean }): Promise<T>;
   lrange<T>(k: string, start: number, stop: number): Promise<T[]>;
-  lpush(k: string, ...vs: unknown[]): Promise<unknown>;
-  del(...ks: string[]): Promise<unknown>;
+  eval(script: string, keys: string[], args: (string | number)[]): Promise<unknown>;
+  multi(): RescoreMulti;
 }
 
 interface ProfileEntry { encoded: string; mode: string; wins: number; losses: number; grade: string; [k: string]: unknown }
 interface BoardRow { uid: string; name: string; wins: number; losses: number; net: number; lineup: string; [k: string]: unknown }
+
+const RESULTS_LOCK_SEC = 5;
 
 function idsFor(mode: string, encoded: string): string[] | null {
   if (mode !== "surgeon") return decodeLineup(encoded);
@@ -35,24 +45,39 @@ function idsFor(mode: string, encoded: string): string[] | null {
   return card ? card.afterIds : null; // a Surgeon result records the after-swap five
 }
 
-export async function rescoreProfileResults(redis: RescoreRedis, uid: string, evaluate: Evaluate): Promise<number> {
-  const key = `results:${uid}`;
-  const raw = await redis.lrange<ProfileEntry | string>(key, 0, -1);
-  if (!raw.length) return 0;
-  let changed = 0;
-  const next = raw.map((v) => {
-    const e: ProfileEntry = typeof v === "string" ? JSON.parse(v) : v;
-    const ids = idsFor(e.mode, e.encoded);
-    const r = ids && ids.length === 5 ? evaluate(ids) : null;
-    if (!r || (r.wins === e.wins && r.losses === e.losses && r.grade === e.grade)) return e;
-    changed++;
-    return { ...e, wins: r.wins, losses: r.losses, grade: r.grade };
-  });
-  if (changed) {
-    await redis.del(key);
-    await redis.lpush(key, ...[...next].reverse()); // lpush leaves its LAST arg at the head
+// Same protocol as profileStore.syncResults: hold results:lock:{uid} (NX + token, owner-checked
+// release) so a concurrent /api/profile/sync can't interleave, and rewrite the list in ONE MULTI so a
+// failure mid-rewrite can never leave the no-TTL history deleted. Returns -1 if the lock stays busy.
+export async function rescoreProfileResults(redis: RescoreRedis, uid: string, evaluate: Evaluate, token = randomToken()): Promise<number> {
+  const key = `results:${uid}`, lock = `results:lock:${uid}`;
+  let got = false;
+  for (let i = 0; i < 10 && !got; i++) {
+    got = (await redis.set(lock, token, { nx: true, ex: RESULTS_LOCK_SEC })) === "OK";
+    if (!got) await new Promise((r) => setTimeout(r, 50 * (i + 1)));
   }
-  return changed;
+  if (!got) return -1;
+  try {
+    const raw = await redis.lrange<ProfileEntry | string>(key, 0, -1);
+    if (!raw.length) return 0;
+    let changed = 0;
+    const next = raw.map((v) => {
+      const e: ProfileEntry = typeof v === "string" ? JSON.parse(v) : v;
+      const ids = idsFor(e.mode, e.encoded);
+      const r = ids && ids.length === 5 ? evaluate(ids) : null;
+      if (!r || (r.wins === e.wins && r.losses === e.losses && r.grade === e.grade)) return e;
+      changed++;
+      return { ...e, wins: r.wins, losses: r.losses, grade: r.grade };
+    });
+    // lpush leaves its LAST arg at the head, so push the reverse to keep newest-first
+    if (changed) await redis.multi().del(key).lpush(key, ...[...next].reverse()).exec();
+    return changed;
+  } finally {
+    try { await redis.eval(RELEASE_LOCK_LUA, [lock], [token]); } catch { /* expires on its own */ }
+  }
+}
+
+function randomToken(): string {
+  return `rescore-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
 export async function rescoreChallenge(redis: RescoreRedis, id: string, evaluate: Evaluate, ttl: number): Promise<boolean> {
@@ -66,11 +91,16 @@ export async function rescoreChallenge(redis: RescoreRedis, id: string, evaluate
       touched = true;
     }
   }
-  return (await rescoreBoard(redis, zKey, hKey, evaluate)) > 0 || touched;
+  if ((await rescoreBoard(redis, zKey, hKey, evaluate)) > 0) touched = true;
+  // keep the challenge's three keys expiring together (as submitChallenge does), so a rewritten info
+  // key can't outlive its board and leave a ghost /c/<id> page
+  if (touched) await redis.multi().expire(zKey, ttl).expire(hKey, ttl).expire(infoKey, ttl).exec();
+  return touched;
 }
 
 // Rescore every row of a lineup-carrying board (meta HASH of StoredRow + score ZSET): the challenge
-// boards and the still-open daily board (lb:{today}), whose rows keep the encoded lineup.
+// boards and the still-open daily board (lb:{today}), whose rows keep the encoded lineup. hset/zadd
+// leave the keys' TTLs untouched.
 export async function rescoreBoard(redis: RescoreRedis, zKey: string, hKey: string, evaluate: Evaluate): Promise<number> {
   const rows = (await redis.hgetall<BoardRow>(hKey)) ?? {};
   let changed = 0;
@@ -87,19 +117,17 @@ export async function rescoreBoard(redis: RescoreRedis, zKey: string, hKey: stri
   return changed;
 }
 
-// Copy a ZSET + its meta HASH under `<key>:v<version>` and clear the originals (no RENAME, so the
-// same code runs against the hermetic fake). Skips when the archive already exists (idempotent).
-export async function archiveBoard(redis: RescoreRedis, zKey: string, hKey: string, version: number): Promise<boolean> {
+// Move a ZSET + its meta HASH to `<key>:v<version>` with RENAME in one MULTI: atomic, O(1), and no
+// submit can land between a copy and a delete. Runs only when the archive is absent and the live board
+// exists, so a rerun is a no-op and a failed run (nothing applied) can simply be retried. `ttl` (the
+// weekly board's) is applied to the archive; the all-time archive keeps no TTL like its source.
+export async function archiveBoard(redis: RescoreRedis, zKey: string, hKey: string, version: number, ttl?: number): Promise<boolean> {
   const az = `${zKey}:v${version}`, ah = `${hKey}:v${version}`;
-  const existing = await redis.zrange<(string | number)[]>(az, 0, 0);
-  if (existing.length) return false;
-  const z = await redis.zrange<(string | number)[]>(zKey, 0, -1, { withScores: true });
-  if (!z.length) return false;
-  const entries: { score: number; member: string }[] = [];
-  for (let i = 0; i < z.length; i += 2) entries.push({ member: String(z[i]), score: Number(z[i + 1]) });
-  await redis.zadd(az, ...entries);
-  const h = await redis.hgetall<unknown>(hKey);
-  if (h) await redis.hset(ah, h);
-  await redis.del(zKey, hKey);
+  if ((await redis.exists(az)) || !(await redis.exists(zKey))) return false;
+  const tx = redis.multi().rename(zKey, az);
+  const hasMeta = (await redis.exists(hKey)) > 0;
+  if (hasMeta) tx.rename(hKey, ah);
+  if (ttl) { tx.expire(az, ttl); if (hasMeta) tx.expire(ah, ttl); }
+  await tx.exec();
   return true;
 }

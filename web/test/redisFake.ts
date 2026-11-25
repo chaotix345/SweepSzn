@@ -344,6 +344,17 @@ export function createRedisFake() {
       throw new Error("redisFake.eval: unknown script — add its semantics here before using it in tests");
     },
 
+    // RENAME: moves the value (any type) and its TTL; errors like Redis when the source is missing.
+    rename: async (src: string, dst: string) => {
+      log("rename", src, dst);
+      if (!hasKey(src)) throw new Error("ERR no such key");
+      for (const m of [strings, hashes, zsets, lists, sets] as Map<string, unknown>[]) {
+        if (m.has(src)) { m.set(dst, m.get(src)); m.delete(src); } else m.delete(dst);
+      }
+      if (ttls.has(src)) { ttls.set(dst, ttls.get(src)!); ttls.delete(src); } else ttls.delete(dst);
+      return "OK";
+    },
+
     // MULTI/EXEC (redis.multi(), the /multi-exec endpoint): a pipeline applied as ONE unit — no other
     // command interleaves, and a failed request applies nothing (modelled by snapshot-restore).
     multi: () => fake.pipeline(true),
@@ -362,6 +373,7 @@ export function createRedisFake() {
         zrem: (k: string, ...members: string[]) => { ops.push(() => fake.zrem(k, ...members)); return p; },
         sadd: (k: string, ...members: unknown[]) => { ops.push(() => fake.sadd(k, ...members)); return p; },
         exists: (...ks: string[]) => { ops.push(() => fake.exists(...ks)); return p; },
+        rename: (src: string, dst: string) => { ops.push(() => fake.rename(src, dst)); return p; },
         hlen: (k: string) => { ops.push(() => fake.hlen(k)); return p; },
         hexists: (k: string, f: string) => { ops.push(() => fake.hexists(k, f)); return p; },
         scard: (k: string) => { ops.push(() => fake.scard(k)); return p; },
