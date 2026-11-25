@@ -21,7 +21,8 @@ const NAV = [
 
 const CTA_LABEL = "Draft your five";
 
-export default function SiteHeader() {
+// `quietCta`: the page has its own orange primary (404, error), so the header CTA steps down.
+export default function SiteHeader({ quietCta = false }: { quietCta?: boolean } = {}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -29,7 +30,7 @@ export default function SiteHeader() {
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
   // The home hero owns the one orange primary CTA, so the header CTA steps down to secondary there.
-  const ctaVariant = pathname === "/" ? "secondary" : "primary";
+  const ctaVariant = quietCta || pathname === "/" ? "secondary" : "primary";
 
   // Escape closes the mobile menu and returns focus to the toggle (keyboard a11y)
   useEffect(() => {

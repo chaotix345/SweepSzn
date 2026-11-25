@@ -33,7 +33,7 @@ const Empty = ({ msg, children }: { msg: string; children?: React.ReactNode }) =
   <div className="py-16 text-center">
     <h1 className="font-display text-3xl">Drafted Dex</h1>
     <p className="mt-2 text-zinc-400">{msg}</p>
-    <ButtonLink href="/play" className="mt-5">Play a round →</ButtonLink>
+    <ButtonLink href="/play" variant="secondary" className="mt-5">Play a round →</ButtonLink>
     {children}
   </div>
 );

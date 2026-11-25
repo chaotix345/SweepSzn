@@ -12,7 +12,7 @@ export default function ErrorPage({ error, retry }: { error: Error & { digest?: 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100">
       <SkipLink />
-      <SiteHeader />
+      <SiteHeader quietCta />
       <main id="main-content" className="flex flex-1 items-center bg-arena-glow px-5 py-16 sm:px-8">
         <div className="mx-auto max-w-md text-center">
           <h1>
