@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, within, act } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach, afterAll } from "vitest";
+import { render, screen, fireEvent, within, act, cleanup } from "@testing-library/react";
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { hydrateRoot } from "react-dom/client";
@@ -24,6 +24,11 @@ import { headline } from "@/lib/explain";
 import { historyRank } from "@/lib/historyPercentile";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
+
+// Cards stay mounted between tests (no auto-cleanup, see the note below). Unmount them all when the
+// file ends so effect cleanups (the F29 count-up's rAF + timeout) run before jsdom tears down —
+// otherwise a late timer touches a torn-down window in CI.
+afterAll(() => cleanup());
 import type { LineupResult, Player, Slot } from "@/lib/types";
 import type { BlueprintView } from "@/lib/blueprint";
 
