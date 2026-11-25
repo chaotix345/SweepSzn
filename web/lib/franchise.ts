@@ -276,6 +276,7 @@ export function franchiseJsonLdHtml(team: string): string | null {
       ],
     },
   ];
+  graph.push({ "@type": "SportsTeam", name: franchiseFullName(team), sport: "Basketball" });
   if (five) {
     graph.push({
       "@type": "ItemList",

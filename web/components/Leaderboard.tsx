@@ -31,6 +31,10 @@ const subscribeNoop = () => () => {};
 const getMounted = () => true;
 const getServerMounted = () => false;
 
+const AUTO_KEY = "sweepszn:dailyAutoSubmitted";
+function wasAutoSubmitted(sig: string): boolean { try { return localStorage.getItem(AUTO_KEY) === sig; } catch { return false; } }
+function markAutoSubmitted(sig: string): void { try { localStorage.setItem(AUTO_KEY, sig); } catch { /* no storage */ } }
+
 export default function Leaderboard({ date: dateProp, trace, usedHints = false, readOnly = false, onView }: { date?: string; trace: DraftStep[]; usedHints?: boolean; readOnly?: boolean; onView?: (v: LeaderboardView | null) => void }) {
   const { user, signOut, promptSignIn, signInNonce } = useSession();
   // No date = today's board, resolved on the client at mount (lets /leaderboards prerender statically
@@ -60,6 +64,9 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
   // read below rather than racing it. Keep-best + server replay make a repeat (a same-session refresh)
   // harmless. The request is shared through a ref and never aborted: an effect re-run (StrictMode, a
   // sign-in mid-flight) awaits the same submit, and only the first run that survives applies it.
+  // A restored result screen (refresh, back to /play?r=…) must not re-post the same trace: the board is
+  // unaffected (keep-best), but each repeat inflates the submit counters and the play→submit rate.
+  const autoSig = `${date}|${JSON.stringify(trace)}|${usedHints ? 1 : 0}`;
   const autoSubmit = useRef<{ res: Promise<{ status: number; body: { error?: string; you?: { rank: number } } | null }>; applied: boolean } | null>(null);
 
   useEffect(() => {
@@ -70,7 +77,7 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
       // submit (so quitting, going offline, or a stale-date 400 doesn't inflate the streak/history).
       if (!readOnly) setStreak(getStreak());
       try {
-        if (!autoSubmit.current && !readOnly && trace.length === 5 && date === serverDate()) {
+        if (!autoSubmit.current && !readOnly && trace.length === 5 && date === serverDate() && !wasAutoSubmitted(autoSig)) {
           autoSubmit.current = {
             applied: false,
             res: fetch("/api/daily/submit", {
@@ -89,6 +96,7 @@ export default function Leaderboard({ date: dateProp, trace, usedHints = false, 
           if (status === 503) { setEnabled(false); return; }
           if (status === 200) {
             recordDailyDone(date); setStreak(getStreak()); // credit the streak only now that the score has landed
+            markAutoSubmitted(autoSig);
             setView(v as LeaderboardView); setSubmitted(true); setReload((n) => n + 1);
             track("daily_submit", { rank: v?.you?.rank ?? 0, authed: !!user, auto: true });
             return;

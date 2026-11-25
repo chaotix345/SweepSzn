@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ButtonLink } from "@/components/ui/Button";
 import ResultPreview from "@/components/ResultPreview";
 import { marketingMetadata } from "@/lib/marketingMeta";
+import { bestFiveAnswer, perfectSeasonAnswer } from "@/lib/answers";
 
 export const metadata: Metadata = {
   ...marketingMetadata("about"),
@@ -13,10 +14,8 @@ const FAQ: { q: string; a: string }[] = [
     q: "Is SweepSzn free?",
     a: "Yes. It runs entirely in your browser, with no account required. Optional Google sign-in just lets you claim your leaderboard ranks and keep them across devices.",
   },
-  {
-    q: "Can you really go 82-0?",
-    a: "Nobody has. The best draftable five projects 80-2 — better than the 73-9 Warriors, the best real season in NBA history — and it takes a genuinely balanced two-way five, not five ball-dominant scorers. The chase is the whole challenge.",
-  },
+  perfectSeasonAnswer(),
+  bestFiveAnswer(),
   {
     q: "How accurate is the engine?",
     a: "The core model is fit to 1,170 real NBA team-seasons (1985–2025) across 24,687 player-seasons. Given each player's actual season, the team model misses held-out real teams by about 5.6 wins on average against luck-adjusted win totals (6.1 against raw records, which carry roughly 2.4 wins of close-game luck). The card ratings the game uses are tested harder, from each player's other seasons only, and miss by about 8.1. The penalties for lineups real teams never field, like five point guards or five non-scorers, can't be fitted from real data, so they are reasoned and labeled that way. The How it works page shows the receipts: famous teams predicted cold, gimmick-lineup stress tests, and which parts are fitted versus reasoned.",
@@ -39,22 +38,9 @@ const FAQ: { q: string; a: string }[] = [
   },
 ];
 
-const faqLd = {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  mainEntity: FAQ.map((f) => ({
-    "@type": "Question",
-    name: f.q,
-    acceptedAnswer: { "@type": "Answer", text: f.a },
-  })),
-};
-const faqLdHtml = JSON.stringify(faqLd).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
-
 export default function About() {
   return (
     <div className="mx-auto max-w-3xl px-5 py-12 sm:py-16">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqLdHtml }} />
-
       <p className="text-xs font-bold uppercase tracking-widest text-orange-400">About</p>
       <h1 className="mt-2 font-display text-4xl tracking-tight sm:text-5xl">The honest all-time NBA team builder</h1>
       <p className="mt-4 text-base text-zinc-400">

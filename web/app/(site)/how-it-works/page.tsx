@@ -3,29 +3,30 @@ import { ButtonLink } from "@/components/ui/Button";
 import ResultPreview from "@/components/ResultPreview";
 import EngineReceipts from "@/components/EngineReceipts";
 import { getEngineMeta } from "@/lib/receipts";
-import { baseUrl } from "@/lib/site";
+import Link from "next/link";
 import { marketingMetadata } from "@/lib/marketingMeta";
+import { bestFiveAnswer, bullsWarriorsAnswer, perfectSeasonAnswer, recordAnswer } from "@/lib/answers";
+import { breadcrumbLd, faqLd, jsonLdHtml } from "@/lib/jsonLd";
 
 export const metadata: Metadata = {
   ...marketingMetadata("how-it-works"),
   alternates: { canonical: "/how-it-works" },
 };
 
-const breadcrumb = {
+// Straight answers to the questions people ask search engines and AI assistants, built from the live
+// engine at build time. Rendered visibly and mirrored as FAQPage JSON-LD.
+const ANSWERS = [bestFiveAnswer(), perfectSeasonAnswer(), recordAnswer(), bullsWarriorsAnswer()].filter((a) => a !== null);
+
+const ldHtml = jsonLdHtml({
   "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  itemListElement: [
-    { "@type": "ListItem", position: 1, name: "Home", item: baseUrl },
-    { "@type": "ListItem", position: 2, name: "How it works", item: `${baseUrl}/how-it-works` },
-  ],
-};
-const breadcrumbHtml = JSON.stringify(breadcrumb).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
+  "@graph": [breadcrumbLd([["Home", ""], ["How it works", "/how-it-works"]]), faqLd(ANSWERS)],
+});
 
 export default function HowItWorks() {
   const meta = getEngineMeta();
   return (
     <div className="mx-auto max-w-3xl px-5 py-12 sm:py-16">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: breadcrumbHtml }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ldHtml }} />
 
       <p className="text-xs font-bold uppercase tracking-widest text-orange-400">How it works</p>
       <h1 className="mt-2 font-display text-4xl tracking-tight sm:text-5xl">An engine that plays real basketball</h1>
@@ -34,6 +35,23 @@ export default function HowItWorks() {
         scorers. SweepSzn doesn&apos;t. It models the things that actually decide an NBA season, then simulates
         all 82 games — and tells you, in plain English, why your five wins or loses.
       </p>
+
+      {/* direct answers */}
+      <section aria-labelledby="answers-heading" className="mt-12">
+        <h2 id="answers-heading" className="font-display text-2xl tracking-tight">Straight answers</h2>
+        <dl className="mt-5 space-y-3">
+          {ANSWERS.map((f) => (
+            <div key={f.q} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+              <dt className="text-sm font-black text-zinc-100">{f.q}</dt>
+              <dd className="mt-2 text-sm leading-relaxed text-zinc-400">{f.a}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-3 text-sm text-zinc-400">
+          More famous debates, from Bird&apos;s Celtics vs Magic&apos;s Lakers to Russell vs Wilt:{" "}
+          <Link href="/vs" className="font-semibold text-zinc-200 underline underline-offset-4 hover:text-white">head-to-head matchups</Link>.
+        </p>
+      </section>
 
       {/* How to play */}
       <section className="mt-12">
