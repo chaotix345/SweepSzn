@@ -188,7 +188,8 @@ export default function ResultCard({
 
       <div className="px-6 pb-5">
         <p className="mb-2.5 text-center text-xs font-medium text-zinc-400">{shareNudge(result)}</p>
-        <div className="flex gap-3">
+        {/* stacked on phones so the primary Share keeps a full-width hit area; side by side from sm up */}
+        <div className="grid gap-2 sm:flex sm:gap-3">
           {/* On a shared permalink the cold viewer's "build your own" is the conversion that matters,
               so it takes the primary orange and Share drops to secondary. In-game it's the reverse —
               Share is the sharer's growth action. (DESIGN.md: exactly one orange CTA per row.) */}
