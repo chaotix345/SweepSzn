@@ -157,8 +157,8 @@ export function resultOgElement(result: LineupResult, players: Player[], hinted 
 
       {/* footer */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 28 }}>
-        <span style={{ display: "flex", fontSize: 22, color: "#a1a1aa", maxWidth: 820 }}>{ascii(headline(result))}</span>
-        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#ff6a00" }}>Can you beat it?</span>
+        <span style={{ display: "flex", fontSize: 22, color: "#a1a1aa", maxWidth: 760 }}>{ascii(headline(result))}</span>
+        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#ff6a00" }}>Wrong? Beat this five →</span>
       </div>
     </div>
   );
@@ -297,7 +297,7 @@ export function challengeOgElement(creatorName: string, r: { wins: number; losse
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", marginTop: "auto", marginBottom: "auto" }}>
-        <span style={{ display: "flex", fontSize: 34, fontWeight: 700, color: "#e4e4e7" }}>{ascii(creatorName)} went</span>
+        <span style={{ display: "flex", fontSize: 34, fontWeight: 700, color: "#e4e4e7" }}>Engine says {ascii(creatorName)}&apos;s five goes</span>
         <div style={{ display: "flex", alignItems: "center", gap: 36, marginTop: 8 }}>
           <div style={{ display: "flex", alignItems: "baseline", fontSize: 150, fontWeight: 900, lineHeight: 1, color: grade }}>
             <span>{r.wins}</span><span style={{ color: "#3f3f46" }}>–</span><span>{r.losses}</span>
@@ -307,11 +307,12 @@ export function challengeOgElement(creatorName: string, r: { wins: number; losse
             <span style={{ display: "flex", marginTop: 8, fontSize: 26, color: "#a1a1aa" }}>Net {net}</span>
           </div>
         </div>
+        <span style={{ display: "flex", marginTop: 14, fontSize: 26, fontWeight: 700, color: "#fafafa" }}>{historyPercentileText(r.wins)}</span>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ display: "flex", fontSize: 30, fontWeight: 700, color: "#fafafa" }}>Can you beat it?</span>
-        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#ff6a00" }}>Build your five →</span>
+        <span style={{ display: "flex", fontSize: 30, fontWeight: 700, color: "#fafafa" }}>Wrong? Same spins, your draft.</span>
+        <span style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "#ff6a00" }}>Beat this five →</span>
       </div>
     </div>
   );
