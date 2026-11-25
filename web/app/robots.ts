@@ -3,11 +3,12 @@ import { baseUrl } from "@/lib/site";
 
 // Public pages are open to every crawler (incl. /r/ permalinks — they must stay crawlable so social/OG
 // unfurlers can fetch their share-card images; they're kept out of search by their own `noindex`
-// metadata). /admin and the JSON API are disallowed.
+// metadata). /admin is disallowed. /api/ stays crawlable: pages such as /leaderboards and the
+// home page render client-fetched board JSON, and Google renders them with those fetches.
 //
 // AI search and answer crawlers get their own group, so the allow is explicit rather than inherited.
 // A crawler that matches a named group ignores the `*` group, so it repeats the same disallows.
-const DISALLOW = ["/admin", "/api/"];
+const DISALLOW = ["/admin"];
 const AI_CRAWLERS = [
   "GPTBot", "OAI-SearchBot", "ChatGPT-User",
   "ClaudeBot", "Claude-SearchBot", "Claude-User",

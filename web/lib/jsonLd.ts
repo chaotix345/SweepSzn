@@ -1,3 +1,4 @@
+import { getEngineMeta } from "./receipts";
 import { baseUrl, SITE_NAME, X_URL } from "./site";
 
 // Serialize schema.org JSON-LD for a <script type="application/ld+json">, escaping the characters
@@ -16,7 +17,7 @@ export const faqLd = (faq: { q: string; a: string }[]) => ({
 });
 
 const HOME_DESCRIPTION =
-  "All-time NBA lineup simulator. Draft a starting five by spinning team and era reels. Engine calibrated to 1,170 real NBA team-seasons — and it tells you why your lineup wins or loses.";
+  `All-time NBA lineup simulator. Draft a starting five by spinning team and era reels. Engine calibrated to ${getEngineMeta().team_seasons.toLocaleString("en-US")} real NBA team-seasons — and it tells you why your lineup wins or loses.`;
 
 export const homeJsonLd = {
   "@context": "https://schema.org",

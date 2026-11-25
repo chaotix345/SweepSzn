@@ -3,7 +3,6 @@ import { ButtonLink } from "@/components/ui/Button";
 import ResultPreview from "@/components/ResultPreview";
 import { marketingMetadata } from "@/lib/marketingMeta";
 import { bestFiveAnswer, perfectSeasonAnswer } from "@/lib/answers";
-import { faqLd, jsonLdHtml } from "@/lib/jsonLd";
 
 export const metadata: Metadata = {
   ...marketingMetadata("about"),
@@ -39,13 +38,9 @@ const FAQ: { q: string; a: string }[] = [
   },
 ];
 
-const faqLdHtml = jsonLdHtml({ "@context": "https://schema.org", ...faqLd(FAQ) });
-
 export default function About() {
   return (
     <div className="mx-auto max-w-3xl px-5 py-12 sm:py-16">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: faqLdHtml }} />
-
       <p className="text-xs font-bold uppercase tracking-widest text-orange-400">About</p>
       <h1 className="mt-2 font-display text-4xl tracking-tight sm:text-5xl">The honest all-time NBA team builder</h1>
       <p className="mt-4 text-base text-zinc-400">

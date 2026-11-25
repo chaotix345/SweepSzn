@@ -48,7 +48,7 @@ const rec = (r: LineupResult) => `${r.wins}-${r.losses}`;
 
 // The quotable one-line answer: both projections and which five the engine rates higher.
 export function vsVerdict(a: VsSideView, b: VsSideView): string {
-  const head = `SweepSzn's engine projects the ${a.label} starting five at ${rec(a.result)} and the ${b.label} at ${rec(b.result)} over an 82-game season`;
+  const head = `In a SweepSzn fantasy sim built from its player cards, the engine projects the ${a.label} starting five at ${rec(a.result)} and the ${b.label} at ${rec(b.result)} over an 82-game season`;
   const diff = a.result.wins - b.result.wins;
   if (diff !== 0) {
     const [hi, n] = diff > 0 ? [a, diff] : [b, -diff];

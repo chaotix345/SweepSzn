@@ -77,12 +77,9 @@ describe("JSON-LD structured data", () => {
     expect(html).toContain('href="/vs"');
   });
 
-  it("about: FAQPage", () => {
+  it("about: no duplicate FAQPage (the marked-up FAQ lives on /how-it-works)", () => {
     const ld = jsonLd(renderToStaticMarkup(About()));
-    validate(ld);
-    const qs = (ofType(ld, "FAQPage")[0].mainEntity as Node[]).map((q) => q.name);
-    expect(qs).toContain("Can a team go 82-0?");
-    expect(qs).toContain("What is the best all-time NBA starting five?");
+    expect(ofType(ld, "FAQPage")).toHaveLength(0);
   });
 
   it("teams: ItemList on the index (linking to /vs), SportsTeam + ItemList per franchise", () => {
@@ -128,8 +125,11 @@ describe("robots", () => {
     }
   });
 
-  it("keeps /admin and the API disallowed for every group", () => {
-    for (const rule of rules) expect(rule.disallow).toEqual(expect.arrayContaining(["/admin", "/api/"]));
+  it("keeps /admin disallowed and the board API crawlable for every group", () => {
+    for (const rule of rules) {
+      expect(rule.disallow).toEqual(expect.arrayContaining(["/admin"]));
+      expect(rule.disallow).not.toEqual(expect.arrayContaining(["/api/"]));
+    }
     expect(ua("*")?.allow).toBe("/");
   });
 });
