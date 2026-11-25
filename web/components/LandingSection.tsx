@@ -117,7 +117,7 @@ export default function LandingSection() {
         <p className="mt-3 text-sm text-zinc-400">
           {"SweepSzn's core model is fit to 1,170 real NBA team-seasons, and the receipts are public. It tracks finite possessions, era-normalizes every player, gives defense equal weight with offense, and scores spacing and fit. The result punishes exactly the lineups a box-score adder adores — the difference between a 74-win team and a 40-win one."}
         </p>
-        <Link href="/how-it-works" className="mt-5 inline-block text-sm font-bold text-orange-400 hover:text-orange-300">
+        <Link href="/how-it-works" className="mt-5 inline-flex min-h-11 items-center text-sm font-bold text-orange-400 hover:text-orange-300">
           See exactly how the engine works →
         </Link>
       </section>

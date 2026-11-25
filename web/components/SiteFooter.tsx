@@ -37,15 +37,15 @@ export default function SiteFooter() {
               </a>
             </div>
           </div>
-          <nav className="grid grid-cols-2 gap-x-10 gap-y-2 text-sm">
-            <Link href="/play" className="text-zinc-400 hover:text-zinc-100">Play</Link>
-            <Link href="/leaderboards" className="text-zinc-400 hover:text-zinc-100">Leaderboards</Link>
-            <Link href="/teams" className="text-zinc-400 hover:text-zinc-100">Teams</Link>
-            <Link href="/stats" className="text-zinc-400 hover:text-zinc-100">Stats</Link>
-            <Link href="/dex" className="text-zinc-400 hover:text-zinc-100">Dex</Link>
-            <Link href="/how-it-works" className="text-zinc-400 hover:text-zinc-100">How it works</Link>
-            <Link href="/about" className="text-zinc-400 hover:text-zinc-100">About</Link>
-            <Link href="/vs" className="text-zinc-400 hover:text-zinc-100">Matchups</Link>
+          <nav className="grid grid-cols-2 gap-x-10 text-sm">
+            <Link href="/play" className="flex min-h-11 items-center text-zinc-400 hover:text-zinc-100">Play</Link>
+            <Link href="/leaderboards" className="flex min-h-11 items-center text-zinc-400 hover:text-zinc-100">Leaderboards</Link>
+            <Link href="/teams" className="flex min-h-11 items-center text-zinc-400 hover:text-zinc-100">Teams</Link>
+            <Link href="/stats" className="flex min-h-11 items-center text-zinc-400 hover:text-zinc-100">Stats</Link>
+            <Link href="/dex" className="flex min-h-11 items-center text-zinc-400 hover:text-zinc-100">Dex</Link>
+            <Link href="/how-it-works" className="flex min-h-11 items-center text-zinc-400 hover:text-zinc-100">How it works</Link>
+            <Link href="/about" className="flex min-h-11 items-center text-zinc-400 hover:text-zinc-100">About</Link>
+            <Link href="/vs" className="flex min-h-11 items-center text-zinc-400 hover:text-zinc-100">Matchups</Link>
           </nav>
         </div>
         <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-zinc-800/70 pt-5 text-xs text-zinc-600">

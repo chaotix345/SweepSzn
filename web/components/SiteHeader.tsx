@@ -45,11 +45,11 @@ export default function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/80 shadow-[0_1px_0_0_rgba(255,106,0,0.08),0_10px_30px_-12px_rgba(0,0,0,0.85)] backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-        <Link href="/" onClick={() => setOpen(false)} className="font-display text-2xl tracking-wide">
+        <Link href="/" onClick={() => setOpen(false)} className="flex min-h-11 items-center font-display text-2xl tracking-wide">
           Sweep<span className="text-orange-500">Szn</span>
         </Link>
 
-        <nav className="hidden items-center gap-6 sm:flex">
+        <nav className="hidden items-center gap-5 md:flex lg:gap-6">
           {NAV.filter((n) => n.desktop).map((n) => (
             <Link
               key={n.href}
@@ -63,8 +63,10 @@ export default function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          {/* Shown beside the menu toggle (sm) and the full nav (lg); hidden md–lg, where the nav plus
+              the account controls would otherwise crowd it. */}
           {pathname !== "/play" && (
-            <ButtonLink href="/play" size="sm" variant={ctaVariant} className="hidden sm:inline-flex">
+            <ButtonLink href="/play" size="sm" variant={ctaVariant} className="hidden sm:inline-flex md:hidden lg:inline-flex">
               {CTA_LABEL}
             </ButtonLink>
           )}
@@ -76,7 +78,7 @@ export default function SiteHeader() {
             aria-label="Toggle menu"
             aria-expanded={open}
             aria-controls="mobile-nav"
-            className="flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:border-zinc-500 sm:hidden"
+            className="flex h-11 w-11 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:border-zinc-500 md:hidden"
           >
             {open ? <CloseIcon /> : <MenuIcon />}
           </button>
@@ -88,7 +90,7 @@ export default function SiteHeader() {
           id="mobile-nav"
           ref={navRef}
           onKeyDown={(e) => buildFocusTrapHandler<HTMLElement>(navRef, () => { setOpen(false); toggleRef.current?.focus(); }, { selector: "a[href], button" })(e)}
-          className="animate-menu-down border-t border-zinc-800 px-4 pb-3 pt-1 sm:hidden"
+          className="animate-menu-down border-t border-zinc-800 px-4 pb-3 pt-1 md:hidden"
         >
           {NAV.map((n, i) => (
             <Link
