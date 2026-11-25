@@ -37,7 +37,8 @@ const isReleasedDaily = (s: string): boolean => {
 // FOREIGN h2h-<otherid> pool (poisoning the draft). Excluding it closes that hole with no loss.
 const isGameSeed = (s: unknown): s is string =>
   typeof s === "string" && /^[a-z0-9-]{1,40}$/.test(s) &&
-  (s.startsWith("daily-") ? isReleasedDaily(s) : s.startsWith("classic-") || s.startsWith("hoopiq-"));
+  (s.startsWith("daily-") ? isReleasedDaily(s)
+    : s.startsWith("classic-") || s.startsWith("hoopiq-") || (s.startsWith("prime-") && !s.startsWith("prime-daily-")));
 
 export async function POST(req: Request) {
   if (!isChallengeEnabled()) return NextResponse.json({ error: "challenges not configured" }, { status: 503 });

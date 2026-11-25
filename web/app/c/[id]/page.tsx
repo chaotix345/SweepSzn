@@ -3,6 +3,7 @@ import { X_HANDLE, SITE_NAME } from "@/lib/site";
 import { cache } from "react";
 import Link from "next/link";
 import { getChallengePublic } from "@/lib/challengeStore";
+import { historyPercentileText } from "@/lib/historyPercentile";
 import ChallengeSpectatorBoard from "@/components/ChallengeSpectatorBoard";
 import SkipLink from "@/components/SkipLink";
 
@@ -15,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const info = await load(id);
   if (!info) return { title: "SweepSzn — head-to-head challenge", robots: { index: false } };
   const title = `Beat ${info.creatorName}'s ${info.wins}-${info.losses} — SweepSzn challenge`;
-  const description = `${info.creatorName} went ${info.wins}-${info.losses} (${info.grade}). Same draft, your picks. Can you build a better all-time five?`;
+  const description = `Engine says ${info.creatorName}'s five goes ${info.wins}-${info.losses}. ${historyPercentileText(info.wins)}. Wrong? Same spins, your draft.`;
   return {
     title, description,
     robots: { index: false },

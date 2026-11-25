@@ -161,15 +161,21 @@ describe("DuelGame — draft", () => {
 
   it("pick clock: on timeout auto-picks the top scorer who fits an open slot", async () => {
     localStorage.setItem("szn_duel_clock", "1");
-    render(<DuelGame onModeSelect={() => {}} />);
-    await waitFor(() => expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true));
-    fireEvent.click(screen.getByRole("button", { name: /duel old head/i }));
-    await screen.findByRole("button", { name: /Select Player hi0/ });
-    expect(screen.getByRole("timer")).toBeTruthy();
-    vi.useFakeTimers();
-    await act(async () => { vi.advanceTimersByTime(21_000); });
-    vi.useRealTimers();
-    await waitFor(() => expect(calls.some((c) => c.url === "/api/duel/bot-pick")).toBe(true));
+    // Fake (but real-time-advancing) timers for the WHOLE test. The clock's interval is created when the
+    // spin lands, so faking only afterwards left it on a real timer, and switching back to real timers
+    // before the auto-pick's follow-up work ran dropped it: both raced under a loaded suite.
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"] });
+    try {
+      render(<DuelGame onModeSelect={() => {}} />);
+      await waitFor(() => expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(true));
+      fireEvent.click(screen.getByRole("button", { name: /duel old head/i }));
+      await screen.findByRole("button", { name: /Select Player hi0/ });
+      expect(screen.getByRole("timer")).toBeTruthy();
+      await act(async () => { await vi.advanceTimersByTimeAsync(21_000); });
+      await waitFor(() => expect(calls.some((c) => c.url === "/api/duel/bot-pick")).toBe(true));
+    } finally {
+      vi.useRealTimers();
+    }
     const first = calls.find((c) => c.url === "/api/duel/bot-pick")!;
     expect((first.body.picks as { id: string }[])[0].id).toBe("hi0");
   });

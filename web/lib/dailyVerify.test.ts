@@ -280,3 +280,44 @@ describe("verifyTrace", () => {
     expect(verifyTrace("h2h-abc123", chalBad, deps).ok).toBe(false);
   });
 });
+
+// Prime spins are team-only: an "era" re-spin must never verify (it was a free extra team reroll).
+describe("verifyTrace on Prime seeds", () => {
+  const slots = ["PG", "SG", "SF", "PF", "C"] as const;
+  const pick = (r: number) => ["p0pg", "p1sg", "p2sf", "p3pf", "p4c"][r];
+  // every spin (base, team or era re-spin) offers that round's legit player, so a forged trace is
+  // otherwise valid and only the Prime rule can reject it
+  const primeDeps = (decade: string): VerifyDeps => ({
+    ...deps,
+    spinPool: (_seed, round, opts) => ({ team: opts.salt ? `T${round}-${opts.salt}` : `T${round}`, decade, ids: [pick(round)] }),
+  });
+  const trace = (respins: ("team" | "era")[][]): DraftStep[] => slots.map((slot, r) => ({ slot, pickedId: pick(r), respins: respins[r] }));
+
+  it("legit Prime traces (no re-spin, one team re-spin) still verify", () => {
+    for (const [seed, decade] of [["prime-123456", "PRIME"], ["h2h-abc123", "PRIME"]] as const) {
+      expect(verifyTrace(seed, trace([[], [], [], [], []]), primeDeps(decade)).ok).toBe(true);
+      for (let r = 0; r < 5; r++) {
+        const rs: ("team" | "era")[][] = [[], [], [], [], []]; rs[r] = ["team"];
+        expect(verifyTrace(seed, trace(rs), primeDeps(decade)).ok).toBe(true);
+      }
+    }
+  });
+
+  it("rejects 200 forged Prime traces that use an era re-spin", () => {
+    let s = 7;
+    const rand = (n: number) => { s = (s * 1103515245 + 12345) % 2 ** 31; return s % n; };
+    const shapes: ("team" | "era")[][] = [["era"], ["team", "era"], ["era", "team"]];
+    // the same forgery is accepted on a non-Prime seed, so the rejection is the Prime rule, not another check
+    const forged = Array.from({ length: 200 }, () => {
+      const rs: ("team" | "era")[][] = [[], [], [], [], []];
+      rs[rand(5)] = shapes[rand(3)];
+      return trace(rs);
+    });
+    for (const t of forged) {
+      expect(verifyTrace("classic-123456", t, primeDeps("1990s")).ok).toBe(true);
+      expect(verifyTrace("prime-123456", t, primeDeps("PRIME")).ok).toBe(false);
+      expect(verifyTrace("prime-123456", t, primeDeps("1990s")).ok).toBe(false); // seed alone is enough
+      expect(verifyTrace("h2h-abc123", t, primeDeps("PRIME")).ok).toBe(false);   // so is a PRIME round
+    }
+  });
+});

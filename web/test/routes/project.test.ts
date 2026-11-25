@@ -51,6 +51,14 @@ describe("POST /api/project — gating", () => {
   });
 });
 
+describe("POST /api/project — Prime fit-lock", () => {
+  it("returns gated for a Prime seed converted into a challenge", async () => {
+    ctx.redis!.strings.set("chal:fitlock:prime-locked-seed-001", "1");
+    const { body } = await readJson(await post({ seed: "prime-locked-seed-001", lineup: [FIVE[0], FIVE[1], null, null, null] }));
+    expect(body.gated).toBe(true);
+  });
+});
+
 describe("POST /api/project — projection on allowed seeds", () => {
   it("200 with a floor/ceiling band for a partial Classic roster", async () => {
     const { status, body } = await readJson(await post({ seed: "classic-1", lineup: [FIVE[0], FIVE[1], null, null, null] }));

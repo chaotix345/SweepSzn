@@ -23,6 +23,14 @@ import DailyComeback from "@/components/DailyComeback";
 import CeilingReveal from "@/components/CeilingReveal";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { dayUTC, shortDay } from "@/lib/day";
+import { canShareAsChallenge, createShareChallenge } from "@/lib/challengeShare";
+import { getUid, getName } from "@/lib/streak";
+import { encodeLineup } from "@/lib/share";
+import { saveResult, readLastResult, writeLastResult } from "@/lib/resultHistory";
+import { pushResult } from "@/lib/account";
+import { useSessionContext } from "@/components/SessionProvider";
+import { track } from "@vercel/analytics";
+import Link from "next/link";
 
 // Surgeon reveal: its own before/after layout + delta board, not the single-lineup ResultCard.
 export function SurgeonResultView({ mode, seed, sgResult, onRestart, onModeSelect }: {
@@ -47,12 +55,37 @@ export function GameResultView({ mode, seed, asOf, result, roundNum, onRestart, 
   challengeId: string | null; challengeRole: "create" | "respond" | null;
 }) {
   const [lbView, setLbView] = useState<LeaderboardView | null>(null); // daily standing for the result-card pill
+  const { user } = useSessionContext();
   const [convertedId, setConvertedId] = useState<string | null>(null); // challenge minted from a finished game
+  // created by Share (D6). Kept on lastResult for this seed, so a refresh/remount reuses it: one result, one challenge.
+  const [sharedChallengeId, setSharedChallengeId] = useState<string | null>(() => {
+    const last = readLastResult<{ seed?: string; shareChallengeId?: string }>();
+    return last?.seed === seed && last.shareChallengeId ? last.shareChallengeId : null;
+  });
+  // D6: a Classic/Prime result's Share creates a Challenge on the same seed (fit-locked server-side).
+  // Remembered under "Your results" like a converted challenge, so the creator can reopen the dashboard.
+  // (a challenge RESPONDER replays the creator's classic/prime seed — their share stays the /r/ claim)
+  const challengeShare = (mode === "classic" || mode === "prime") && canShareAsChallenge(seed, result.trace) ? {
+    path: sharedChallengeId ? `/c/${sharedChallengeId}` : null,
+    create: async () => {
+      if (sharedChallengeId) return `/c/${sharedChallengeId}`;
+      const id = await createShareChallenge({ seed, asOf, trace: result.trace, usedHints: result.usedHints }, { uid: user?.uid ?? getUid(), name: getName() });
+      if (!id) return null;
+      const saved = saveResult({ encoded: encodeLineup(result.players.map((p) => p.id), result.usedHints), mode: "challenge", wins: result.result.wins, losses: result.result.losses, grade: result.result.grade, challengeId: id });
+      if (user) void pushResult(saved);
+      const last = readLastResult<{ seed?: string }>();
+      if (last?.seed === seed) writeLastResult({ ...last, shareChallengeId: id });
+      track("challenge_submit", { role: "creator" });
+      setSharedChallengeId(id);
+      return `/c/${id}`;
+    },
+  } : undefined;
   // W2: today's ceiling record, fetched only once the board shows a verified submission for this viewer
   const ceiling = useDailyCeiling(mode === "daily" ? seed.replace("daily-", "") : null, mode === "daily" && !!lbView?.you);
   const [streak, setStreak] = useState(0); // the board's streak (server when signed in), for the come-back block
   const dailyDate = mode === "daily" ? seed.replace("daily-", "") : null;
-  const dailyToday = dailyDate !== null && dailyDate === dayUTC();
+  const dailyToday = dailyDate !== null && dailyDate === dayUTC(); // the one "is today's live Daily" check
+  const daily = dailyDate !== null ? { date: dailyDate, live: dailyToday } : undefined;
 
   // Pick'Em crowd-vs-you strip data for the result card (vote falls back to the per-seed local
   // copy so a Daily replay in the same browser still shows your pick when the API is dark).
@@ -73,10 +106,21 @@ export function GameResultView({ mode, seed, asOf, result, roundNum, onRestart, 
 
   return (
     <Shell roundNum={roundNum} mode={mode} onRestart={onRestart} onModeSelect={onModeSelect} showRestart>
-      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} modeKey={mode} usedHints={result.usedHints} onReset={onRestart} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView}
+      <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} modeKey={mode} usedHints={result.usedHints} onReset={onRestart} pickem={pickemView} factorHunt={fhView}
+        prime={mode === "prime" || seed.startsWith("prime-")} blueprint={bpView}
         lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} ceiling={ceiling}
+        challengeShare={challengeShare} daily={daily}
         afterActions={dailyToday ? <DailyComeback streak={streak} /> : undefined} />
-      <InviteFriend />
+      {/* F02: at most ONE secondary action under the card. Classic/Prime: Share already is the
+          challenge, so this is the link to its live dashboard once created. Daily/HoopIQ: the explicit
+          "challenge a friend" convert (below). Modes with no challenge keep the referral invite. */}
+      {sharedChallengeId && (
+        <Link href={`/play?own=${sharedChallengeId}`}
+          className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-zinc-700 px-3 text-sm font-semibold text-zinc-200 hover:border-zinc-500">
+          ⚔️ Your challenge is live · See who&apos;s played →
+        </Link>
+      )}
+      {(mode === "factorhunt" || mode === "blueprint") && <InviteFriend />}
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} onView={setLbView} onStreak={setStreak} />}
       {/* a past day's Daily result (restored from its permalink): that day's revealed perfect five */}
       {dailyDate !== null && !dailyToday && <CeilingReveal date={dailyDate} yourWins={result.result.wins} />}
@@ -86,16 +130,16 @@ export function GameResultView({ mode, seed, asOf, result, roundNum, onRestart, 
         <ChallengeResult id={challengeId} role={challengeRole} seed={seed} asOf={asOf} usedHints={false} result={result.result} players={result.players}
           trace={result.trace} onCreateOwn={onCreateChallenge} />
       )}
-      {/* FH/Prime/Blueprint/Surgeon seeds can't convert to H2H challenges (the challenge store only
-          accepts daily/classic/hoopiq game seeds), so the convert CTA is hidden there. */}
-      {mode !== "challenge" && mode !== "factorhunt" && mode !== "prime" && mode !== "blueprint" && mode !== "surgeon" && (convertedId ? (
+      {/* Daily/HoopIQ convert to an H2H challenge explicitly. Classic/Prime do it through Share (D6);
+          FH/Blueprint/Surgeon seeds can't convert (the challenge store doesn't accept them). */}
+      {(mode === "daily" || mode === "hoopiq") && (convertedId ? (
         // Convert THIS finished five into a real H2H challenge in place, carrying the original seed:
         // the friend drafts the same teams/eras and tries to beat this exact record — no re-draft.
         <ChallengeResult id={convertedId} role="create" seed={seed} asOf={asOf} usedHints={result.usedHints}
           result={result.result} players={result.players} trace={result.trace} />
       ) : (
         <button onClick={() => setConvertedId(newChallengeId())}
-          className="mt-4 w-full rounded-xl border border-orange-500/50 bg-orange-500/10 py-3 text-sm font-bold text-orange-300 hover:bg-orange-500/20">
+          className="mt-3 min-h-11 w-full rounded-xl border border-zinc-700 py-2.5 text-sm font-semibold text-zinc-200 hover:border-zinc-500">
           ⚔️ Challenge a friend to beat this
         </button>
       ))}
@@ -117,7 +161,7 @@ export function ArchiveResultView({ date, result, onRestart, onModeSelect, onPla
           <p className="mt-3 text-center text-xs text-zinc-400" data-testid="archive-unranked">Unranked replay: no leaderboard, streak or weekly credit.</p>
           <CeilingReveal date={date} yourWins={result.result.wins} />
         </>} />
-      <div className="mt-4 grid gap-2 sm:flex sm:gap-3">
+      <div className="mt-4 grid auto-rows-fr gap-2 sm:flex sm:gap-3">
         <ButtonLink href="/archive" variant="secondary" className="flex-1">← All past Dailies</ButtonLink>
         <Button variant="primary" onClick={onPlayToday} className="flex-1">Play today&apos;s Daily →</Button>
       </div>

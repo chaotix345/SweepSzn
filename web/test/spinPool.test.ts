@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { spinPool, spin, getDraftablePool } from "@/lib/data";
+import { spinPool, spin, primeSpin, getDraftablePool } from "@/lib/data";
 import { quickScore } from "@/lib/engine";
 
 // passthrough spy: lets the fit test see every lineup computeFits scores
@@ -31,6 +31,25 @@ describe("spinPool determinism (the anti-cheat replay depends on it)", () => {
     for (let round = 0; round < 5; round++) {
       expect(spinPool(seed, round)).toEqual(spinPool(seed, round));
     }
+  });
+});
+
+describe("spinPool on Prime seeds (a Prime result shared as a challenge is verified by replay)", () => {
+  it("replays the exact Prime spin: same team, PRIME decade, same candidate ids", () => {
+    for (const seed of ["prime-42", "prime-987654"]) {
+      for (let round = 0; round < 5; round++) {
+        const opts = { exclude: [] as string[], salt: 0 };
+        const live = primeSpin(seed, round, opts);
+        expect(spinPool(seed, round, opts)).toEqual({ team: live.team, decade: "PRIME", ids: live.candidates.map((c) => c.id) });
+      }
+    }
+  });
+
+  it("replays a Prime team re-spin the same way", () => {
+    const first = primeSpin("prime-42", 0);
+    const opts = { excludeTeam: first.team, salt: 1 };
+    const live = primeSpin("prime-42", 0, opts);
+    expect(spinPool("prime-42", 0, opts).ids).toEqual(live.candidates.map((c) => c.id));
   });
 });
 
