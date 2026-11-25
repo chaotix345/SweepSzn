@@ -28,7 +28,7 @@ export function isLeaderboardEnabled(): boolean { return isRedisEnabled(); }
 export async function getLeaderboard(date: string, uid?: string): Promise<LeaderboardView | null> {
   if (!redis) return null;
   const { total, top, you } = await readBoardView<StoredRow>(keyZ(date), keyH(date), uid);
-  if (isLiveDaily(date) && !you) return { date, total, top: top.map(({ lineup: _spoiler, ...row }) => row) };
+  if (isLiveDaily(date) && !you) return { date, total, top: top.map((row) => { const r: Partial<typeof row> = { ...row }; delete r.lineup; return r as Omit<typeof row, "lineup">; }) };
   return { date, total, top, you };
 }
 

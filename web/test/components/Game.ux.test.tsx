@@ -78,6 +78,7 @@ describe("Game — usage cap visible from round 1 (R1)", () => {
   });
 
   it("does not show the usage bar in HoopIQ (blind drafting)", async () => {
+    try { localStorage.setItem("szn_more_modes_open", "1"); } catch { /* */ } // W1: HoopIQ is in the "More modes" drawer
     render(<Game />);
     await act(async () => { fireEvent.click(findModeBtn("HoopIQ", "test your ball knowledge")); });
     await spinAndWait();
@@ -226,6 +227,7 @@ describe("Game — first-run levers tip (R6)", () => {
   });
 
   it("does not show the tip in HoopIQ (deliberately sparse, blind drafting)", async () => {
+    try { localStorage.setItem("szn_more_modes_open", "1"); } catch { /* */ } // W1: HoopIQ is in the "More modes" drawer
     render(<Game />);
     await act(async () => { fireEvent.click(findModeBtn("HoopIQ", "test your ball knowledge")); });
     await act(async () => {});

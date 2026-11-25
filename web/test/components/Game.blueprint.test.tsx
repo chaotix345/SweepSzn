@@ -92,6 +92,8 @@ function makeFetchMock() {
 
 function renderGame() {
   try { localStorage.clear(); } catch { /* */ }
+  // W1: Blueprint / Factor Hunt / Surgeon live in the picker's "More modes" drawer — start with it open
+  try { localStorage.setItem("szn_more_modes_open", "1"); } catch { /* */ }
   return render(<Game />);
 }
 
