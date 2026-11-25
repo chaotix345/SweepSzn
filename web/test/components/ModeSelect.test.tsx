@@ -161,7 +161,7 @@ describe("ModeSelect", () => {
 
   it("puts Draft Duel at the top level right after Daily (not in the drawer) and starts it", () => {
     const onPick = vi.fn();
-    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     const daily = screen.getByLabelText(/Play Daily mode/i);
     const duel = screen.getByLabelText("Play Draft Duel mode");
     expect(daily.compareDocumentPosition(duel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -177,7 +177,7 @@ describe("ModeSelect", () => {
       { encoded: "abc", mode: "classic", wins: 60, losses: 22, grade: "A", ts: Date.now() - 1000 },
     ]);
     const onPick = vi.fn();
-    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     fireEvent.click(await screen.findByText(/Play Classic again/));
     expect(onPick).toHaveBeenCalledWith("classic");
     expect(screen.queryByText(/Play Draft Duel again/)).toBeNull();
