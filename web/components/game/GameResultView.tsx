@@ -4,10 +4,8 @@ import { type Mode, MODE_LABEL } from "@/components/game/types";
 import { Shell } from "@/components/game/Shell";
 import type { LeaderboardView } from "@/lib/types";
 import { SLOTS } from "@/lib/teams";
-import { showsSaveNudge } from "@/lib/signinNudge";
 import ResultCard from "@/components/ResultCard";
 import Leaderboard from "@/components/Leaderboard";
-import SignInSaveNudge from "@/components/SignInSaveNudge";
 import ChallengeResult from "@/components/ChallengeResult";
 import InviteFriend from "@/components/InviteFriend";
 import { newChallengeId } from "@/lib/challenge";
@@ -32,7 +30,6 @@ export function SurgeonResultView({ mode, seed, sgResult, onRestart, onModeSelec
         card={sgResult.card} onReset={onRestart} />
       <InviteFriend />
       <SgLeaderboard date={seed.replace("surgeon-", "")} preloaded={sgResult.view} />
-      {showsSaveNudge(mode) && <SignInSaveNudge mode={mode} />}
     </Shell>
   );
 }
@@ -70,11 +67,6 @@ export function GameResultView({ mode, seed, result, roundNum, onRestart, onMode
         lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} />
       <InviteFriend />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} onView={setLbView} />}
-      {/* Every non-Daily result gets the minimal save/keep-streak sign-in nudge — not just the
-          board-less Classic/HoopIQ/Prime, but also the FactorHunt/Blueprint/Challenge results that
-          previously left a signed-out share-link arrival with no reason to make an account. Daily is
-          excluded: its Leaderboard already prompts sign-in with the richer claim-your-rank flow. */}
-      {showsSaveNudge(mode) && <SignInSaveNudge mode={mode} />}
       {mode === "factorhunt" && <FhLeaderboard date={seed.replace("fh-", "")} trace={result.trace} prediction={fhPrediction} readOnly={result.trace.length === 0} />}
       {mode === "blueprint" && blueprint && <BpLeaderboard date={seed.replace("bp-", "")} trace={result.trace} blueprint={blueprint} usedHints={result.usedHints} readOnly={result.trace.length === 0} />}
       {mode === "challenge" && challengeId && challengeRole && (

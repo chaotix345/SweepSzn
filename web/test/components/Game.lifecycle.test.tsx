@@ -26,7 +26,6 @@ vi.mock("@/components/RankShareButton", () => ({ default: () => null }));
 vi.mock("@/components/game/PickemOverlay", () => ({ PickemOverlay: () => null }));
 vi.mock("@/components/ResultCard", () => ({ default: () => React.createElement("div", { "data-testid": "result-card" }) }));
 vi.mock("@/components/InviteFriend", () => ({ default: () => null }));
-vi.mock("@/components/SignInSaveNudge", () => ({ default: () => null }));
 
 import Game from "@/components/Game";
 import { encodeLineup } from "@/lib/share";
