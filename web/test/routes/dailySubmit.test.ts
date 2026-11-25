@@ -129,6 +129,34 @@ describe("POST /api/daily/submit — stale date", () => {
   });
 });
 
+// ---- W3 past-Daily archive: replays are unranked ----
+// The archive replays an old seed with a perfectly valid trace. The only ranked write path for a Daily
+// is this route, and it takes today's date only — so an archive run can never reach the board, the
+// weekly/all-time boards or the server streak, signed in or not, however the date is spelled.
+describe("POST /api/daily/submit — archive replays are never ranked (W3)", () => {
+  const ARCHIVE_DAYS = ["2026-6-14", "2026-06-14", "2026-6-6"];
+  const nothingWritten = () => {
+    expect([...ctx.redis!.zsets.keys()]).toEqual([]);
+    expect(ctx.redis!.calls.some((c) => c.startsWith("eval ") || c.startsWith("zadd") || c.startsWith("hset"))).toBe(false);
+  };
+
+  it.each(ARCHIVE_DAYS)("anon submit for archive day %s → 400, nothing written", async (date) => {
+    const { status, body } = await readJson(await submit({ date, trace: LEGIT_TRACE, uid: "anon-uid-12345678", name: "Replayer" }));
+    expect(status).toBe(400);
+    expect(body.error).toMatch(/stale/i);
+    nothingWritten();
+  });
+
+  it.each(ARCHIVE_DAYS)("signed-in submit for archive day %s → 400, no board, weekly, all-time or streak credit", async (date) => {
+    await signIn({ uid: "gdddddddddddddddddddddddddddddddd", name: "Dana" });
+    const { status } = await readJson(await submit({ date, trace: LEGIT_TRACE, name: "Dana" }));
+    expect(status).toBe(400);
+    nothingWritten();
+    await flushAfter();
+    expect(ctx.redis!.calls.some((c) => c.includes("streak") || c.includes("ev:"))).toBe(false);
+  });
+});
+
 // ---- Trace verification ----
 describe("POST /api/daily/submit — trace verification", () => {
   it("accepts a legit trace (anon path) and returns 200 with a view", async () => {

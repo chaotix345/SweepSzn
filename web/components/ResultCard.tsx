@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
 import { getUid } from "@/lib/streak";
@@ -101,9 +101,10 @@ export function SaveCardImage({ path }: { path: string }) {
 }
 
 export default function ResultCard({
-  result, players, slots, mode, modeKey, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint, lbRank, ceiling,
+  result, players, slots, mode, modeKey, onReset, shared, usedHints, pickem, factorHunt, prime, blueprint, lbRank, ceiling, afterActions,
 }: {
   result: LineupResult; players: Player[]; slots: Slot[]; mode: string; modeKey?: string; onReset?: () => void; shared?: boolean; usedHints?: boolean; pickem?: PickemProp; factorHunt?: FactorHuntProp; prime?: boolean; blueprint?: BlueprintView; lbRank?: LbRankProp | null; ceiling?: CeilingProp | null;
+  afterActions?: ReactNode; // rendered right under Share / Build Another (W3's Daily come-back block)
 }) {
   const factors = factorViews(result);
   // split by the value's sign (what actually helped/hurt), not the engine's fixed label —
@@ -205,6 +206,7 @@ export default function ResultCard({
           )}
         </div>
         <SaveCardImage path={sharePath} />
+        {afterActions}
       </div>
 
       {/* how it stacks up: real-history anchor, league-average baseline, verified ceiling, grade ladder */}
@@ -265,7 +267,8 @@ export default function ResultCard({
         <RarityBadge ids={players.map((p) => p.person_id ?? p.id).join(",")} />
       </div>
 
-      <div className="px-6 pb-2"><DexStrip lineupIds={players.map((p) => p.id)} /></div>
+      {/* an unranked archive replay (W3) never feeds the Dex, so don't promise it does */}
+      {modeKey !== "archive" && <div className="px-6 pb-2"><DexStrip lineupIds={players.map((p) => p.id)} /></div>}
 
       {/* "Dig deeper": the full roster with dossiers, the scouting report, the What-If Lab and Compare.
           Collapsed + lazy-mounted (a cold permalink viewer never fires their /api fetches); the

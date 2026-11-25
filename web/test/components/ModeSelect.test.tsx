@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import React from "react";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -22,7 +22,7 @@ afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); });
 
 describe("ModeSelect", () => {
   it("features Daily as the recommended start and renders all eight modes (four behind More modes)", () => {
-    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     expect(screen.getByText(/start here/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /more modes/i }));
     for (const name of ["Daily", "Classic", "HoopIQ", "Factor Hunt", "Prime Draft", "Blueprint", "Surgeon", "Challenge a Friend"]) {
@@ -31,12 +31,12 @@ describe("ModeSelect", () => {
   });
 
   it("surfaces the 80-2 competitive target in the subhead for cold /play arrivals (§12-safe public fact)", () => {
-    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     expect(screen.getByText(/80-2/)).toBeTruthy();
   });
 
   it("renders every 'Play →' CTA in the action orange — never a mode accent (DESIGN.md: orange is the only CTA color)", () => {
-    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /more modes/i }));
     const ctas = screen.getAllByText("Play →");
     expect(ctas.length).toBeGreaterThanOrEqual(7); // 6 discipline tiles + the Challenge invite
@@ -48,7 +48,7 @@ describe("ModeSelect", () => {
 
   it("calls onPick with the right mode id when a card is clicked", () => {
     const onPick = vi.fn();
-    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     fireEvent.click(screen.getByLabelText(/Play Daily mode/i));
     expect(onPick).toHaveBeenCalledWith("daily");
     fireEvent.click(screen.getByRole("button", { name: /more modes/i }));
@@ -59,7 +59,7 @@ describe("ModeSelect", () => {
   });
 
   it("shows first-run orientation when unseen and hides + remembers it on dismiss", () => {
-    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     expect(screen.getByText(/New here/i)).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Dismiss"));
     expect(screen.queryByText(/New here/i)).toBeNull();
@@ -70,23 +70,52 @@ describe("ModeSelect", () => {
     // The risky logic is the dayUTC(entry.ts) === dayUTC() detection — a wrong field name or date
     // compare would leave the tile saying "Play Daily" and deep-link to a 404. Assert the flip.
     mockList.mockReturnValue([{ encoded: "abc123", mode: "daily", wins: 50, losses: 10, grade: "A", ts: Date.now() }]);
-    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     expect(await screen.findByLabelText(/View today's Daily result/i)).toBeTruthy();
     expect(screen.getByText(/View today's result/i)).toBeTruthy();
     expect(screen.queryByText(/start here/i)).toBeNull(); // no longer the cold-start CTA
   });
 
-  it("links the played-today Daily tile to its /r/ result client-side (a Link, not location.assign)", async () => {
+  // F15: the cold /r/ page has neither the player's standing nor the come-back block — reopen their own
+  // Daily result in place instead (Game rewrites the URL and re-runs the restore).
+  it("reopens the played-today Daily result in place (not the cold /r/ page)", async () => {
     mockList.mockReturnValue([{ encoded: "abc123", mode: "daily", wins: 50, losses: 10, grade: "A", ts: Date.now() }]);
-    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    const onViewDaily = vi.fn();
+    const onPick = vi.fn();
+    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} onViewDaily={onViewDaily} />);
     const tile = await screen.findByLabelText(/View today's Daily result/i);
-    expect(tile.tagName).toBe("A");
-    expect(tile.getAttribute("href")).toBe("/r/abc123");
+    expect(tile.tagName).toBe("BUTTON");
+    expect(tile.getAttribute("href")).toBeNull();
+    fireEvent.click(tile);
+    expect(onViewDaily).toHaveBeenCalledWith("abc123");
+    expect(onPick).not.toHaveBeenCalled();
+  });
+
+  it("never shows 'New here?' to a returning player, even one who never dismissed it (F15)", async () => {
+    mockList.mockReturnValue([{ encoded: "def456", mode: "classic", wins: 64, losses: 18, grade: "B", ts: Date.now() - 5 * 86_400_000 }]);
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
+    await screen.findByText(/Play Classic again/i);
+    expect(screen.queryByText(/New here/i)).toBeNull();
+    cleanup();
+    mockList.mockReturnValue([]);
+    localStorage.setItem("82-0:daily:history", JSON.stringify(["2026-11-1"])); // a Daily, results cleared
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
+    await act(async () => {});
+    expect(screen.queryByText(/New here/i)).toBeNull();
+  });
+
+  it("puts the Daily archive (W3) inside More modes", () => {
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
+    expect(screen.queryByLabelText("Open the Daily archive")).toBeNull(); // drawer closed
+    fireEvent.click(screen.getByRole("button", { name: /more modes/i }));
+    const link = screen.getByLabelText("Open the Daily archive");
+    expect(link.getAttribute("href")).toBe("/archive");
+    expect(link.textContent).toMatch(/Unranked/);
   });
 
   it("does NOT flip the Daily tile for a Daily played on a previous day", async () => {
     mockList.mockReturnValue([{ encoded: "old", mode: "daily", wins: 50, losses: 10, grade: "A", ts: Date.now() - 2 * 86_400_000 }]);
-    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     expect(await screen.findByText(/start here/i)).toBeTruthy(); // yesterday's daily doesn't count
     expect(screen.queryByText(/View today's result/i)).toBeNull();
   });
@@ -94,7 +123,7 @@ describe("ModeSelect", () => {
   it("offers a 'Play X again' shortcut for the most recent solo mode", async () => {
     mockList.mockReturnValue([{ encoded: "def456", mode: "classic", wins: 64, losses: 18, grade: "B", ts: Date.now() }]);
     const onPick = vi.fn();
-    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /Play Classic again/i }));
     expect(onPick).toHaveBeenCalledWith("classic");
   });
@@ -102,7 +131,7 @@ describe("ModeSelect", () => {
   // W1 sharper core: Daily, Classic, Prime and the Challenge bar are top level; the four niche modes
   // live in a collapsed "More modes" drawer whose open state is remembered per viewer.
   it("keeps Surgeon, Blueprint, Factor Hunt and HoopIQ in a collapsed More modes drawer", () => {
-    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     for (const name of ["Daily", "Classic", "Prime Draft", "Challenge a Friend"]) expect(screen.getByText(name)).toBeTruthy();
     const toggle = screen.getByRole("button", { name: /more modes/i });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
@@ -113,10 +142,10 @@ describe("ModeSelect", () => {
   });
 
   it("remembers the drawer state across visits", async () => {
-    const first = render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    const first = render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /more modes/i }));
     first.unmount();
-    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     expect(await screen.findByText("Surgeon")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /more modes/i })); // close → remembered closed
     expect(screen.queryByText("Surgeon")).toBeNull();
@@ -125,14 +154,14 @@ describe("ModeSelect", () => {
   it("still works when storage throws (private mode)", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("denied"); });
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("denied"); });
-    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={() => {}} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /more modes/i }));
     expect(screen.getByText("Surgeon")).toBeTruthy();
   });
 
   it("puts Draft Duel at the top level right after Daily (not in the drawer) and starts it", () => {
     const onPick = vi.fn();
-    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     const daily = screen.getByLabelText(/Play Daily mode/i);
     const duel = screen.getByLabelText("Play Draft Duel mode");
     expect(daily.compareDocumentPosition(duel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -148,7 +177,7 @@ describe("ModeSelect", () => {
       { encoded: "abc", mode: "classic", wins: 60, losses: 22, grade: "A", ts: Date.now() - 1000 },
     ]);
     const onPick = vi.fn();
-    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} />);
+    render(<ModeSelect onPick={onPick} onOpenChallenge={() => {}} onViewDaily={() => {}} />);
     fireEvent.click(await screen.findByText(/Play Classic again/));
     expect(onPick).toHaveBeenCalledWith("classic");
     expect(screen.queryByText(/Play Draft Duel again/)).toBeNull();
