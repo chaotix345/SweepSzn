@@ -6,6 +6,7 @@ import { teamColors, initials, eraLabel, displayName } from "@/lib/teams";
 import { factorViews } from "@/lib/explain";
 import { ShareButton, SaveCardImage } from "@/components/ResultCard";
 import { GRADE_COLOR } from "@/lib/grades";
+import { historyPercentileText } from "@/lib/historyPercentile";
 
 // Surgeon result: the delta IS the story. BEFORE/AFTER records and factor breakdowns side by
 // side, the diagnosis that drove the deal, and the one swap that moved the needle. Used by the
@@ -37,6 +38,7 @@ export default function SurgeonResult({
           <span aria-hidden className="text-zinc-600">→</span>
           <span className={GRADE_COLOR[after.grade] ?? "text-zinc-300"}>{after.wins}-{after.losses}</span>
         </div>
+        <p className="mt-1 text-xs font-semibold text-zinc-300">{historyPercentileText(after.wins)} after the swap</p>
         <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-rose-300"
           title={diagnosis.kind === "worst" ? "The engine's highest-magnitude negative factor" : "No negative factors — this was your weakest strength"}>
           🩺 Diagnosis: {diagnosis.label}{diagnosis.kind === "weakest" ? " (weakest strength)" : ""}

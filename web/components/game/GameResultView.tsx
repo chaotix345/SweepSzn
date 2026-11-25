@@ -18,6 +18,7 @@ import SurgeonResult from "@/components/SurgeonResult";
 import SgLeaderboard from "@/components/SgLeaderboard";
 import type { GameResult } from "@/components/game/gameState";
 import type { SgResult } from "@/components/game/useSurgeon";
+import { useDailyCeiling } from "@/components/game/useDailyCeiling";
 
 // Surgeon reveal: its own before/after layout + delta board, not the single-lineup ResultCard.
 export function SurgeonResultView({ mode, seed, sgResult, onRestart, onModeSelect }: {
@@ -43,6 +44,8 @@ export function GameResultView({ mode, seed, asOf, result, roundNum, onRestart, 
 }) {
   const [lbView, setLbView] = useState<LeaderboardView | null>(null); // daily standing for the result-card pill
   const [convertedId, setConvertedId] = useState<string | null>(null); // challenge minted from a finished game
+  // W2: today's ceiling record, fetched only once the board shows a verified submission for this viewer
+  const ceiling = useDailyCeiling(mode === "daily" ? seed.replace("daily-", "") : null, mode === "daily" && !!lbView?.you);
 
   // Pick'Em crowd-vs-you strip data for the result card (vote falls back to the per-seed local
   // copy so a Daily replay in the same browser still shows your pick when the API is dark).
@@ -64,7 +67,7 @@ export function GameResultView({ mode, seed, asOf, result, roundNum, onRestart, 
   return (
     <Shell roundNum={roundNum} mode={mode} onRestart={onRestart} onModeSelect={onModeSelect} showRestart>
       <ResultCard result={result.result} players={result.players} slots={SLOTS} mode={MODE_LABEL[mode]} modeKey={mode} usedHints={result.usedHints} onReset={onRestart} pickem={pickemView} factorHunt={fhView} prime={mode === "prime"} blueprint={bpView}
-        lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} />
+        lbRank={mode === "daily" && lbView?.you ? { rank: lbView.you.rank, total: lbView.total } : null} ceiling={ceiling} />
       <InviteFriend />
       {mode === "daily" && <Leaderboard date={seed.replace("daily-", "")} trace={result.trace} usedHints={result.usedHints} readOnly={result.trace.length === 0} onView={setLbView} />}
       {mode === "factorhunt" && <FhLeaderboard date={seed.replace("fh-", "")} trace={result.trace} prediction={fhPrediction} readOnly={result.trace.length === 0} />}

@@ -19,8 +19,9 @@ vi.mock("@/lib/ev", () => ({ ev: vi.fn() }));
 vi.mock("@/lib/streak", () => ({ getUid: () => "test-uid" }));
 
 // --- import the component under test AFTER mocks ---
-import ResultCard, { ShareButton } from "@/components/ResultCard";
+import ResultCard, { ShareButton, SaveCardImage } from "@/components/ResultCard";
 import { headline } from "@/lib/explain";
+import { historyRank } from "@/lib/historyPercentile";
 import { track } from "@vercel/analytics";
 import { ev } from "@/lib/ev";
 import type { LineupResult, Player, Slot } from "@/lib/types";
@@ -606,5 +607,80 @@ describe("ResultCard — accuracy receipts link", () => {
     renderCard();
     const a = screen.getByText("How accurate is this?").closest("a");
     expect(a?.getAttribute("href")).toBe("/how-it-works#receipts");
+  });
+});
+
+describe("ResultCard — measured against history (W2, D7)", () => {
+  it("shows one history line: the percentile vs real teams since 1985 beside the closest famous team", () => {
+    const { container } = renderCard(); // wins=55
+    const pct = historyRank(55).pct;
+    expect(container.textContent).toContain(`Beats ${pct}% of real NBA teams since 1985 · comparable to the 58-24 Spurs (2012-13)`);
+  });
+
+  it("below the anchor bands the percentile still shows on its own", () => {
+    const { container } = renderCard({ result: makeResult({ wins: 30, losses: 52, grade: "D", label: "Lottery team" }) });
+    expect(container.textContent).toContain(`Beats ${historyRank(30).pct}% of real NBA teams since 1985.`);
+  });
+
+  it("never says 100%: beating every team says so", () => {
+    const { container } = renderCard({ result: makeResult({ wins: 78, losses: 4, grade: "A+", label: "HISTORIC" }) });
+    expect(container.textContent).toContain("Better than every real team since 1985");
+    expect(container.textContent).not.toMatch(/100%/);
+  });
+
+  it("is on shared permalinks too", () => {
+    const { container } = renderCard({ shared: true });
+    expect(container.textContent).toMatch(/of real NBA teams since 1985/);
+  });
+});
+
+describe("ResultCard — Daily ceiling gap (W2)", () => {
+  const gap = (c: HTMLElement) => c.querySelector('[data-testid="ceiling-gap"]');
+
+  it("is absent unless the server sent today's ceiling", () => {
+    const { container } = renderCard();
+    expect(gap(container)).toBeNull();
+    expect(container.textContent).not.toMatch(/perfect five/i);
+  });
+
+  it("names the gap and the record", () => {
+    const { container } = renderCard({ ceiling: { wins: 62, losses: 20 } }); // result 55
+    expect(gap(container)!.textContent).toContain("You're 7 wins off today's perfect five (62-20)");
+    const one = renderCard({ ceiling: { wins: 56, losses: 26 } });
+    expect(gap(one.container)!.textContent).toContain("You're 1 win off today's perfect five (56-26)");
+  });
+
+  it("a match and a re-spin overshoot read as such", () => {
+    expect(gap(renderCard({ ceiling: { wins: 55, losses: 27 } }).container)!.textContent).toContain("You matched today's perfect five (55-27)");
+    expect(gap(renderCard({ ceiling: { wins: 52, losses: 30 } }).container)!.textContent).toContain("Your re-spins beat today's perfect five (52-30)");
+  });
+
+  it("sits above the fold, before Share", () => {
+    const { container } = renderCard({ ceiling: { wins: 62, losses: 20 } });
+    const share = container.querySelector('a[aria-label="Post to X"]')!;
+    expect(gap(container)!.compareDocumentPosition(share) & 4).toBeTruthy();
+  });
+});
+
+describe("SaveCardImage — hydrates cleanly where the browser can copy images", () => {
+  afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ""; });
+
+  it("server HTML has no Copy button; it appears after hydration without a mismatch", async () => {
+    const el = <SaveCardImage path="/r/x" />;
+    vi.stubGlobal("window", undefined);
+    let html: string;
+    try { html = renderToString(el); } finally { vi.unstubAllGlobals(); }
+    expect(html).not.toContain("Copy");
+    vi.stubGlobal("ClipboardItem", class {});
+    Object.defineProperty(navigator, "clipboard", { value: { write: vi.fn(), writeText: vi.fn() }, configurable: true });
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const onRecoverableError = vi.fn();
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    await act(async () => { root = hydrateRoot(container, el, { onRecoverableError }); });
+    expect(onRecoverableError).not.toHaveBeenCalled();
+    expect(container.querySelector('button[aria-label="Copy card image to clipboard"]')).not.toBeNull();
+    await act(async () => { root?.unmount(); });
   });
 });
